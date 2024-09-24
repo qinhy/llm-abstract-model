@@ -15,19 +15,29 @@ from pydantic import field_validator, ConfigDict, Field
 import requests
 from typing import Dict, Any
 
-from BasicModel import Controller4Basic, Model4Basic, BasicStore
+from .BasicModel import Controller4Basic, Model4Basic, BasicStore
 
 
 class Controller4LLMs:
     class AbstractVendorController(Controller4Basic.AbstractObjController):
-        pass
-    class OpenAIVendorController(Controller4Basic.AbstractObjController):
+        def __init__(self, store, model):
+            super().__init__(store, model)
+            self.model:Model4LLMs.AbstractVendor = model
+            self._store:LLMsStore = store
+    class OpenAIVendorController(AbstractVendorController):
         pass
     class AbstractLLMController(Controller4Basic.AbstractObjController):
+        def __init__(self, store, model):
+            super().__init__(store, model)
+            self.model:Model4LLMs.AbstractLLM = model
+            self._store:LLMsStore = store
+        
+        def get_vendor(self):
+            vendor:Model4LLMs.AbstractVendor = self._store.find(self.model.vendor_id)
+            return vendor
+    class ChatGPT4oController(AbstractLLMController):
         pass
-    class ChatGPT4oController(Controller4Basic.AbstractObjController):
-        pass
-    class ChatGPT4oMiniController(Controller4Basic.AbstractObjController):
+    class ChatGPT4oMiniController(ChatGPT4oController):
         pass
         
 class Model4LLMs:
@@ -38,27 +48,26 @@ class Model4LLMs:
         api_key: str = None  # API key for authentication, if required
         timeout: int = 30  # Default timeout for API requests in seconds
         
-        def send_request(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-            """
-            Send a request to the vendor's API.
-            :param endpoint: API endpoint to be called.
-            :param payload: Request payload to be sent.
-            :return: Response from the API as a dictionary.
-            """
-            pass
+        # def send_request(self, endpoint: str,
+        #                  payload: Dict[str, Any]={}, headers = {}, method:str='post') -> Dict[str, Any]:
+        #     url = self._build_url(endpoint)
+        #     hs = self._get_headers()
+        #     hs.update(headers)
+        #     method = method.lower()
+        #     try:
+        #         if method=='get':
+        #             response = requests.get( url, json=payload, headers=hs, timeout=self.timeout)
+        #         else:
+        #             response = requests.post(url, json=payload, headers=hs, timeout=self.timeout)
+        #         response.raise_for_status()  # Raise an exception for HTTP errors
+        #         return response.json()
+        #     except requests.RequestException as e:
+        #         raise Exception(f"API request failed: {e}")
 
         def get_available_models(self) -> Dict[str, Any]:
-            """
-            Get a list of available models from the vendor.
-            :return: Dictionary of available models and their details.
-            """
             pass
 
-        def _get_headers(self) -> Dict[str, str]:
-            """
-            Get headers for API requests, including authorization if API key is present.
-            :return: Dictionary of headers.
-            """
+        def _build_headers(self) -> Dict[str, str]:
             headers = {
                 'Content-Type': 'application/json'
             }
@@ -81,35 +90,16 @@ class Model4LLMs:
 
     class OpenAIVendor(AbstractVendor):
         vendor_name:str = 'OpenAI'
-        api_url:str = 'https://api.openai.com/v1/chat/completions'
-
-        def send_request(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-            """
-            Send a request to the OpenAI API.
-            :param endpoint: API endpoint to be called.
-            :param payload: Request payload to be sent.
-            :return: Response from the API as a dictionary.
-            """
-            url = self._build_url(endpoint)
-            headers = self._get_headers()
-            try:
-                response = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
-                response.raise_for_status()  # Raise an exception for HTTP errors
-                return response.json()
-            except requests.RequestException as e:
-                raise Exception(f"API request failed: {e}")
+        api_url:str = 'https://api.openai.com'
 
         def get_available_models(self) -> Dict[str, Any]:
-            """
-            Get a list of available models from OpenAI.
-            :return: Dictionary of available models and their details.
-            """
-            endpoint = 'models'
-            response = self.send_request(endpoint, {})
-            models = {model['id']: model for model in response.get('data', [])}
+            response = requests.get( self._build_url('/v1/models'),
+                                    headers=self._build_headers(),
+                                    timeout=self.timeout)
+            models = {model['id']: model for model in response.json().get('data', [])}
             return models
 
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
+        model_config = ConfigDict(arbitrary_types_allowed=True)
         _controller: Controller4LLMs.OpenAIVendorController = None
         def get_controller(self)->Controller4LLMs.OpenAIVendorController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.OpenAIVendorController(store,self)
@@ -127,6 +117,9 @@ class Model4LLMs:
         frequency_penalty: Optional[float] = 0.0
         presence_penalty: Optional[float] = 0.0
         system_prompt: Optional[str] = None
+
+        def get_vendor(self):
+            return self.get_controller().get_vendor()
 
         def get_usage_limits(self) -> Dict[str, Any]:
             """
@@ -167,6 +160,7 @@ class Model4LLMs:
 
     class OpenAIChatGPT(AbstractLLM):
         llm_model_name:str
+        endpoint:str='/v1/chat/completions'
 
         context_window_tokens:int
         max_output_tokens:int
@@ -217,8 +211,30 @@ class Model4LLMs:
             payload = {k: v for k, v in payload.items() if v is not None}
             return payload
         
+        def chat_completions(self,messages=[]):
+            vendor = self.get_vendor()
+            url=vendor._build_url(self.endpoint)
+            headers=vendor._build_headers()
+            msgs = []
+            if self.system_prompt:
+                msgs.append({"role":"system","content":self.system_prompt})
+            data = self.construct_payload(msgs+messages)
+            response = requests.post(url=url, data=json.dumps(data,ensure_ascii=False), headers=headers)
+            try:
+                response = json.loads(response.text,strict=False)
+            except Exception as e:
+                if type(response) is not dict:
+                    return {'error':f'{e}'}
+                else:
+                    return {'error':f'{response}({e})'}
+            return response
+        
         def gen(self, messages=[])->str:
-            pass
+            if type(messages) is str:
+                messages = [{"role":"user","content":messages}]
+            res = self.chat_completions(messages)
+            return str(res['error']) if 'error' in res else res['choices'][0]['message']['content']
+            
 
     class ChatGPT4o(OpenAIChatGPT):
         llm_model_name:str = 'gpt-4o'
@@ -256,7 +272,7 @@ class LLMsStore(BasicStore):
         return super()._get_class(id, modelclass)
 
     def add_new_openai_vendor(self,api_key: str,
-                              api_url: str='https://api.openai.com/v1/chat/completions',
+                              api_url: str='https://api.openai.com',
                               timeout: int=30) -> Model4LLMs.OpenAIVendor:
         return self.add_new_obj(Model4LLMs.OpenAIVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
@@ -284,6 +300,7 @@ class LLMsStore(BasicStore):
                                 frequency_penalty:float = 0.0,
                                 presence_penalty:float = 0.0,
                                 system_prompt:str = None ) -> Model4LLMs.ChatGPT4oMini:
+        
         return self.add_new_obj(Model4LLMs.ChatGPT4oMini(vendor_id=vendor_id,
                                 limit_output_tokens=limit_output_tokens,
                                 temperature=temperature,
@@ -294,3 +311,32 @@ class LLMsStore(BasicStore):
     
     def find_all_vendors(self)->list[Model4LLMs.AbstractVendor]:
         return self.find_all('*Vendor:*')
+
+
+
+class Tests(unittest.TestCase):
+    def __init__(self,*args,**kwargs)->None:
+        super().__init__(*args,**kwargs)
+        self.store = LLMsStore()
+
+    def test_all(self,num=1):
+        for i in range(num):
+            self.test_1()
+            self.test_2()
+            self.test_3()
+    
+    def test_1(self):
+        v = self.store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
+        print(v.get_available_models())
+
+    def test_2(self):
+        v = self.store.find_all('OpenAIVendor:*')[0]
+        c = self.store.add_new_chatgpt4omini(vendor_id=v.get_id())
+        print(c)
+    
+    
+    def test_3(self):
+        c:Model4LLMs.ChatGPT4oMini = self.store.find_all('ChatGPT4oMini:*')[0]
+        print(c.gen('What is your name?'))
+
+    
