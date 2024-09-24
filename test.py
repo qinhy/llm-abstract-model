@@ -111,10 +111,10 @@ class TextFile:
 # # Close the file
 # text_file.close()
 
-def test_summary(f='The Adventures of Sherlock Holmes.txt'):
-    chatgpt4omini = store.add_new_chatgpt4omini(
-         vendor_id=vendor.get_id(),
-         system_prompt='You are an expert in text summary.')
+def test_summary(f='The Adventures of Sherlock Holmes.txt',limit_words=1000,
+                chatgpt4omini = store.add_new_chatgpt4omini(
+                                        vendor_id=vendor.get_id(),
+                                        system_prompt='You are an expert in text summary.')):
     
     user_message = '''I will provide pieces of the text along with prior summarizations.
 Your task is to read each new text snippet and add new summarizations accordingly.  
@@ -146,7 +146,7 @@ You should reply in Japanese with summarizations only, without any additional in
     for i,chunk in enumerate(text_file):
         # yield chunk        
         pre_summarization = previous_outputs[-1] if len(previous_outputs)>0 else None
-        msg = user_message.format(limit_words=1000,text='\n'.join(chunk),
+        msg = user_message.format(limit_words=limit_words,text='\n'.join(chunk),
                                   pre_summarization=pre_summarization)
         # yield msg
         output = chatgpt4omini.gen(msg)
