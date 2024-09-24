@@ -8,21 +8,27 @@ import os
 import re
 import unittest
 import uuid
-from PIL import Image
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 from zoneinfo import ZoneInfo
-from pydantic import validator, ConfigDict, Field
+from pydantic import field_validator, ConfigDict, Field
 import requests
 from typing import Dict, Any
 
-from .BasicModel import Controller4Basic,Model4Basic
+from BasicModel import Controller4Basic, Model4Basic, BasicStore
 
-def now_utc():
-    return datetime.now().replace(tzinfo=ZoneInfo("UTC"))
 
 class Controller4LLMs:
-    pass
+    class AbstractVendorController(Controller4Basic.AbstractObjController):
+        pass
+    class OpenAIVendorController(Controller4Basic.AbstractObjController):
+        pass
+    class AbstractLLMController(Controller4Basic.AbstractObjController):
+        pass
+    class ChatGPT4oController(Controller4Basic.AbstractObjController):
+        pass
+    class ChatGPT4oMiniController(Controller4Basic.AbstractObjController):
+        pass
         
 class Model4LLMs:
     
@@ -68,6 +74,11 @@ class Model4LLMs:
             """
             return f"{self.api_url.rstrip('/')}/{endpoint.lstrip('/')}"
 
+        model_config = ConfigDict(arbitrary_types_allowed=True)    
+        _controller: Controller4LLMs.AbstractVendorController = None
+        def get_controller(self)->Controller4LLMs.AbstractVendorController: return self._controller
+        def init_controller(self,store):self._controller = Controller4LLMs.AbstractVendorController(store,self)
+
     class OpenAIVendor(AbstractVendor):
         vendor_name:str = 'OpenAI'
         api_url:str = 'https://api.openai.com/v1/chat/completions'
@@ -98,9 +109,14 @@ class Model4LLMs:
             models = {model['id']: model for model in response.get('data', [])}
             return models
 
+        model_config = ConfigDict(arbitrary_types_allowed=True)    
+        _controller: Controller4LLMs.OpenAIVendorController = None
+        def get_controller(self)->Controller4LLMs.OpenAIVendorController: return self._controller
+        def init_controller(self,store):self._controller = Controller4LLMs.OpenAIVendorController(store,self)
+
     class AbstractLLM(Model4Basic.AbstractObj):
         vendor_id:str
-        model_name:str
+        llm_model_name:str
 
         context_window_tokens:int
         # Context Window Size: The context window size dictates the total number of tokens the model can handle at once. For example, if a model has a context window of 4096 tokens, it can process up to 4096 tokens of combined input and output.
@@ -145,35 +161,36 @@ class Model4LLMs:
             """
 
         model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4Basic.AbstractObjController = None
-        def get_controller(self)->Controller4Basic.AbstractObjController: return self._controller
-        def init_controller(self,store):self._controller = Controller4Basic.AbstractObjController(store,self)
+        _controller: Controller4LLMs.AbstractLLMController = None
+        def get_controller(self)->Controller4LLMs.AbstractLLMController: return self._controller
+        def init_controller(self,store):self._controller = Controller4LLMs.AbstractLLMController(store,self)
 
-    class ChatGPT4o(AbstractLLM):
-        model_name:str = 'gpt-4o'
+    class OpenAIChatGPT(AbstractLLM):
+        llm_model_name:str
 
-        context_window_tokens:int = 128000
-        max_output_tokens:int = 4096
+        context_window_tokens:int
+        max_output_tokens:int
         
-        temperature: Optional[float] = 0.7
-        top_p: Optional[float] = 1.0
-        frequency_penalty: Optional[float] = 0.0
-        presence_penalty: Optional[float] = 0.0
-        system_prompt: Optional[str] = None
+        limit_output_tokens: Optional[int]
+        temperature: Optional[float]
+        top_p: Optional[float]
+        frequency_penalty: Optional[float]
+        presence_penalty: Optional[float]
+        system_prompt: Optional[str]
 
         # New attributes for advanced configurations
-        stop_sequences: Optional[List[str]] = Field(default_factory=list)
-        n: Optional[int] = 1  # Number of completions to generate for each input prompt
+        stop_sequences: Optional[List[str]]
+        n: Optional[int]
         
-        # Validator to ensure correct range of temperature
-        @validator('temperature')
+        # field_validator to ensure correct range of temperature
+        @field_validator('temperature')
         def validate_temperature(cls, value):
             if not 0 <= value <= 1:
                 raise ValueError("Temperature must be between 0 and 1.")
             return value
 
-        # Validator to ensure correct range of top_p
-        @validator('top_p')
+        # field_validator to ensure correct range of top_p
+        @field_validator('top_p')
         def validate_top_p(cls, value):
             if not 0 <= value <= 1:
                 raise ValueError("top_p must be between 0 and 1.")
@@ -186,7 +203,7 @@ class Model4LLMs:
         # ],
         def construct_payload(self, messages: list[dict]) -> Dict[str, Any]:
             payload = {
-                "model": self.model_name,
+                "model": self.llm_model_name,
                 "messages": messages,
                 "max_tokens": self.max_output_tokens,
                 "temperature": self.temperature,
@@ -202,57 +219,78 @@ class Model4LLMs:
         
         def gen(self, messages=[])->str:
             pass
+
+    class ChatGPT4o(OpenAIChatGPT):
+        llm_model_name:str = 'gpt-4o'
+
+        context_window_tokens:int = 128000
+        max_output_tokens:int = 4096
         
+        limit_output_tokens: Optional[int] = 1024
+        temperature: Optional[float] = 0.7
+        top_p: Optional[float] = 1.0
+        frequency_penalty: Optional[float] = 0.0
+        presence_penalty: Optional[float] = 0.0
+        system_prompt: Optional[str] = None
+
+        # New attributes for advanced configurations
+        stop_sequences: Optional[List[str]] = Field(default_factory=list)
+        n: Optional[int] = 1  # Number of completions to generate for each input prompt
+        
+        model_config = ConfigDict(arbitrary_types_allowed=True)    
+        _controller: Controller4LLMs.ChatGPT4oController = None
+        def get_controller(self)->Controller4LLMs.ChatGPT4oController: return self._controller
+        def init_controller(self,store):self._controller = Controller4LLMs.ChatGPT4oController(store,self)
+
     class ChatGPT4oMini(ChatGPT4o):
-        model_name:str = 'gpt-4o-mini'
+        llm_model_name:str = 'gpt-4o-mini'
 
+        model_config = ConfigDict(arbitrary_types_allowed=True)    
+        _controller: Controller4LLMs.ChatGPT4oMiniController = None
+        def get_controller(self)->Controller4LLMs.ChatGPT4oMiniController: return self._controller
+        def init_controller(self,store):self._controller = Controller4LLMs.ChatGPT4oMiniController(store,self)
 
-def test(materials=''):
-    # ideas : 1.purpose 2.reference materials 3.previous outputs ==> current outputs 
-    reference_materials = materials.split()
-    previous_outputs = []
+class LLMsStore(BasicStore):
 
-    llm = Model4LLMs.ChatGPT4oMini()
-    # llm.build_system(purpose='...')
-    def system_prompt(limit_words,code_path,code_lang,code,pre_explanation):
-        return f'''You are an expert in code explanation, familiar with Electron, and Python.
-I have an app built with Electron and Python.
-I will provide pieces of the project code along with prior explanations.
-Your task is to read each new code snippet and add new explanations accordingly.  
-You should reply in Japanese with explanations only, without any additional information.
+    def _get_class(self, id: str, modelclass=Model4LLMs):
+        return super()._get_class(id, modelclass)
 
-## Your Reply Format Example (should not over {limit_words} words)
-```explanation
-- This code shows ...
-```
-                           
-## Code Snippet
-code path : {code_path}
-```{code_lang}
-{code}
-```
-
-## Previous Explanations
-```explanation
-{pre_explanation}
-```'''
+    def add_new_openai_vendor(self,api_key: str,
+                              api_url: str='https://api.openai.com/v1/chat/completions',
+                              timeout: int=30) -> Model4LLMs.OpenAIVendor:
+        return self.add_new_obj(Model4LLMs.OpenAIVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
-    def messages(limit_words,code_path,code_lang,code,pre_explanation):
-        return [
-            {"role": "system", "content": system_prompt(limit_words,code_path,code_lang,code,pre_explanation)},
-        ]
 
-    def outputFormatter(output=''):
-        def extract_explanation_block(text):
-            matches = re.findall(r"```explanation\s*(.*)\s*```", text, re.DOTALL)
-            return matches if matches else []
-        return extract_explanation_block(output)[0]
-
-    for m in reference_materials:
-        preout = previous_outputs[-1] if len(previous_outputs)>0 else None
-        msgs = messages(code=m,pre_explanation=preout,limit_words=100)
-        tokens = llm.get_token_count(msgs)
-        output = llm.gen(msgs)
-        previous_outputs.append(outputFormatter(output))
-
-
+    def add_new_chatgpt4o(self,vendor_id:str,
+                                limit_output_tokens:int = 1024,
+                                temperature:float = 0.7,
+                                top_p:float = 1.0,
+                                frequency_penalty:float = 0.0,
+                                presence_penalty:float = 0.0,
+                                system_prompt:str = None ) -> Model4LLMs.ChatGPT4o:
+        
+        return self.add_new_obj(Model4LLMs.ChatGPT4o(vendor_id=vendor_id,
+                                limit_output_tokens=limit_output_tokens,
+                                temperature=temperature,
+                                top_p=top_p,
+                                frequency_penalty=frequency_penalty,
+                                presence_penalty=presence_penalty,
+                                system_prompt=system_prompt,))
+    
+    def add_new_chatgpt4omini(self,vendor_id:str,
+                                limit_output_tokens:int = 1024,
+                                temperature:float = 0.7,
+                                top_p:float = 1.0,
+                                frequency_penalty:float = 0.0,
+                                presence_penalty:float = 0.0,
+                                system_prompt:str = None ) -> Model4LLMs.ChatGPT4oMini:
+        return self.add_new_obj(Model4LLMs.ChatGPT4oMini(vendor_id=vendor_id,
+                                limit_output_tokens=limit_output_tokens,
+                                temperature=temperature,
+                                top_p=top_p,
+                                frequency_penalty=frequency_penalty,
+                                presence_penalty=presence_penalty,
+                                system_prompt=system_prompt,))
+    
+    def find_all_vendors(self)->list[Model4LLMs.AbstractVendor]:
+        return self.find_all('*Vendor:*')

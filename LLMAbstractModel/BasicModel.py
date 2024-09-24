@@ -7,7 +7,6 @@ import json
 import os
 import unittest
 import uuid
-from PIL import Image
 from typing import Any, List
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -35,6 +34,8 @@ class PythonDictStorage:
 
     def keys(self, pattern: str='*')->list[str]:
         return fnmatch.filter(self.model.store.keys(), pattern)
+    
+    def dumps(self)->str:return json.dumps(self.model.store)
 
 def now_utc():
     return datetime.now().replace(tzinfo=ZoneInfo("UTC"))
@@ -101,6 +102,40 @@ class Model4Basic:
         def get_controller(self)->Controller4Basic.AbstractObjController: return self._controller
         def init_controller(self,store):self._controller = Controller4Basic.AbstractObjController(store,self)
 
+
+
+class BasicStore(PythonDictStorage):
+
+    def _get_class(self, id: str, modelclass=Model4Basic):
+        class_type = id.split(':')[0]
+        res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
+        res = res.get(class_type, None)
+        if res is None: raise ValueError(f'No such class of {class_type}')
+        return res
+    
+    def _get_as_obj(self,id,data_dict)->Model4Basic.AbstractObj:
+        obj:Model4Basic.AbstractObj = self._get_class(id)(**data_dict)
+        obj.set_id(id).init_controller(self)
+        return obj
+    
+    
+    def _add_new_obj(self, obj:Model4Basic.AbstractObj, id:str=None):
+        id,d = obj.gen_new_id() if id is None else id, obj.model_dump_json_dict()
+        self.set(id,d)
+        return self._get_as_obj(id,d)
+    
+    def add_new_obj(self, obj:Model4Basic.AbstractObj, id:str=None):        
+        if obj._id is not None: raise ValueError(f'obj._id is {obj._id}, must be none')
+        return self._add_new_obj(obj,id)
+    
+    # available for regx?
+    def find(self,id:str) -> Model4Basic.AbstractObj:
+        raw = self.get(id)
+        if raw is None:return None
+        return self._get_as_obj(id,raw)
+    
+    def find_all(self,id:str=f'AbstractObj:*')->list[Model4Basic.AbstractObj]:
+        return [self.find(k) for k in self.keys(id)]
 
 
 
