@@ -153,3 +153,15 @@ You should reply in Japanese with summarizations only, without any additional in
         output = outputFormatter(output)
         previous_outputs.append(output)
         yield output
+
+
+# for i,p in enumerate(['file1','file2','file3','filen']):
+#     ts = test_summary(p)
+#     res = ''
+#     for s in ts:
+#         with open(p.replace('file','output'),'a') as f:
+#             f.write(s)
+#             res += s
+#     with open(f'allinone','a') as f:
+#         f.write(f'## {p}\n')
+#         f.write(res)
