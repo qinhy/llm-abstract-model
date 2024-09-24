@@ -126,7 +126,7 @@ You should reply in Japanese with summarizations only, without any additional in
 ```
                         
 ## Text Snippet
-```{text_lang}
+```text
 {text}
 ```
 
@@ -146,8 +146,8 @@ You should reply in Japanese with summarizations only, without any additional in
     for i,chunk in enumerate(text_file):
         # yield chunk        
         pre_summarization = previous_outputs[-1] if len(previous_outputs)>0 else None
-        msg = user_message.format(limit_words=1000,text_lang='English',
-                        text='\n'.join(chunk),pre_summarization=pre_summarization)
+        msg = user_message.format(limit_words=1000,text='\n'.join(chunk),
+                                  pre_summarization=pre_summarization)
         # yield msg
         output = chatgpt4omini.gen(msg)
         output = outputFormatter(output)
