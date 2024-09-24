@@ -1,22 +1,12 @@
-# from https://github.com/qinhy/singleton-key-value-storage.git
-import base64
-from datetime import datetime
-import fnmatch
-import io
 import json
 import os
-import re
 import unittest
-import uuid
 from typing import Any, Dict, List, Optional
-from uuid import uuid4
-from zoneinfo import ZoneInfo
 from pydantic import field_validator, ConfigDict, Field
 import requests
 from typing import Dict, Any
 
 from .BasicModel import Controller4Basic, Model4Basic, BasicStore
-
 
 class Controller4LLMs:
     class AbstractVendorController(Controller4Basic.AbstractObjController):
@@ -35,7 +25,9 @@ class Controller4LLMs:
         def get_vendor(self):
             vendor:Model4LLMs.AbstractVendor = self._store.find(self.model.vendor_id)
             return vendor
-    class ChatGPT4oController(AbstractLLMController):
+    class OpenAIChatGPTController(AbstractLLMController):
+        pass
+    class ChatGPT4oController(OpenAIChatGPTController):
         pass
     class ChatGPT4oMiniController(ChatGPT4oController):
         pass
@@ -48,22 +40,6 @@ class Model4LLMs:
         api_key: str = None  # API key for authentication, if required
         timeout: int = 30  # Default timeout for API requests in seconds
         
-        # def send_request(self, endpoint: str,
-        #                  payload: Dict[str, Any]={}, headers = {}, method:str='post') -> Dict[str, Any]:
-        #     url = self._build_url(endpoint)
-        #     hs = self._get_headers()
-        #     hs.update(headers)
-        #     method = method.lower()
-        #     try:
-        #         if method=='get':
-        #             response = requests.get( url, json=payload, headers=hs, timeout=self.timeout)
-        #         else:
-        #             response = requests.post(url, json=payload, headers=hs, timeout=self.timeout)
-        #         response.raise_for_status()  # Raise an exception for HTTP errors
-        #         return response.json()
-        #     except requests.RequestException as e:
-        #         raise Exception(f"API request failed: {e}")
-
         def get_available_models(self) -> Dict[str, Any]:
             pass
 
@@ -149,9 +125,12 @@ class Model4LLMs:
             return len(text.split())
         
         def build_system(self, purpose='...'):
-            """
+            return """
             Dummy implementation for building system prompt
             """
+
+        def gen(self, messages=Optional[list|str])->str:
+            pass
 
         model_config = ConfigDict(arbitrary_types_allowed=True)    
         _controller: Controller4LLMs.AbstractLLMController = None
@@ -235,6 +214,10 @@ class Model4LLMs:
             res = self.chat_completions(messages)
             return str(res['error']) if 'error' in res else res['choices'][0]['message']['content']
             
+        model_config = ConfigDict(arbitrary_types_allowed=True)    
+        _controller: Controller4LLMs.OpenAIChatGPTController = None
+        def get_controller(self)->Controller4LLMs.OpenAIChatGPTController: return self._controller
+        def init_controller(self,store):self._controller = Controller4LLMs.OpenAIChatGPTController(store,self)
 
     class ChatGPT4o(OpenAIChatGPT):
         llm_model_name:str = 'gpt-4o'
@@ -311,8 +294,6 @@ class LLMsStore(BasicStore):
     
     def find_all_vendors(self)->list[Model4LLMs.AbstractVendor]:
         return self.find_all('*Vendor:*')
-
-
 
 class Tests(unittest.TestCase):
     def __init__(self,*args,**kwargs)->None:
