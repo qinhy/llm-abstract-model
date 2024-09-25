@@ -2,7 +2,12 @@ import os
 import re
 from LLMAbstractModel import Model4LLMs, LLMsStore
 store = LLMsStore()
+
 vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
+chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
+
+vendor = store.add_new_ollama_vendor()
+gemma2 = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
 
 class TextFile:
     def __init__(self, file_path, chunk_size=1000, overlap_size=100):
@@ -111,10 +116,8 @@ class TextFile:
 # # Close the file
 # text_file.close()
 
-def test_summary(f='The Adventures of Sherlock Holmes.txt',limit_words=1000,
-                chatgpt4omini = store.add_new_chatgpt4omini(
-                                        vendor_id=vendor.get_id(),
-                                        system_prompt='You are an expert in text summary.')):
+def test_summary(llm = gemma2,
+                 f='The Adventures of Sherlock Holmes.txt',limit_words=1000):
     
     user_message = '''I will provide pieces of the text along with prior summarizations.
 Your task is to read each new text snippet and add new summarizations accordingly.  
@@ -149,7 +152,7 @@ You should reply in Japanese with summarizations only, without any additional in
         msg = user_message.format(limit_words=limit_words,text='\n'.join(chunk),
                                   pre_summarization=pre_summarization)
         # yield msg
-        output = chatgpt4omini.gen(msg)
+        output = llm.gen(msg)
         output = outputFormatter(output)
         previous_outputs.append(output)
         yield output
