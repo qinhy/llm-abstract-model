@@ -8,6 +8,7 @@ chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),system_pro
 
 vendor = store.add_new_ollama_vendor()
 gemma2 = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
+phi3 = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
 
 class TextFile:
     def __init__(self, file_path, chunk_size=1000, overlap_size=100):
@@ -101,7 +102,6 @@ class TextFile:
         """
         self.file.close()
 
-
 # # Usage example:
 # # Create an instance of TextFile
 # text_file = TextFile('The Adventures of Sherlock Holmes.txt', chunk_size=10, overlap_size=3)
@@ -116,7 +116,7 @@ class TextFile:
 # # Close the file
 # text_file.close()
 
-def test_summary(llm = gemma2,
+def test_summary(llm = chatgpt4omini,
                  f='The Adventures of Sherlock Holmes.txt',limit_words=1000):
     
     user_message = '''I will provide pieces of the text along with prior summarizations.
@@ -153,7 +153,11 @@ You should reply in Japanese with summarizations only, without any additional in
                                   pre_summarization=pre_summarization)
         # yield msg
         output = llm.gen(msg)
-        output = outputFormatter(output)
+        try:
+            output = outputFormatter(output)
+        except Exception as e:
+            print('[outputFormatter]: error!',e)
+            
         previous_outputs.append(output)
         yield output
 

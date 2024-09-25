@@ -14,10 +14,6 @@ class Controller4LLMs:
             super().__init__(store, model)
             self.model:Model4LLMs.AbstractVendor = model
             self._store:LLMsStore = store
-    class OpenAIVendorController(AbstractVendorController):
-        pass
-    class OllamaVendorController(AbstractVendorController):
-        pass
     class AbstractLLMController(Controller4Basic.AbstractObjController):
         def __init__(self, store, model):
             super().__init__(store, model)
@@ -27,14 +23,6 @@ class Controller4LLMs:
         def get_vendor(self):
             vendor:Model4LLMs.AbstractVendor = self._store.find(self.model.vendor_id)
             return vendor
-    class OpenAIChatGPTController(AbstractLLMController):
-        pass
-    class ChatGPT4oController(OpenAIChatGPTController):
-        pass
-    class ChatGPT4oMiniController(ChatGPT4oController):
-        pass
-    class Gemma2Controller(AbstractLLMController):
-        pass 
 class Model4LLMs:
     
     class AbstractVendor(Model4Basic.AbstractObj):
@@ -70,15 +58,11 @@ class Model4LLMs:
             """
             return f"{self.api_url.rstrip('/')}/{endpoint.lstrip('/')}"
 
-        def chat_request(self,llm_model, messages=[]):
-            llm_model:Model4LLMs.AbstractLLM = llm_model
+        def chat_request(self,payload={}):
             url=self._build_url(self.chat_endpoint)
             headers=self._build_headers()
-            msgs = []
-            if llm_model.system_prompt:
-                msgs.append({"role":"system","content":llm_model.system_prompt})
-            data = llm_model.construct_payload(msgs+messages)
-            response = requests.post(url=url, data=json.dumps(data,ensure_ascii=False), headers=headers)
+            response = requests.post(url=url, data=json.dumps(payload,ensure_ascii=False),
+                                     headers=headers,timeout=self.timeout)
             try:
                 response = json.loads(response.text,strict=False)
             except Exception as e:
@@ -88,7 +72,7 @@ class Model4LLMs:
                     return {'error':f'{response}({e})'}
             return response
         
-        def chat_result(response):
+        def chat_result(self,response)->str:
             return response
         
         model_config = ConfigDict(arbitrary_types_allowed=True)    
@@ -106,13 +90,8 @@ class Model4LLMs:
             response = super().get_available_models()
             return {model['id']: model for model in response.json().get('data', [])}
         
-        def chat_result(self,response):
+        def chat_result(self,response)->str:
             return response['choices'][0]['message']['content']
-        
-        model_config = ConfigDict(arbitrary_types_allowed=True)
-        _controller: Controller4LLMs.OpenAIVendorController = None
-        def get_controller(self)->Controller4LLMs.OpenAIVendorController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.OpenAIVendorController(store,self)
 
     class AbstractLLM(Model4Basic.AbstractObj):
         vendor_id:str
@@ -191,11 +170,18 @@ class Model4LLMs:
             }
             return {k: v for k, v in payload.items() if v is not None}
         
-        def gen(self, messages=[])->str:
-            vendor = self.get_vendor()
+        def construct_messages(self,messages:Optional[List|str])->list:
+            msgs = []
+            if self.system_prompt:
+                msgs.append({"role":"system","content":self.system_prompt})
             if type(messages) is str:
                 messages = [{"role":"user","content":messages}]
-            return vendor.chat_result(vendor.chat_request(self,messages))
+            return msgs+messages
+
+        def gen(self, messages:Optional[List|str])->str:
+            payload = self.construct_payload(self.construct_messages(messages))
+            vendor = self.get_vendor()
+            return vendor.chat_result(vendor.chat_request(payload))
 
         model_config = ConfigDict(arbitrary_types_allowed=True)    
         _controller: Controller4LLMs.AbstractLLMController = None
@@ -211,11 +197,6 @@ class Model4LLMs:
             payload.update({"stop": self.stop_sequences, "n": self.n,})
             return {k: v for k, v in payload.items() if v is not None}
                     
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4LLMs.OpenAIChatGPTController = None
-        def get_controller(self)->Controller4LLMs.OpenAIChatGPTController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.OpenAIChatGPTController(store,self)
-
     class ChatGPT4o(OpenAIChatGPT):
         llm_model_name:str = 'gpt-4o'
 
@@ -233,18 +214,8 @@ class Model4LLMs:
         stop_sequences: Optional[List[str]] = Field(default_factory=list)
         n: Optional[int] = 1  # Number of completions to generate for each input prompt
         
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4LLMs.ChatGPT4oController = None
-        def get_controller(self)->Controller4LLMs.ChatGPT4oController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.ChatGPT4oController(store,self)
-
     class ChatGPT4oMini(ChatGPT4o):
         llm_model_name:str = 'gpt-4o-mini'
-
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4LLMs.ChatGPT4oMiniController = None
-        def get_controller(self)->Controller4LLMs.ChatGPT4oMiniController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.ChatGPT4oMiniController(store,self)
 
     class OllamaVendor(AbstractVendor):
         vendor_name:str = 'Ollama'
@@ -263,14 +234,8 @@ class Model4LLMs:
                 llm_model_name = llm_model_name[0] + llm_model_name[1] + ':' + llm_model_name[2]
             return llm_model_name
         
-        def chat_result(self,response):
-            return response['message']['content']
-        
-        model_config = ConfigDict(arbitrary_types_allowed=True)
-        _controller: Controller4LLMs.OllamaVendorController = None
-        def get_controller(self)->Controller4LLMs.OllamaVendorController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.OllamaVendorController(store,self)
-
+        def chat_result(self,response)->str:
+            return response['message']['content']        
     class Gemma2(AbstractLLM):
         llm_model_name:str = 'gemma-2-2b'
 
@@ -284,11 +249,18 @@ class Model4LLMs:
         presence_penalty: Optional[float] = None
         system_prompt: Optional[str] = None
 
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4LLMs.Gemma2Controller = None
-        def get_controller(self)->Controller4LLMs.Gemma2Controller: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.Gemma2Controller(store,self)
+    class Phi3(AbstractLLM):
+        llm_model_name:str = 'phi-3-3.8b'
 
+        context_window_tokens:int = -1
+        max_output_tokens:int = -1
+        
+        limit_output_tokens: Optional[int] = None
+        temperature: Optional[float] = None
+        top_p: Optional[float] = None
+        frequency_penalty: Optional[float] = None
+        presence_penalty: Optional[float] = None
+        system_prompt: Optional[str] = None
 
 class LLMsStore(BasicStore):
 
@@ -338,6 +310,9 @@ class LLMsStore(BasicStore):
     
     def add_new_gemma2(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Gemma2:
         return self.add_new_obj(Model4LLMs.Gemma2(vendor_id=vendor_id,system_prompt=system_prompt))
+    
+    def add_new_phi3(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Phi3:
+        return self.add_new_obj(Model4LLMs.Phi3(vendor_id=vendor_id,system_prompt=system_prompt))
 
     def find_all_vendors(self)->list[Model4LLMs.AbstractVendor]:
         return self.find_all('*Vendor:*')
