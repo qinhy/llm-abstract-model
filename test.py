@@ -1,14 +1,15 @@
 import os
 import re
-from LLMAbstractModel import Model4LLMs, LLMsStore
+from LLMAbstractModel import LLMsStore
 store = LLMsStore()
 
 vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
 chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
 
-vendor = store.add_new_ollama_vendor()
-gemma2 = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
-phi3 = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
+vendor  = store.add_new_ollama_vendor()
+gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
+phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
+llama32 = store.add_new_llama(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
 
 class TextFile:
     def __init__(self, file_path, chunk_size=1000, overlap_size=100):
@@ -116,8 +117,8 @@ class TextFile:
 # # Close the file
 # text_file.close()
 
-def test_summary(llm = chatgpt4omini,
-                 f='The Adventures of Sherlock Holmes.txt',limit_words=1000):
+def test_summary(llm = llama32,
+                 f='The Adventures of Sherlock Holmes.txt',limit_words=1000,chunk_size=100, overlap_size=30):
     
     user_message = '''I will provide pieces of the text along with prior summarizations.
 Your task is to read each new text snippet and add new summarizations accordingly.  
@@ -127,7 +128,7 @@ You should reply in Japanese with summarizations only, without any additional in
 ```summarization
 - This text shows ...
 ```
-                        
+
 ## Text Snippet
 ```text
 {text}
@@ -145,13 +146,13 @@ You should reply in Japanese with summarizations only, without any additional in
         return extract_explanation_block(output)[0]
     
     previous_outputs = []    
-    text_file = TextFile(f, chunk_size=100, overlap_size=30)
+    text_file = TextFile(f, chunk_size=chunk_size, overlap_size=overlap_size)
     for i,chunk in enumerate(text_file):
         # yield chunk        
         pre_summarization = previous_outputs[-1] if len(previous_outputs)>0 else None
         msg = user_message.format(limit_words=limit_words,text='\n'.join(chunk),
                                   pre_summarization=pre_summarization)
-        # yield msg
+        yield msg
         output = llm.gen(msg)
         try:
             output = outputFormatter(output)

@@ -262,6 +262,19 @@ class Model4LLMs:
         presence_penalty: Optional[float] = None
         system_prompt: Optional[str] = None
 
+    class Llama(AbstractLLM):
+        llm_model_name:str = 'llama-3.2-3b'
+
+        context_window_tokens:int = -1
+        max_output_tokens:int = -1
+        
+        limit_output_tokens: Optional[int] = None
+        temperature: Optional[float] = None
+        top_p: Optional[float] = None
+        frequency_penalty: Optional[float] = None
+        presence_penalty: Optional[float] = None
+        system_prompt: Optional[str] = None
+
 class LLMsStore(BasicStore):
 
     def _get_class(self, id: str, modelclass=Model4LLMs):
@@ -313,6 +326,9 @@ class LLMsStore(BasicStore):
     
     def add_new_phi3(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Phi3:
         return self.add_new_obj(Model4LLMs.Phi3(vendor_id=vendor_id,system_prompt=system_prompt))
+    
+    def add_new_llama(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Llama:
+        return self.add_new_obj(Model4LLMs.Llama(vendor_id=vendor_id,system_prompt=system_prompt))
 
     def find_all_vendors(self)->list[Model4LLMs.AbstractVendor]:
         return self.find_all('*Vendor:*')
@@ -359,8 +375,9 @@ class Tests(unittest.TestCase):
     def test_ollama_2(self):
         v = self.store.find_all('OllamaVendor:*')[0]
         c = self.store.add_new_gemma2(vendor_id=v.get_id())
-        print(c)
+        print(c.gen('What is your name?'))
 
     def test_ollama_3(self):
-        c:Model4LLMs.Gemma2 = self.store.find_all('Gemma2:*')[0]
+        v = self.store.find_all('OllamaVendor:*')[0]
+        c = self.store.add_new_llama(vendor_id=v.get_id())
         print(c.gen('What is your name?'))
