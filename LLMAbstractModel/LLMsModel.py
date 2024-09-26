@@ -178,7 +178,7 @@ class Model4LLMs:
                 messages = [{"role":"user","content":messages}]
             return msgs+messages
 
-        def gen(self, messages:Optional[List|str])->str:
+        def __call__(self, messages:Optional[List|str])->str:
             payload = self.construct_payload(self.construct_messages(messages))
             vendor = self.get_vendor()
             return vendor.chat_result(vendor.chat_request(payload))
@@ -366,7 +366,7 @@ class Tests(unittest.TestCase):
     
     def test_openai_3(self):
         c:Model4LLMs.ChatGPT4oMini = self.store.find_all('ChatGPT4oMini:*')[0]
-        print(c.gen('What is your name?'))
+        print(c('What is your name?'))
     
     def test_ollama_1(self):
         v = self.store.add_new_ollama_vendor()
@@ -375,9 +375,9 @@ class Tests(unittest.TestCase):
     def test_ollama_2(self):
         v = self.store.find_all('OllamaVendor:*')[0]
         c = self.store.add_new_gemma2(vendor_id=v.get_id())
-        print(c.gen('What is your name?'))
+        print(c('What is your name?'))
 
     def test_ollama_3(self):
         v = self.store.find_all('OllamaVendor:*')[0]
         c = self.store.add_new_llama(vendor_id=v.get_id())
-        print(c.gen('What is your name?'))
+        print(c('What is your name?'))

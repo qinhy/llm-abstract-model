@@ -1,5 +1,7 @@
 import os
 import re
+
+from pydantic import BaseModel
 from LLMAbstractModel import LLMsStore
 store = LLMsStore()
 
@@ -117,51 +119,83 @@ class TextFile:
 # # Close the file
 # text_file.close()
 
-def test_summary(llm = llama32,
-                 f='The Adventures of Sherlock Holmes.txt',limit_words=1000,chunk_size=100, overlap_size=30):
-    
-    user_message = '''I will provide pieces of the text along with prior summarizations.
+user_message = '''I will provide pieces of the text along with prior summarizations.
 Your task is to read each new text snippet and add new summarizations accordingly.  
 You should reply in Japanese with summarizations only, without any additional information.
 
-## Your Reply Format Example (should not over {limit_words} words)
+## Your Reply Format Example (should not over {} words)
 ```summarization
 - This text shows ...
 ```
 
 ## Text Snippet
 ```text
-{text}
+{}
 ```
 
 ## Previous Summarizations
 ```summarization
-{pre_summarization}
+{}
 ```'''
 
-    def outputFormatter(output=''):
-        def extract_explanation_block(text):
-            matches = re.findall(r"```summarization\s*(.*)\s*```", text, re.DOTALL)
-            return matches if matches else []
+class RegxExtractor(BaseModel):
+    regx:str = r"```summarization\s*(.*)\s*```"
+    def __call__(self,*args,**kwargs):
+        return self.extract(*args,**kwargs)
+    
+    def extract(self,text):
+        matches = re.findall(self.regx, text, re.DOTALL)        
+        try:
+            return matches[0]
+        except Exception as e:
+            print('[outputFormatter]: error!',e)
+            return text
+
+class StringTemplate(BaseModel):
+    string:str
+    def __call__(self,*args,**kwargs):
+        return self.string.format(*args[0])
+
+def outputFormatter(output=''):
+    def extract_explanation_block(text):
+        matches = re.findall(r"```summarization\s*(.*)\s*```", text, re.DOTALL)
+        return matches if matches else []    
+    try:
         return extract_explanation_block(output)[0]
+    except Exception as e:
+        print('[outputFormatter]: error!',e)
+        return output
+
+def test_summary(llm = llama32,
+                 f='The Adventures of Sherlock Holmes.txt',limit_words=1000,chunk_size=100, overlap_size=30):
     
     previous_outputs = []    
     text_file = TextFile(f, chunk_size=chunk_size, overlap_size=overlap_size)
     for i,chunk in enumerate(text_file):
         # yield chunk        
         pre_summarization = previous_outputs[-1] if len(previous_outputs)>0 else None
-        msg = user_message.format(limit_words=limit_words,text='\n'.join(chunk),
-                                  pre_summarization=pre_summarization)
+        msg = user_message.format(limit_words,'\n'.join(chunk),pre_summarization)
         yield msg
-        output = llm.gen(msg)
-        try:
-            output = outputFormatter(output)
-        except Exception as e:
-            print('[outputFormatter]: error!',e)
-            
+        output = llm(msg)
+        output = outputFormatter(output)            
         previous_outputs.append(output)
         yield output
 
+# make a custom chain 
+from functools import reduce
+def rcompose(*funcs):
+    return lambda x: reduce(lambda v, f: f(v), reversed(funcs), x)
+def compose(*funcs):
+    return lambda x: reduce(lambda v, f: f(v), funcs, x)
+
+chain_list = [
+    StringTemplate(string=user_message),
+    chatgpt4omini,
+    RegxExtractor(regx=r"```summarization\s*(.*)\s*```")
+]
+
+chain = compose(*chain_list)
+print(chain((100,'NULL','')))
 
 # for i,p in enumerate(['file1','file2','file3','filen']):
 #     ts = test_summary(p)
