@@ -137,47 +137,36 @@ You should reply in Japanese with summarizations only, without any additional in
 ```summarization
 {}
 ```'''
-
 class RegxExtractor(BaseModel):
     regx:str = r"```summarization\s*(.*)\s*```"
     def __call__(self,*args,**kwargs):
         return self.extract(*args,**kwargs)
     
     def extract(self,text):
-        matches = re.findall(self.regx, text, re.DOTALL)        
+        matches = re.findall(self.regx, text, re.DOTALL)
         try:
             return matches[0]
         except Exception as e:
             print('[outputFormatter]: error!',e)
             return text
-
 class StringTemplate(BaseModel):
     string:str
     def __call__(self,*args,**kwargs):
         return self.string.format(*args[0])
 
-def outputFormatter(output=''):
-    def extract_explanation_block(text):
-        matches = re.findall(r"```summarization\s*(.*)\s*```", text, re.DOTALL)
-        return matches if matches else []    
-    try:
-        return extract_explanation_block(output)[0]
-    except Exception as e:
-        print('[outputFormatter]: error!',e)
-        return output
-
 def test_summary(llm = llama32,
-                 f='The Adventures of Sherlock Holmes.txt',limit_words=1000,chunk_size=100, overlap_size=30):
+                 f='The Adventures of Sherlock Holmes.txt',
+                 limit_words=1000,chunk_size=100, overlap_size=30):
     
     previous_outputs = []    
     text_file = TextFile(f, chunk_size=chunk_size, overlap_size=overlap_size)
-    for i,chunk in enumerate(text_file):
-        # yield chunk        
+    for i,chunk in enumerate(text_file):        
         pre_summarization = previous_outputs[-1] if len(previous_outputs)>0 else None
-        msg = user_message.format(limit_words,'\n'.join(chunk),pre_summarization)
-        yield msg
+
+        msg = StringTemplate(string=user_message)(limit_words,'\n'.join(chunk),pre_summarization)        
         output = llm(msg)
-        output = outputFormatter(output)            
+        output = RegxExtractor(regx=r"```summarization\s*(.*)\s*```")(output)     
+
         previous_outputs.append(output)
         yield output
 
