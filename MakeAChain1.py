@@ -9,13 +9,13 @@ chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),
                                             system_prompt='You are an expert in English translation.')
 
 # vendor  = store.add_new_ollama_vendor()
+# llama32 = store.add_new_llama(vendor_id=vendor.get_id(),system_prompt='You are an expert in English translation.')
 # gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt='You are an expert in English translation.')
 # phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt='You are an expert in English translation.')
-# llama32 = store.add_new_llama(vendor_id=vendor.get_id(),system_prompt='You are an expert in English translation.')
 
 ##################### make a message template
 translate_template = store.add_new_str_template(
-'''I will provide text. Please tranlate it.
+'''I will you provide text. Please tranlate it.
 You should reply translations only, without any additional information.
 
 ## Your Reply Format Example
@@ -47,6 +47,7 @@ print(get_result(
             )))
 # -> Hello! This is my first time making a chain!
 
+
 ##################### make the chain more graceful and simple
 # chain up functions
 from functools import reduce
@@ -71,6 +72,7 @@ print(translator(['常識とは、18歳までに身に付けた偏見のコレ�
 print(translator(['为政以德，譬如北辰，居其所而众星共之。',]))
 # -> Governing with virtue is like the North Star, which remains in its place while all the other stars revolve around it.
 
+
 ############# save/load chain json
 print(LLMsStore.chain_dumps(translator_chain))
 
@@ -82,9 +84,6 @@ print(translator(['こんにちは！はじめてのチェーン作りです！'
 
 
 
-
-
-
 ############# additional template usage
 
 chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id())
@@ -93,18 +92,18 @@ chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id())
 translate_template = store.add_new_str_template(
 '''[
     {{"role":"system","content":"You are an expert in translation text ({})."}},
-    {{"role":"user","content":"I will provide text. Please tranlate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n```translation\\n...\\n```\\n## The Text\\n```text\\n{}\\n```\\n```"}}
+    {{"role":"user","content":"I will you provide text. Please tranlate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n```translation\\n...\\n```\\n## The Text\\n```text\\n{}\\n```"}}
 ]''')
 # the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
 print(translate_template( ['to English','こんにちは！はじめてのチェーン作りです！',] ))
 # -> [
 # ->     {"role":"system","content":"You are an expert in translation text (to English)."},
-# ->     {"role":"user","content":"I will provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```\n## The Text\n```text\nこんにちは！はじめてのチェーン作りです！\n```\n```"}
+# ->     {"role":"user","content":"I will you provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```\n## The Text\n```text\nこんにちは！はじめてのチェーン作りです！\n```"}
 # -> ]
 
 msg = json.loads( translate_template( ['to English','こんにちは！はじめてのチェーン作りです！',] ))
 print(msg)
-# -> [{'role': 'system', 'content': 'You are an expert in translation text (to English).'}, {'role': 'user', 'content': 'I will provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```\n## The Text\n```text\nこんにちは！はじめてのチェーン作りです！\n```\n```'}]
+# -> [{'role': 'system', 'content': 'You are an expert in translation text (to English).'}, {'role': 'user', 'content': 'I will you provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```\n## The Text\n```text\nこんにちは！はじめてのチェーン作りです！\n```'}]
 
 print(chatgpt4omini(msg))
 # -> ```translation
