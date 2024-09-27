@@ -49,8 +49,7 @@ print(get_result(
 ##################### make the chain more graceful and simple
 # chain up functions
 from functools import reduce
-def compose(*funcs):
-    return lambda x: reduce(lambda v, f: f(v), funcs, x)
+def compose(*funcs): return lambda x: reduce(lambda v, f: f(v), funcs, x)
 
 def say_a(x):return f'{x}a'
 def say_b(x):return f'{x}b'
