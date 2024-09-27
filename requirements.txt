@@ -1,0 +1,8 @@
+# pydantic is used for data validation and settings management
+pydantic
+
+# requests is used for making HTTP requests
+requests
+
+# ZoneInfo comes with Python 3.9+, no external library needed
+# unittest, fnmatch, json, os, re, uuid, typing, and datetime are part of the Python standard library
