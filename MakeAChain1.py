@@ -1,3 +1,4 @@
+import json
 import os
 from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.utils import TextFile
@@ -14,7 +15,7 @@ chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),
 
 ##################### make a message template
 translate_template = store.add_new_str_template(
-'''I will provide text of Japanese. Please tranlate it.
+'''I will provide text. Please tranlate it.
 You should reply translations only, without any additional information.
 
 ## Your Reply Format Example
@@ -26,7 +27,7 @@ You should reply translations only, without any additional information.
 {}
 ```                                          
 ```''')
-# the usage of template is tmp( [args1,args2,...] ) is the same of sting.format([...])
+# the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
 print(translate_template( ['こんにちは！はじめてのチェーン作りです！',] ))
 # -> ...
 
@@ -36,7 +37,7 @@ print(chatgpt4omini( translate_template( ['こんにちは！はじめてのチ�
 # -> ```
 
 
-#################### make a "translation" extractor, strings between " ```translation " and " ``` "
+# #################### make a "translation" extractor, strings between " ```translation " and " ``` "
 get_result = store.add_new_regx_extractor(r"```translation\s*(.*)\s*```")
 
 # this just a chain like processs
@@ -78,3 +79,41 @@ print(loaded_chain)
 translator = compose(*loaded_chain)
 print(translator(['こんにちは！はじめてのチェーン作りです！',]))
 # -> Hello! It's my first time making a chain!
+
+
+
+
+
+
+############# additional template usage
+
+chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id())
+
+# we use raw json to do template
+translate_template = store.add_new_str_template(
+'''[
+    {{"role":"system","content":"You are an expert in translation text ({})."}},
+    {{"role":"user","content":"I will provide text. Please tranlate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n```translation\\n...\\n```\\n## The Text\\n```text\\n{}\\n```\\n```"}}
+]''')
+# the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
+print(translate_template( ['to English','こんにちは！はじめてのチェーン作りです！',] ))
+# -> [
+# ->     {"role":"system","content":"You are an expert in translation text (to English)."},
+# ->     {"role":"user","content":"I will provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```\n## The Text\n```text\nこんにちは！はじめてのチェーン作りです！\n```\n```"}
+# -> ]
+
+msg = json.loads( translate_template( ['to English','こんにちは！はじめてのチェーン作りです！',] ))
+print(msg)
+# -> [{'role': 'system', 'content': 'You are an expert in translation text (to English).'}, {'role': 'user', 'content': 'I will provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```\n## The Text\n```text\nこんにちは！はじめてのチェーン作りです！\n```\n```'}]
+
+print(chatgpt4omini(msg))
+# -> ```translation
+# -> Hello! This is my first time making a chain!
+# -> ```
+
+translator_chain = [translate_template, json.loads, chatgpt4omini, get_result]
+translator = compose(*translator_chain)
+print(translator( ['to Chinese','こんにちは！はじめてのチェーン作りです！',] ))
+# -> 你好！这是第一次制作链条！
+print(translator( ['to Japanese','Hello! This is my first time making a chain!',] ))
+# -> こんにちは！これは私の初めてのチェーン作りです！

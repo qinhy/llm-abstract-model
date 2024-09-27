@@ -101,6 +101,8 @@ class Model4LLMs:
             return {model['id']: model for model in response.json().get('data', [])}
         
         def chat_result(self,response)->str:
+            if not self._try_binary_error(lambda:response['choices'][0]['message']['content']):
+                return self._log_error(ValueError(f'cannot get result from {response}'))
             return response['choices'][0]['message']['content']
 
     class AbstractLLM(Model4Basic.AbstractObj):
