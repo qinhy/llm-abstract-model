@@ -31,9 +31,30 @@ class PythonDictStorage:
         return fnmatch.filter(self.model.store.keys(), pattern)
     
     def dumps(self)->str:return json.dumps(self.model.store)
+    
+    def loads(self, json_string=r'{}'): [ self.set(k,v) for k,v in json.loads(json_string).items()]
 
 def now_utc():
     return datetime.now().replace(tzinfo=ZoneInfo("UTC"))
+class BasicModel(BaseModel):
+    def __call__(self, *args, **kwargs):
+        raise NotImplementedError('This method should be implemented by subclasses.')
+    
+    def _log_error(self, e):
+        print(f"[{self.__class__.__name__}] Error: {str(e)}")
+    
+    def _try_error(self, func, default_value=('NULL',None)):
+        try:
+            return (True,func())
+        except Exception as e:
+            self._log_error(e)
+            return (False,default_value)
+        
+    def _try_binary_error(self, func):
+        return self._try_error(func)[0]
+    
+    def _try_obj_error(self, func, default_value=('NULL',None)):
+        return self._try_error(func,default_value)[1]
 
 class Controller4Basic:
     class AbstractObjController:
@@ -68,7 +89,7 @@ class Controller4Basic:
             return self
         
 class Model4Basic:
-    class AbstractObj(BaseModel):
+    class AbstractObj(BasicModel):
         _id: str=None
         rank: list = [0]
         create_time: datetime = Field(default_factory=now_utc)

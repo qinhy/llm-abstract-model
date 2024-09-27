@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import unittest
 from typing import Any, Dict, List, Optional
 from pydantic import field_validator, ConfigDict, Field
@@ -22,6 +23,15 @@ class Controller4LLMs:
         
         def get_vendor(self):
             vendor:Model4LLMs.AbstractVendor = self._store.find(self.model.vendor_id)
+            if vendor is None:
+                raise ValueError(f'vendor of {self.model.vendor_id} is not exists! Please do change_vendor(...)')
+            return vendor
+        
+        def change_vendor(self,vendor_id:str):
+            vendor:Model4LLMs.AbstractVendor = self._store.find(vendor_id)
+            if vendor is None:
+                raise ValueError(f'vendor of {vendor_id} is not exists! Please do add new vendor')
+            self.update(vendor_id=vendor.get_id())
             return vendor
 class Model4LLMs:
     
@@ -187,7 +197,6 @@ class Model4LLMs:
         _controller: Controller4LLMs.AbstractLLMController = None
         def get_controller(self)->Controller4LLMs.AbstractLLMController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractLLMController(store,self)
-
     class OpenAIChatGPT(AbstractLLM):        
         # New attributes for advanced configurations
         stop_sequences: Optional[List[str]]
@@ -224,18 +233,25 @@ class Model4LLMs:
         models_endpoint:str = '/api/tags'
 
         def get_available_models(self) -> Dict[str, Any]:
-            response = super().get_available_models()
+            response = self._try_obj_error(super().get_available_models, None)
+            if response is None:
+                return self._log_error(ValueError(f'cannot get available models'))
             return {model['name']: model for model in response.json().get('models', [])}
 
         def format_llm_model_name(self,llm_model_name:str) -> str:            
             llm_model_name = llm_model_name.lower().replace('meta-','')
             if '-' in llm_model_name:
                 llm_model_name = llm_model_name.split('-')
+                if not self._try_binary_error(lambda:llm_model_name[2]):
+                    return self._log_error(ValueError(f'cannot parse name of {llm_model_name}'))
                 llm_model_name = llm_model_name[0] + llm_model_name[1] + ':' + llm_model_name[2]
             return llm_model_name
         
         def chat_result(self,response)->str:
-            return response['message']['content']        
+            if not self._try_binary_error(lambda:response['message']['content']):
+                return self._log_error(ValueError(f'cannot get result from {response}'))
+            return response['message']['content']
+        
     class Gemma2(AbstractLLM):
         llm_model_name:str = 'gemma-2-2b'
 
@@ -274,6 +290,25 @@ class Model4LLMs:
         frequency_penalty: Optional[float] = None
         presence_penalty: Optional[float] = None
         system_prompt: Optional[str] = None
+
+    #####################utils model#########
+    
+    class RegxExtractor(Model4Basic.AbstractObj):
+        regx:str
+        def __call__(self,*args,**kwargs):
+            return self.extract(*args,**kwargs)
+        
+        def extract(self,text):
+            matches = re.findall(self.regx, text, re.DOTALL)        
+            if not self._try_binary_error(lambda:matches[0]):
+                self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
+                return text
+            return matches[0]
+            
+    class StringTemplate(Model4Basic.AbstractObj):
+        string:str
+        def __call__(self,*args,**kwargs):
+            return self.string.format(*args[0])
 
 class LLMsStore(BasicStore):
 
@@ -330,8 +365,31 @@ class LLMsStore(BasicStore):
     def add_new_llama(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Llama:
         return self.add_new_obj(Model4LLMs.Llama(vendor_id=vendor_id,system_prompt=system_prompt))
 
+    def add_new_str_template(self,string:str):
+        return self.add_new_obj(Model4LLMs.StringTemplate(string=string))
+    
+    def add_new_regx_extractor(self,regx:str):
+        return self.add_new_obj(Model4LLMs.RegxExtractor(regx=regx))
+
     def find_all_vendors(self)->list[Model4LLMs.AbstractVendor]:
         return self.find_all('*Vendor:*')
+
+    @staticmethod    
+    def chain_dumps(cl:list[Model4Basic.AbstractObj]):
+        res = {}
+        for i in list(map(lambda x:{x.get_id():json.loads(x.model_dump_json())},cl)):
+            res.update(i)
+        return json.dumps(res)
+
+    def chain_loads(self,cl_json):
+        data:dict = json.loads(cl_json)
+        ks = data.keys()
+        tmp_store = LLMsStore()
+        tmp_store.loads(cl_json)
+        vs = [tmp_store.find(k) for k in ks]
+        for v in vs:v._id=None
+        return [self.add_new_obj(v) for v in vs]
+
 
 class Tests(unittest.TestCase):
     def __init__(self,*args,**kwargs)->None:
