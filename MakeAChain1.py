@@ -5,15 +5,16 @@ from LLMAbstractModel.utils import TextFile
 store = LLMsStore()
 
 vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
-chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),
+llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',#vendor.get_id(),
                                             system_prompt='You are an expert in English translation.')
 
 # vendor  = store.add_new_ollama_vendor()
-# llama32 = store.add_new_llama(vendor_id=vendor.get_id(),system_prompt='You are an expert in English translation.')
+# llm = llama32 = store.add_new_llama(vendor_id='auto',#vendor.get_id(),
+#                                     system_prompt='You are an expert in English translation.')
 # gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt='You are an expert in English translation.')
 # phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt='You are an expert in English translation.')
 
-##################### make a message template
+print('############# make a message template')
 translate_template = store.add_new_str_template(
 '''I will you provide text. Please tranlate it.
 You should reply translations only, without any additional information.
@@ -31,24 +32,24 @@ You should reply translations only, without any additional information.
 print(translate_template( ['こんにちは！はじめてのチェーン作りです！',] ))
 # -> ...
 
-print(chatgpt4omini( translate_template( ['こんにちは！はじめてのチェーン作りです！',] ) ))
+print(llm( translate_template( ['こんにちは！はじめてのチェーン作りです！',] ) ))
 # -> ```translation
 # -> Hello! This is my first time making a chain!
 # -> ```
 
 
-# #################### make a "translation" extractor, strings between " ```translation " and " ``` "
+print('############# make a "translation" extractor, strings between " ```translation " and " ``` "')
 get_result = store.add_new_regx_extractor(r"```translation\s*(.*)\s*```")
 
 # this just a chain like processs
 print(get_result(
-        chatgpt4omini(
+        llm(
             translate_template( ['こんにちは！はじめてのチェーン作りです！',] ) 
             )))
 # -> Hello! This is my first time making a chain!
 
 
-##################### make the chain more graceful and simple
+print('############# make the chain more graceful and simple')
 # chain up functions
 from functools import reduce
 def compose(*funcs): return lambda x: reduce(lambda v, f: f(v), funcs, x)
@@ -60,7 +61,7 @@ def say_c(x):return f'{x}c'
 say_abc = compose(say_a,say_b,say_c)
 print('test chain up:',say_abc(''))
 
-translator_chain = [translate_template, chatgpt4omini, get_result]
+translator_chain = [translate_template, llm, get_result]
 translator = compose(*translator_chain)
 
 print(translator(['こんにちは！はじめてのチェーン作りです！',]))
@@ -73,7 +74,7 @@ print(translator(['为政以德，譬如北辰，居其所而众星共之。',])
 # -> Governing with virtue is like the North Star, which remains in its place while all the other stars revolve around it.
 
 
-############# save/load chain json
+print('############# save/load chain json')
 print(LLMsStore.chain_dumps(translator_chain))
 
 loaded_chain = store.chain_loads(LLMsStore.chain_dumps(translator_chain))
@@ -84,9 +85,10 @@ print(translator(['こんにちは！はじめてのチェーン作りです！'
 
 
 
-############# additional template usage
+print('############# additional template usage')
 
-chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id())
+llm = store.add_new_chatgpt4omini(vendor_id='auto')
+# llm = store.add_new_llama(vendor_id='auto')
 
 # we use raw json to do template
 translate_template = store.add_new_str_template(
@@ -105,12 +107,12 @@ msg = json.loads( translate_template( ['to English','こんにちは！はじめ
 print(msg)
 # -> [{'role': 'system', 'content': 'You are an expert in translation text (to English).'}, {'role': 'user', 'content': 'I will you provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```\n## The Text\n```text\nこんにちは！はじめてのチェーン作りです！\n```'}]
 
-print(chatgpt4omini(msg))
+print(llm(msg))
 # -> ```translation
 # -> Hello! This is my first time making a chain!
 # -> ```
 
-translator_chain = [translate_template, json.loads, chatgpt4omini, get_result]
+translator_chain = [translate_template, json.loads, llm, get_result]
 translator = compose(*translator_chain)
 print(translator( ['to Chinese','こんにちは！はじめてのチェーン作りです！',] ))
 # -> 你好！这是第一次制作链条！

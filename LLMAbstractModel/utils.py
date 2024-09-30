@@ -1,6 +1,6 @@
 import re
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Any, Optional, List
 from .BasicModel import BasicModel
 
 class TextFile(BasicModel):
@@ -9,13 +9,15 @@ class TextFile(BasicModel):
     overlap_lines: int = Field(default=100, ge=0, description="Number of overlapping lines between chunks, must be non-negative")
     current_position: int = Field(default=0, ge=0, description="Current position in the file")
     line_count: Optional[int] = None
+    _file:Any = None
+    _current_chunk:Any = None
 
     class Config:
         arbitrary_types_allowed = True
 
     def __init__(self, **data):
         super().__init__(**data)
-        self.file = open(self.file_path, 'r', encoding='utf-8')  # Open the file in read mode
+        self._file = open(self.file_path, 'r', encoding='utf-8')  # Open the file in read mode
         self.line_count = 0
         self._calculate_total_lines()
 
@@ -31,7 +33,7 @@ class TextFile(BasicModel):
         """
         Reset the file pointer to the beginning of the file.
         """
-        self.file.seek(0)
+        self._file.seek(0)
         self.current_position = 0
 
     def read_chunk(self) -> Optional[List[str]]:
@@ -51,12 +53,12 @@ class TextFile(BasicModel):
         if start_line > 0:
             self._reset_file()
             for _ in range(start_line):
-                self.file.readline()
+                self._file.readline()
 
         # Read the chunk
         chunk = []
         for _ in range(start_line, end_line):
-            line = self.file.readline()
+            line = self._file.readline()
             if not line:
                 break
             chunk.append(line)
@@ -70,28 +72,28 @@ class TextFile(BasicModel):
         Reset the file and the position to enable iteration over the file chunks.
         """
         self._reset_file()
-        self.current_chunk = self.read_chunk()
+        self._current_chunk = self.read_chunk()
         return self
 
     def __next__(self) -> List[str]:
         """
         Return the next chunk of lines.
         """
-        if not self.current_chunk:
-            self.current_chunk = self.read_chunk()
+        if not self._current_chunk:
+            self._current_chunk = self.read_chunk()
 
-        if self.current_chunk is None or len(self.current_chunk) == 0:
+        if self._current_chunk is None or len(self._current_chunk) == 0:
             raise StopIteration
 
-        chunk = self.current_chunk
-        self.current_chunk = self.read_chunk()
+        chunk = self._current_chunk
+        self._current_chunk = self.read_chunk()
         return chunk
 
     def close(self):
         """
         Close the file when done.
         """
-        self.file.close()
+        self._file.close()
 
 # Example usage:
 # text_file = TextFile(file_path="example.txt")

@@ -47,23 +47,25 @@ def test_summary(llm = llama32,
         pre_summarization = output
         yield output
 
-# make a custom chain 
+
+############# make a custom chain 
 from functools import reduce
-def rcompose(*funcs):
-    return lambda x: reduce(lambda v, f: f(v), reversed(funcs), x)
 def compose(*funcs):
     return lambda x: reduce(lambda v, f: f(v), funcs, x)
 
-chain_list = [
-    msg_template,
-    chatgpt4omini,
-    res_ext
-]
-
+chain_list = [msg_template, chatgpt4omini, res_ext]
 chain = compose(*chain_list)
-print(chain((100,'NULL','')))
-print(LLMsStore.chain_dumps(chain_list))
-print(store.chain_loads(LLMsStore.chain_dumps(chain_list)))
+print(chain( [100,'NULL',''] )) # limit_words, the text, pre_summarization
+# print(LLMsStore.chain_dumps(chain_list))
+# print(store.chain_loads(LLMsStore.chain_dumps(chain_list)))
+
+pre_summarization = ''
+for i,chunk_lines in enumerate(TextFile(file_path='The Adventures of Sherlock Holmes.txt',
+                                  chunk_lines=100, overlap_lines=30)):
+        summarization = chain( [100,'\n'.join(chunk_lines),pre_summarization] )
+        pre_summarization = summarization
+        print(summarization)
+        break
 
 # for i,p in enumerate(['file1','file2','file3','filen']):
 #     ts = test_summary(p)

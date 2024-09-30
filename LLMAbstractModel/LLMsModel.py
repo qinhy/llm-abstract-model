@@ -21,11 +21,27 @@ class Controller4LLMs:
             self.model:Model4LLMs.AbstractLLM = model
             self._store:LLMsStore = store
         
-        def get_vendor(self):
-            vendor:Model4LLMs.AbstractVendor = self._store.find(self.model.vendor_id)
-            if vendor is None:
-                raise ValueError(f'vendor of {self.model.vendor_id} is not exists! Please do change_vendor(...)')
-            return vendor
+        def get_vendor(self,auto=False):
+            if not auto:
+                vendor:Model4LLMs.AbstractVendor = self._store.find(self.model.vendor_id)
+                if vendor is None:
+                    raise ValueError(f'vendor of {self.model.vendor_id} is not exists! Please change_vendor(...)')
+                return vendor
+            else:
+                if type(self.model) in [Model4LLMs.ChatGPT4o,Model4LLMs.ChatGPT4oMini]:
+                    # try openai vendor
+                    vs = self._store.find_all('OpenAIVendor:*')
+                    if len(vs)==0:raise ValueError(f'auto get endor of OpenAIVendor:* is not exists! Please (add and) change_vendor(...)')
+                    else: return vs[0]
+                    # try other vendors
+                    pass
+                elif type(self.model) in [Model4LLMs.Gemma2, Model4LLMs.Phi3, Model4LLMs.Llama ]:
+                    # try ollama vendor
+                    vs = self._store.find_all('OllamaVendor:*')
+                    if len(vs)==0:raise ValueError(f'auto get endor of OllamaVendor:* is not exists! Please (add and) change_vendor(...)')
+                    else: return vs[0]
+                    # try other vendors
+                    pass
         
         def change_vendor(self,vendor_id:str):
             vendor:Model4LLMs.AbstractVendor = self._store.find(vendor_id)
@@ -106,7 +122,7 @@ class Model4LLMs:
             return response['choices'][0]['message']['content']
 
     class AbstractLLM(Model4Basic.AbstractObj):
-        vendor_id:str
+        vendor_id:str='auto'
         llm_model_name:str
         context_window_tokens:int
         # Context Window Size: The context window size dictates the total number of tokens the model can handle at once. For example, if a model has a context window of 4096 tokens, it can process up to 4096 tokens of combined input and output.
@@ -135,7 +151,7 @@ class Model4LLMs:
         #     return value
         
         def get_vendor(self):
-            return self.get_controller().get_vendor()
+            return self.get_controller().get_vendor(auto=(self.vendor_id=='auto'))
 
         def get_usage_limits(self) -> Dict[str, Any]:
             """
