@@ -67,7 +67,7 @@ class Model4LLMs:
             if 'os.getenv' not in str(self.api_key):
                 return str(self.api_key)
             else:
-                return os.getenv(self.api_key)
+                return eval(self.api_key)
 
         def get_available_models(self) -> Dict[str, Any]:
             return requests.get(self._build_url(self.models_endpoint),
@@ -79,7 +79,7 @@ class Model4LLMs:
                 'Content-Type': 'application/json'
             }
             if self.api_key:
-                headers['Authorization'] = f'Bearer {self.api_key}'
+                headers['Authorization'] = f'Bearer {self.get_api_key()}'
             return headers
 
         def _build_url(self, endpoint: str) -> str:
@@ -93,7 +93,7 @@ class Model4LLMs:
         def chat_request(self,payload={}):
             url=self._build_url(self.chat_endpoint)
             headers=self._build_headers()
-            response = requests.post(url=url, data=json.dumps(payload,ensure_ascii=False),
+            response = requests.post(url=url, data=json.dumps(payload,ensure_ascii=True),
                                      headers=headers,timeout=self.timeout)
             try:
                 response = json.loads(response.text,strict=False)

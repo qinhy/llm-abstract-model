@@ -4,7 +4,7 @@ from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.utils import TextFile
 store = LLMsStore()
 
-vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
+vendor = store.add_new_openai_vendor(api_key="os.getenv('OPENAI_API_KEY')")#os.environ.get('OPENAI_API_KEY','null'))
 llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',#vendor.get_id(),
                                             system_prompt='You are an expert in English translation.')
 
@@ -26,7 +26,6 @@ You should reply translations only, without any additional information.
 ## The Text
 ```text
 {}
-```                                          
 ```''')
 # the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
 print(translate_template( ['こんにちは！はじめてのチェーン作りです！',] ))
