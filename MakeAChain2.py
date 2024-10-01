@@ -51,18 +51,20 @@ def test_summary(llm = llama32,
 ############# make a custom chain 
 from functools import reduce
 def compose(*funcs):
-    return lambda x: reduce(lambda v, f: f(v), funcs, x)
+    def chained_function(*args, **kwargs):
+        return reduce(lambda acc, f: f(*acc if isinstance(acc, tuple) else (acc,), **kwargs), funcs, args)
+    return chained_function
 
 chain_list = [msg_template, chatgpt4omini, res_ext]
 chain = compose(*chain_list)
-print(chain( [100,'NULL',''] )) # limit_words, the text, pre_summarization
+print(chain(100,'NULL','')) # limit_words, the text, pre_summarization
 # print(LLMsStore.chain_dumps(chain_list))
 # print(store.chain_loads(LLMsStore.chain_dumps(chain_list)))
 
 pre_summarization = ''
 for i,chunk_lines in enumerate(TextFile(file_path='The Adventures of Sherlock Holmes.txt',
                                   chunk_lines=100, overlap_lines=30)):
-        summarization = chain( [100,'\n'.join(chunk_lines),pre_summarization] )
+        summarization = chain(100,'\n'.join(chunk_lines),pre_summarization)
         pre_summarization = summarization
         print(summarization)
         break

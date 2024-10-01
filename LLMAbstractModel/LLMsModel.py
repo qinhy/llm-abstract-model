@@ -332,7 +332,7 @@ class Model4LLMs:
     class StringTemplate(Model4Basic.AbstractObj):
         string:str
         def __call__(self,*args,**kwargs):
-            return self.string.format(*args[0])
+            return self.string.format(*args)
 
 class LLMsStore(BasicStore):
 
