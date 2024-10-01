@@ -62,6 +62,12 @@ class Model4LLMs:
         
         def format_llm_model_name(self,llm_model_name:str)->str:
             return llm_model_name       
+        
+        def get_api_key(self)->str:
+            if 'os.getenv' not in str(self.api_key):
+                return str(self.api_key)
+            else:
+                return os.getenv(self.api_key)
 
         def get_available_models(self) -> Dict[str, Any]:
             return requests.get(self._build_url(self.models_endpoint),
