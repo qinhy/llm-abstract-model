@@ -3,34 +3,35 @@ from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.utils import TextFile
 store = LLMsStore()
 
-vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
-chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
+system_prompt = '''I will provide pieces of the text along with prior summarizations.
+Your task is to read each new text snippet and add new summarizations accordingly.
+You should reply summarizations only, without any additional information.
 
-vendor  = store.add_new_ollama_vendor()
-gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
-phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
-llama32 = store.add_new_llama(vendor_id=vendor.get_id(),system_prompt='You are an expert in text summary.')
-
-msg_template = store.add_new_str_template('''I will provide pieces of the text along with prior summarizations.
-Your task is to read each new text snippet and add new summarizations accordingly.  
-You should reply in Japanese with summarizations only, without any additional information.
-
-## Your Reply Format Example (should not over {} words)
+## Your Reply Format Example
 ```summarization
 - This text shows ...
-```
+```'''
 
+vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
+chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),system_prompt=system_prompt)
+
+vendor  = store.add_new_ollama_vendor()
+gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt=system_prompt)
+phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt=system_prompt)
+llama32 = store.add_new_llama(vendor_id=vendor.get_id(),system_prompt=system_prompt)
+
+msg_template = store.add_new_str_template('''
+Please reply summarizations in {}, and should not over {} words.
 ## Text Snippet
 ```text
 {}
 ```
-
 ## Previous Summarizations
 ```summarization
 {}
 ```''')
 
-res_ext = store.add_new_regx_extractor(r"```summarization\s*(.*)\s*```")
+res_ext = store.add_new_regx_extractor(r"```summarization\s*(.*)\s*\n```")
 
 def test_summary(llm = llama32,
                  f='The Adventures of Sherlock Holmes.txt',
@@ -40,7 +41,7 @@ def test_summary(llm = llama32,
     text_file = TextFile(file_path=f, chunk_lines=chunk_lines, overlap_lines=overlap_lines)
     for i,chunk in enumerate(text_file):        
         
-        msg    = msg_template(limit_words,'\n'.join(chunk),pre_summarization)        
+        msg    = msg_template('Japanese', limit_words,'\n'.join(chunk),pre_summarization)        
         output = llm(msg)
         output = res_ext(output)
 
@@ -57,14 +58,13 @@ def compose(*funcs):
 
 chain_list = [msg_template, chatgpt4omini, res_ext]
 chain = compose(*chain_list)
-print(chain(100,'NULL','')) # limit_words, the text, pre_summarization
 # print(LLMsStore.chain_dumps(chain_list))
 # print(store.chain_loads(LLMsStore.chain_dumps(chain_list)))
 
 pre_summarization = ''
 for i,chunk_lines in enumerate(TextFile(file_path='The Adventures of Sherlock Holmes.txt',
                                   chunk_lines=100, overlap_lines=30)):
-        summarization = chain(100,'\n'.join(chunk_lines),pre_summarization)
+        summarization = chain('Japanese', 100,'\n'.join(chunk_lines),pre_summarization)
         pre_summarization = summarization
         print(summarization)
         break

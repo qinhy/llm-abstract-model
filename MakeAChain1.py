@@ -4,9 +4,13 @@ from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.utils import TextFile
 store = LLMsStore()
 
-vendor = store.add_new_openai_vendor(api_key="os.getenv('OPENAI_API_KEY')")#os.environ.get('OPENAI_API_KEY','null'))
+vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")#auto check os.environ
 llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',#vendor.get_id(),
-                                            system_prompt='You are an expert in English translation.')
+                        system_prompt='''You are an expert in English translation. I will provide you with the text. Please translate it. You should reply with translations only, without any additional information.
+## Your Reply Format Example
+```translation
+...
+```''')
 
 # vendor  = store.add_new_ollama_vendor()
 # llm = llama32 = store.add_new_llama(vendor_id='auto',#vendor.get_id(),
@@ -16,14 +20,7 @@ llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',#vendor.get_i
 
 print('############# make a message template')
 translate_template = store.add_new_str_template(
-'''I will provide you with the text. Please translate it.
-You should reply with translations only, without any additional information.
-
-## Your Reply Format Example
-```translation
-...
-```
-## The Text
+'''
 ```text
 {}
 ```''')
@@ -38,7 +35,7 @@ print(llm( translate_template('こんにちは！はじめてのチェーン作�
 
 
 print('############# make a "translation" extractor, strings between " ```translation " and " ``` "')
-get_result = store.add_new_regx_extractor(r"```translation\s*(.*)\s*```")
+get_result = store.add_new_regx_extractor(r"```translation\s*(.*)\s*\n```")
 
 # this just a chain like processs
 print(get_result(
@@ -86,7 +83,6 @@ print(translator('こんにちは！はじめてのチェーン作りです！')
 # -> Hello! It's my first time making a chain!
 
 
-
 print('############# additional template usage')
 
 llm = store.add_new_chatgpt4omini(vendor_id='auto')
@@ -95,19 +91,19 @@ llm = store.add_new_chatgpt4omini(vendor_id='auto')
 # we use raw json to do template
 translate_template = store.add_new_str_template(
 '''[
-    {{"role":"system","content":"You are an expert in translation text ({})."}},
-    {{"role":"user","content":"I will you provide text. Please tranlate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n```translation\\n...\\n```\\n## The Text\\n```text\\n{}\\n```"}}
+    {{"role":"system","content":"You are an expert in translation text.I will you provide text. Please tranlate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n```translation\\n...\\n```"}},
+    {{"role":"user","content":"\\nPlease translate the text in{}.\\n```text\\n{}\\n```"}}
 ]''')
 # the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
 print(translate_template('to English','こんにちは！はじめてのチェーン作りです！'))
 # -> [
-# ->     {"role":"system","content":"You are an expert in translation text (to English)."},
-# ->     {"role":"user","content":"I will you provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```\n## The Text\n```text\nこんにちは！はじめてのチェーン作りです！\n```"}
+# ->     {"role":"system","content":"You are an expert in translation text.I will you provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## -> Your Reply Format Example\n```translation\n...\n```"},
+# ->     {"role":"user","content":"\nPlease translate the text into English.\n```text\nこんにちは！はじめてのチェーン作りです！\n```"}
 # -> ]
 
 msg = json.loads( translate_template('to English','こんにちは！はじめてのチェーン作りです！'))
 print(msg)
-# -> [{'role': 'system', 'content': 'You are an expert in translation text (to English).'}, {'role': 'user', 'content': 'I will you provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```\n## The Text\n```text\nこんにちは！はじめてのチェーン作りです！\n```'}]
+# -> [{'role': 'system', 'content': 'You are an expert in translation text.I will you provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```'}, {'role': 'user', 'content': '\nPlease translate the text into English.\n```text\nこんにちは！はじめてのチェーン作りです！\n```'}]
 
 print(llm(msg))
 # -> ```translation
