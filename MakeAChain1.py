@@ -4,19 +4,21 @@ from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.utils import TextFile
 store = LLMsStore()
 
-vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")#auto check os.environ
-llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',#vendor.get_id(),
-                        system_prompt='''You are an expert in English translation. I will provide you with the text. Please translate it. You should reply with translations only, without any additional information.
+system_prompt='''You are an expert in English translation. I will provide you with the text. Please translate it. You should reply with translations only, without any additional information.
 ## Your Reply Format Example
 ```translation
 ...
-```''')
+```'''
+
+vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")#auto check os.environ
+llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',#vendor.get_id(),
+                                                  system_prompt=system_prompt)
 
 # vendor  = store.add_new_ollama_vendor()
 # llm = llama32 = store.add_new_llama(vendor_id='auto',#vendor.get_id(),
-#                                     system_prompt='You are an expert in English translation.')
-# gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt='You are an expert in English translation.')
-# phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt='You are an expert in English translation.')
+#                                     system_prompt=system_prompt)
+# gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt=system_prompt)
+# phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt=system_prompt)
 
 print('############# make a message template')
 translate_template = store.add_new_str_template(
