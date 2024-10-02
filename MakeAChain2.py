@@ -12,7 +12,7 @@ You should reply summarizations only, without any additional information.
 - This text shows ...
 ```'''
 
-vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
+vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
 chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),system_prompt=system_prompt)
 
 vendor  = store.add_new_ollama_vendor()
