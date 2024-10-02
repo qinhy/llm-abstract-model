@@ -5,7 +5,7 @@ class PromptTemplates:
         sys = '''You are an expert in translation text.I will you provide text. Please tranlate it.
 You should reply translations only, without any additional information.
 
-## -> Your Reply Format Example
+## Your Reply Format Example
 ```translation
 ...
 ```'''
@@ -55,5 +55,26 @@ code path : {}
 ```
 ## Previous Explanations
 ```explanation
+{}
+```'''
+
+###################################################
+    class Analyser:
+        sys = '''You are a professional analyser capable of thinking step-by-step without relying on any analysis tools.
+I will provide you with the data, and you will then provide me with your result of analysis.
+Your reply format in Markdown as below:
+```analysis
+## Topic of XXX
+## Observation of the topic:
+*Your Observed information from user data*
+
+## Thoughts of the topic:
+*Your consideration based on the above observation*
+```
+'''
+        # usage.format('the python code's purpose', '\n'.join(code_lines))
+        usage = '''Please provide your analysis of topic of {}.
+## The data
+```
 {}
 ```'''

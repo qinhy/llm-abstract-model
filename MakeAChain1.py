@@ -1,7 +1,5 @@
 import json
-import os
 from LLMAbstractModel import LLMsStore
-from LLMAbstractModel.utils import TextFile
 store = LLMsStore()
 
 system_prompt='''You are an expert in English translation. I will provide you with the text. Please translate it. You should reply with translations only, without any additional information.
