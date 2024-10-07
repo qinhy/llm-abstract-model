@@ -1,5 +1,8 @@
 import json
+import re
+import sys
 from LLMAbstractModel import LLMsStore
+from LLMAbstractModel.LLMsModel import Model4LLMs
 store = LLMsStore()
 
 system_prompt='''You are an expert in English translation. I will provide you with the text. Please translate it. You should reply with translations only, without any additional information.
@@ -37,13 +40,34 @@ print(llm( translate_template('こんにちは！はじめてのチェーン作�
 print('############# make a "translation" extractor, strings between " ```translation " and " ``` "')
 get_result = store.add_new_regx_extractor(r"```translation\s*(.*)\s*\n```")
 
+descriptions = Model4LLMs.Function.param_descriptions
+@descriptions('Extract text by regx pattern',
+              regx='regx pattern')
+class RegxExtractor(Model4LLMs.Function):
+    regx:str
+    def __call__(self,*args,**kwargs):
+        return self.extract(*args,**kwargs)
+    
+    def extract(self,text):
+        matches = re.findall(self.regx, text, re.DOTALL)        
+        if not self._try_binary_error(lambda:matches[0]):
+            self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
+            return text
+        return matches[0]
+
+store.add_new_function(RegxExtractor(regx=r"```translation\s*(.*)\s*\n```"))
+get_result2 = store.find_function('RegxExtractor')
+
 # this just a chain like processs
-print(get_result(
+print(get_result2(
         llm(
             translate_template('こんにちは！はじめてのチェーン作りです！') 
             )))
 # -> Hello! This is my first time making a chain!
 
+print(store.dumps())
+
+sys.exit(0)
 
 print('############# make the chain more graceful and simple')
 # chain up functions

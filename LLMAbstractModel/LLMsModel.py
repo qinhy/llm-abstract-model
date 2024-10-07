@@ -1,21 +1,24 @@
+import inspect
 import json
 import os
 import re
 import unittest
 from typing import Any, Dict, List, Optional
-from pydantic import field_validator, ConfigDict, Field
+from pydantic import BaseModel, field_validator, ConfigDict, Field
 import requests
 from typing import Dict, Any
 
 from .BasicModel import Controller4Basic, Model4Basic, BasicStore
 
 class Controller4LLMs:
-    class AbstractVendorController(Controller4Basic.AbstractObjController):
+    class AbstractObjController(Controller4Basic.AbstractObjController):
+        pass
+    class AbstractVendorController(AbstractObjController):
         def __init__(self, store, model):
             super().__init__(store, model)
             self.model:Model4LLMs.AbstractVendor = model
             self._store:LLMsStore = store
-    class AbstractLLMController(Controller4Basic.AbstractObjController):
+    class AbstractLLMController(AbstractObjController):
         def __init__(self, store, model):
             super().__init__(store, model)
             self.model:Model4LLMs.AbstractLLM = model
@@ -50,8 +53,10 @@ class Controller4LLMs:
             self.update(vendor_id=vendor.get_id())
             return vendor
 class Model4LLMs:
+    class AbstractObj(Model4Basic.AbstractObj):
+        pass
     
-    class AbstractVendor(Model4Basic.AbstractObj):
+    class AbstractVendor(AbstractObj):
         vendor_name: str  # e.g., 'OpenAI'
         api_url: str  # e.g., 'https://api.openai.com/v1/'
         api_key: str = None  # API key for authentication, if required
@@ -124,7 +129,7 @@ class Model4LLMs:
                 return self._log_error(ValueError(f'cannot get result from {response}'))
             return response['choices'][0]['message']['content']
 
-    class AbstractLLM(Model4Basic.AbstractObj):
+    class AbstractLLM(AbstractObj):
         vendor_id:str='auto'
         llm_model_name:str
         context_window_tokens:int
@@ -312,9 +317,72 @@ class Model4LLMs:
         presence_penalty: Optional[float] = None
         system_prompt: Optional[str] = None
 
-    #####################utils model#########
+    ##################### utils model #########
     
-    class RegxExtractor(Model4Basic.AbstractObj):
+    class Function(AbstractObj):
+
+        def param_descriptions(description,**descriptions):
+            def decorator(func):
+                func:Model4Task.Function = func
+                func._parameters_description = descriptions
+                func._description = description
+                return func
+            return decorator
+
+        class Parameter(BaseModel):
+            type: str
+            description: str            
+
+        name: str = 'null'
+        description: str = 'null'
+        _description: str = 'null'
+        # arguments: Dict[str, Any] = None
+        _properties: Dict[str, Parameter] = {}
+        parameters: Dict[str, Any] = {"type": "object",'properties':_properties}
+        required: list[str] = []        
+        _parameters_description: Dict[str, str] = {}
+        _string_arguments: str='\{\}'
+
+        def __init__(self, *args, **kwargs):
+            # super(self.__class__, self).__init__(*args, **kwargs)
+            super().__init__(*args, **kwargs)
+            self._extract_signature()
+
+        def _extract_signature(self):
+            self.name=self.__class__.__name__
+            sig = inspect.signature(self.__call__)
+            # try:
+            #     self.__call__()
+            # except Exception as e:
+            #     pass
+            # Map Python types to more generic strings
+            type_map = {
+                int: "integer",float: "number",
+                str: "string",bool: "boolean",
+                list: "array",dict: "object"
+                # ... add more mappings if needed
+            }
+            self.required = []
+            for name, param in sig.parameters.items():
+                param_type = type_map.get(param.annotation, "object")
+                self._properties[name] = Model4LLMs.Function.Parameter(
+                    type=param_type, description=self._parameters_description.get(name,''))
+                if param.default is inspect._empty:
+                    self.required.append(name)
+            self.parameters['properties']=self._properties
+            self.description = self._description
+
+        def __call__(self):
+            print('this is root class , not implement')
+        
+        def get_description(self):
+            return self.model_dump()#exclude=['arguments'])
+
+        _controller: Controller4LLMs.AbstractObjController = None
+        def get_controller(self)->Controller4LLMs.AbstractObjController: return self._controller
+        def init_controller(self,store):self._controller = Controller4LLMs.AbstractObjController(store,self)
+
+    class RegxExtractor(AbstractObj):
         regx:str
         def __call__(self,*args,**kwargs):
             return self.extract(*args,**kwargs)
@@ -326,16 +394,24 @@ class Model4LLMs:
                 return text
             return matches[0]
             
-    class StringTemplate(Model4Basic.AbstractObj):
+    class StringTemplate(AbstractObj):
         string:str
         def __call__(self,*args,**kwargs):
             return self.string.format(*args)
 
 class LLMsStore(BasicStore):
 
-    def _get_class(self, id: str, modelclass=Model4LLMs):
-        return super()._get_class(id, modelclass)
 
+    def _get_class(self, id: str, modelclass=Model4LLMs):
+        if 'Function:'in id:
+            class_type = id.split(':')[1]
+        else:
+            class_type = id.split(':')[0]
+        res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
+        res = res.get(class_type, None)
+        if res is None: raise ValueError(f'No such class of {class_type}')
+        return res
+    
     def add_new_openai_vendor(self,api_key: str,
                               api_url: str='https://api.openai.com',
                               timeout: int=30) -> Model4LLMs.OpenAIVendor:
@@ -392,6 +468,14 @@ class LLMsStore(BasicStore):
     def add_new_regx_extractor(self,regx:str):
         return self.add_new_obj(Model4LLMs.RegxExtractor(regx=regx))
 
+    def add_new_function(self, function_obj:Model4LLMs.Function)->Model4LLMs.Function:  
+        function_name = function_obj.__class__.__name__
+        setattr(Model4LLMs,function_name,function_obj.__class__)
+        return self._add_new_obj(function_obj,f'Function:{function_name}')
+    
+    def find_function(self,function_name:str) -> Model4LLMs.Function:
+        return self.find(f'Function:{function_name}')
+    
     def find_all_vendors(self)->list[Model4LLMs.AbstractVendor]:
         return self.find_all('*Vendor:*')
 
@@ -410,7 +494,6 @@ class LLMsStore(BasicStore):
         vs = [tmp_store.find(k) for k in ks]
         for v in vs:v._id=None
         return [self.add_new_obj(v) for v in vs]
-
 
 class Tests(unittest.TestCase):
     def __init__(self,*args,**kwargs)->None:

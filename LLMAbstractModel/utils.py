@@ -2,7 +2,8 @@ import re
 from pydantic import BaseModel, Field
 from typing import Any, Optional, List
 from .BasicModel import BasicModel
-
+from .LLMsModel import Model4LLMs
+descriptions = Model4LLMs.Function.param_descriptions
 class TextFile(BasicModel):
     file_path: str
     chunk_lines: int = Field(default=1000, gt=0, description="Number of lines per chunk, must be greater than 0")
@@ -94,6 +95,26 @@ class TextFile(BasicModel):
         Close the file when done.
         """
         self._file.close()
+
+
+@descriptions('Extract text by regx pattern',
+              regx='regx pattern')
+class RegxExtractor(Model4LLMs.Function):
+    regx:str
+    def __call__(self,*args,**kwargs):
+        return self.extract(*args,**kwargs)
+    
+    def extract(self,text):
+        matches = re.findall(self.regx, text, re.DOTALL)        
+        if not self._try_binary_error(lambda:matches[0]):
+            self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
+            return text
+        return matches[0]
+        
+class StringTemplate(Model4LLMs.Function):
+    string:str
+    def __call__(self,*args,**kwargs):
+        return self.string.format(*args)
 
 # Example usage:
 # text_file = TextFile(file_path="example.txt")
