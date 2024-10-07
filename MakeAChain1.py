@@ -41,8 +41,7 @@ print('############# make a "translation" extractor, strings between " ```transl
 get_result = store.add_new_regx_extractor(r"```translation\s*(.*)\s*\n```")
 
 descriptions = Model4LLMs.Function.param_descriptions
-@descriptions('Extract text by regx pattern',
-              regx='regx pattern')
+@descriptions('Extract text by regx pattern', regx='regx pattern')
 class RegxExtractor(Model4LLMs.Function):
     regx:str
     def __call__(self,*args,**kwargs):
