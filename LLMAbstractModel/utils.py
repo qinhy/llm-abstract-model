@@ -1,6 +1,7 @@
 import re
-from pydantic import BaseModel, Field
+from pydantic import Field
 from typing import Any, Optional, List
+
 from .BasicModel import BasicModel
 from .LLMsModel import Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
