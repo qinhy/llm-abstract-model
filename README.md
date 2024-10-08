@@ -34,20 +34,6 @@
     pip install -r requirements.txt
     ```
 
-3. **Install Dependencies**
-
-   Ensure you have a `requirements.txt` file with the necessary dependencies. If not, you can install the `LLMAbstractModel` library directly:
-
-   ```bash
-   pip install LLMAbstractModel
-   ```
-
-   *If there are additional dependencies, add them to `requirements.txt` and install using:*
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
 ## Configuration
 
 1. **Set Up Environment Variables**
