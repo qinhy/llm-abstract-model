@@ -382,23 +382,6 @@ class Model4LLMs:
         def get_controller(self)->Controller4LLMs.AbstractObjController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractObjController(store,self)
 
-    class RegxExtractor(AbstractObj):
-        regx:str
-        def __call__(self,*args,**kwargs):
-            return self.extract(*args,**kwargs)
-        
-        def extract(self,text):
-            matches = re.findall(self.regx, text, re.DOTALL)        
-            if not self._try_binary_error(lambda:matches[0]):
-                self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
-                return text
-            return matches[0]
-            
-    class StringTemplate(AbstractObj):
-        string:str
-        def __call__(self,*args,**kwargs):
-            return self.string.format(*args)
-
 class LLMsStore(BasicStore):
 
     def _get_class(self, id: str, modelclass=Model4LLMs):
@@ -453,12 +436,6 @@ class LLMsStore(BasicStore):
     
     def add_new_llama(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Llama:
         return self.add_new_obj(Model4LLMs.Llama(vendor_id=vendor_id,system_prompt=system_prompt))
-
-    # def add_new_str_template(self,string:str):
-    #     return self.add_new_obj(Model4LLMs.StringTemplate(string=string))
-    
-    # def add_new_regx_extractor(self,regx:str):
-    #     return self.add_new_obj(Model4LLMs.RegxExtractor(regx=regx))
 
     def add_new_function(self, function_obj:Model4LLMs.Function)->Model4LLMs.Function:  
         function_name = function_obj.__class__.__name__
