@@ -401,16 +401,8 @@ class Model4LLMs:
 
 class LLMsStore(BasicStore):
 
-
     def _get_class(self, id: str, modelclass=Model4LLMs):
-        if 'Function:'in id:
-            class_type = id.split(':')[1]
-        else:
-            class_type = id.split(':')[0]
-        res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
-        res = res.get(class_type, None)
-        if res is None: raise ValueError(f'No such class of {class_type}')
-        return res
+        return super()._get_class(id, modelclass)
     
     def add_new_openai_vendor(self,api_key: str,
                               api_url: str='https://api.openai.com',
@@ -462,19 +454,19 @@ class LLMsStore(BasicStore):
     def add_new_llama(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Llama:
         return self.add_new_obj(Model4LLMs.Llama(vendor_id=vendor_id,system_prompt=system_prompt))
 
-    def add_new_str_template(self,string:str):
-        return self.add_new_obj(Model4LLMs.StringTemplate(string=string))
+    # def add_new_str_template(self,string:str):
+    #     return self.add_new_obj(Model4LLMs.StringTemplate(string=string))
     
-    def add_new_regx_extractor(self,regx:str):
-        return self.add_new_obj(Model4LLMs.RegxExtractor(regx=regx))
+    # def add_new_regx_extractor(self,regx:str):
+    #     return self.add_new_obj(Model4LLMs.RegxExtractor(regx=regx))
 
     def add_new_function(self, function_obj:Model4LLMs.Function)->Model4LLMs.Function:  
         function_name = function_obj.__class__.__name__
         setattr(Model4LLMs,function_name,function_obj.__class__)
-        return self._add_new_obj(function_obj,f'Function:{function_name}')
+        return self._add_new_obj(function_obj)
     
-    def find_function(self,function_name:str) -> Model4LLMs.Function:
-        return self.find(f'Function:{function_name}')
+    def find_function(self,function_id:str) -> Model4LLMs.Function:
+        return self.find(function_id)
     
     def find_all_vendors(self)->list[Model4LLMs.AbstractVendor]:
         return self.find_all('*Vendor:*')

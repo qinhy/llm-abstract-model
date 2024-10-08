@@ -4,6 +4,27 @@ from typing import Any, Optional, List
 from .BasicModel import BasicModel
 from .LLMsModel import Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
+@descriptions('Extract text by regx pattern',
+              text='input text')
+class RegxExtractor(Model4LLMs.Function):
+    regx:str = Field(description='regx pattern')
+    def __call__(self,text:str):
+        return self.extract(text)
+    
+    def extract(self,text)->str:
+        matches = re.findall(self.regx, text, re.DOTALL)        
+        if not self._try_binary_error(lambda:matches[0]):
+            self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
+            return text
+        return matches[0]
+
+@descriptions('String Template for format function',
+              args='string.format args')
+class StringTemplate(Model4LLMs.Function):
+    string:str = Field(description='string of f"..."')
+    def __call__(self,*args):
+        return self.string.format(*args)
+
 class TextFile(BasicModel):
     file_path: str
     chunk_lines: int = Field(default=1000, gt=0, description="Number of lines per chunk, must be greater than 0")
@@ -95,26 +116,6 @@ class TextFile(BasicModel):
         Close the file when done.
         """
         self._file.close()
-
-
-@descriptions('Extract text by regx pattern',
-              regx='regx pattern')
-class RegxExtractor(Model4LLMs.Function):
-    regx:str
-    def __call__(self,*args,**kwargs):
-        return self.extract(*args,**kwargs)
-    
-    def extract(self,text):
-        matches = re.findall(self.regx, text, re.DOTALL)        
-        if not self._try_binary_error(lambda:matches[0]):
-            self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
-            return text
-        return matches[0]
-        
-class StringTemplate(Model4LLMs.Function):
-    string:str
-    def __call__(self,*args,**kwargs):
-        return self.string.format(*args)
 
 # Example usage:
 # text_file = TextFile(file_path="example.txt")

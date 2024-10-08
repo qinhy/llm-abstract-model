@@ -1,6 +1,6 @@
 import os
 from LLMAbstractModel import LLMsStore
-from LLMAbstractModel.utils import TextFile
+from LLMAbstractModel.utils import RegxExtractor, StringTemplate, TextFile
 store = LLMsStore()
 
 system_prompt = '''I will provide pieces of the text along with prior summarizations.
@@ -20,7 +20,7 @@ gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt=system_pr
 phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt=system_prompt)
 llama32 = store.add_new_llama(vendor_id=vendor.get_id(),system_prompt=system_prompt)
 
-msg_template = store.add_new_str_template('''
+msg_template = store.add_new_function(StringTemplate(string='''
 Please reply summarizations in {}, and should not over {} words.
 ## Text Snippet
 ```text
@@ -29,9 +29,9 @@ Please reply summarizations in {}, and should not over {} words.
 ## Previous Summarizations
 ```summarization
 {}
-```''')
+```'''))
 
-res_ext = store.add_new_regx_extractor(r"```summarization\s*(.*)\s*\n```")
+res_ext = store.add_new_function(RegxExtractor(regx=r"```summarization\s*(.*)\s*\n```"))
 
 def test_summary(llm = llama32,
                  f='The Adventures of Sherlock Holmes.txt',

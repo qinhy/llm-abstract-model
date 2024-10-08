@@ -2,7 +2,8 @@ import json
 import re
 import sys
 from LLMAbstractModel import LLMsStore
-from LLMAbstractModel.LLMsModel import Model4LLMs
+from LLMAbstractModel.utils import StringTemplate,RegxExtractor
+
 store = LLMsStore()
 
 system_prompt='''You are an expert in English translation. I will provide you with the text. Please translate it. You should reply with translations only, without any additional information.
@@ -22,11 +23,11 @@ llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',#vendor.get_i
 # phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt=system_prompt)
 
 print('############# make a message template')
-translate_template = store.add_new_str_template(
-'''
+translate_template = store.add_new_function(
+    StringTemplate(string='''
 ```text
 {}
-```''')
+```'''))
 # the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
 print(translate_template('こんにちは！はじめてのチェーン作りです！'))
 # -> ...
@@ -38,35 +39,14 @@ print(llm( translate_template('こんにちは！はじめてのチェーン作�
 
 
 print('############# make a "translation" extractor, strings between " ```translation " and " ``` "')
-get_result = store.add_new_regx_extractor(r"```translation\s*(.*)\s*\n```")
-
-descriptions = Model4LLMs.Function.param_descriptions
-@descriptions('Extract text by regx pattern', regx='regx pattern')
-class RegxExtractor(Model4LLMs.Function):
-    regx:str
-    def __call__(self,*args,**kwargs):
-        return self.extract(*args,**kwargs)
-    
-    def extract(self,text):
-        matches = re.findall(self.regx, text, re.DOTALL)        
-        if not self._try_binary_error(lambda:matches[0]):
-            self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
-            return text
-        return matches[0]
-
-store.add_new_function(RegxExtractor(regx=r"```translation\s*(.*)\s*\n```"))
-get_result2 = store.find_function('RegxExtractor')
+get_result = store.add_new_function(RegxExtractor(regx=r"```translation\s*(.*)\s*\n```"))
 
 # this just a chain like processs
-print(get_result2(
+print(get_result(
         llm(
             translate_template('こんにちは！はじめてのチェーン作りです！') 
             )))
 # -> Hello! This is my first time making a chain!
-
-print(store.dumps())
-
-sys.exit(0)
 
 print('############# make the chain more graceful and simple')
 # chain up functions
@@ -112,11 +92,11 @@ llm = store.add_new_chatgpt4omini(vendor_id='auto')
 # llm = store.add_new_llama(vendor_id='auto')
 
 # we use raw json to do template
-translate_template = store.add_new_str_template(
-'''[
+translate_template = store.add_new_function(
+    StringTemplate(string='''[
     {{"role":"system","content":"You are an expert in translation text.I will you provide text. Please tranlate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n```translation\\n...\\n```"}},
     {{"role":"user","content":"\\nPlease translate the text in{}.\\n```text\\n{}\\n```"}}
-]''')
+]'''))
 # the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
 print(translate_template('to English','こんにちは！はじめてのチェーン作りです！'))
 # -> [
