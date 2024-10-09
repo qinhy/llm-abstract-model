@@ -2,7 +2,7 @@ import re
 from pydantic import Field
 from typing import Any, Optional, List
 
-from .BasicModel import BasicModel
+from .BasicModel import Model4Basic
 from .LLMsModel import Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
 @descriptions('Extract text by regx pattern',
@@ -26,7 +26,7 @@ class StringTemplate(Model4LLMs.Function):
     def __call__(self,*args):
         return self.string.format(*args)
 
-class TextFile(BasicModel):
+class TextFile(Model4Basic.AbstractObj):
     file_path: str
     chunk_lines: int = Field(default=1000, gt=0, description="Number of lines per chunk, must be greater than 0")
     overlap_lines: int = Field(default=100, ge=0, description="Number of overlapping lines between chunks, must be non-negative")
