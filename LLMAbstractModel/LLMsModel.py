@@ -322,7 +322,7 @@ class Model4LLMs:
 
         def param_descriptions(description,**descriptions):
             def decorator(func):
-                func:Model4Task.Function = func
+                func:Model4LLMs.Function = func
                 func._parameters_description = descriptions
                 func._description = description
                 return func
@@ -382,18 +382,23 @@ class Model4LLMs:
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractObjController(store,self)
 
 class LLMsStore(BasicStore):
+    MODEL_CLASS_GROUP = Model4LLMs   
 
-    def _get_class(self, id: str, modelclass=Model4LLMs):
-        return super()._get_class(id, modelclass)
+    def _get_class(self, id: str, modelclass=MODEL_CLASS_GROUP):
+        class_type = id.split(':')[0]
+        res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
+        res = res.get(class_type, None)
+        if res is None: raise ValueError(f'No such class of {class_type}')
+        return res
     
     def add_new_openai_vendor(self,api_key: str,
                               api_url: str='https://api.openai.com',
-                              timeout: int=30) -> Model4LLMs.OpenAIVendor:
-        return self.add_new_obj(Model4LLMs.OpenAIVendor(api_url=api_url,api_key=api_key,timeout=timeout))
+                              timeout: int=30) -> MODEL_CLASS_GROUP.OpenAIVendor:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.OpenAIVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
     def add_new_ollama_vendor(self,api_url: str='http://localhost:11434',
-                              timeout: int=30) -> Model4LLMs.OllamaVendor:
-        return self.add_new_obj(Model4LLMs.OllamaVendor(api_url=api_url,api_key='',timeout=timeout))
+                              timeout: int=30) -> MODEL_CLASS_GROUP.OllamaVendor:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.OllamaVendor(api_url=api_url,api_key='',timeout=timeout))
     
     def add_new_chatgpt4o(self,vendor_id:str,
                                 limit_output_tokens:int = 1024,
@@ -401,9 +406,9 @@ class LLMsStore(BasicStore):
                                 top_p:float = 1.0,
                                 frequency_penalty:float = 0.0,
                                 presence_penalty:float = 0.0,
-                                system_prompt:str = None ) -> Model4LLMs.ChatGPT4o:
+                                system_prompt:str = None ) -> MODEL_CLASS_GROUP.ChatGPT4o:
         
-        return self.add_new_obj(Model4LLMs.ChatGPT4o(vendor_id=vendor_id,
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.ChatGPT4o(vendor_id=vendor_id,
                                 limit_output_tokens=limit_output_tokens,
                                 temperature=temperature,
                                 top_p=top_p,
@@ -417,9 +422,9 @@ class LLMsStore(BasicStore):
                                 top_p:float = 1.0,
                                 frequency_penalty:float = 0.0,
                                 presence_penalty:float = 0.0,
-                                system_prompt:str = None ) -> Model4LLMs.ChatGPT4oMini:
+                                system_prompt:str = None ) -> MODEL_CLASS_GROUP.ChatGPT4oMini:
         
-        return self.add_new_obj(Model4LLMs.ChatGPT4oMini(vendor_id=vendor_id,
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.ChatGPT4oMini(vendor_id=vendor_id,
                                 limit_output_tokens=limit_output_tokens,
                                 temperature=temperature,
                                 top_p=top_p,
@@ -427,24 +432,21 @@ class LLMsStore(BasicStore):
                                 presence_penalty=presence_penalty,
                                 system_prompt=system_prompt,))
     
-    def add_new_gemma2(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Gemma2:
-        return self.add_new_obj(Model4LLMs.Gemma2(vendor_id=vendor_id,system_prompt=system_prompt))
+    def add_new_gemma2(self,vendor_id:str,system_prompt:str = None) -> MODEL_CLASS_GROUP.Gemma2:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.Gemma2(vendor_id=vendor_id,system_prompt=system_prompt))
     
-    def add_new_phi3(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Phi3:
-        return self.add_new_obj(Model4LLMs.Phi3(vendor_id=vendor_id,system_prompt=system_prompt))
+    def add_new_phi3(self,vendor_id:str,system_prompt:str = None) -> MODEL_CLASS_GROUP.Phi3:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.Phi3(vendor_id=vendor_id,system_prompt=system_prompt))
     
-    def add_new_llama(self,vendor_id:str,system_prompt:str = None) -> Model4LLMs.Llama:
-        return self.add_new_obj(Model4LLMs.Llama(vendor_id=vendor_id,system_prompt=system_prompt))
-
-    def add_new_function(self, function_obj:Model4LLMs.Function)->Model4LLMs.Function:  
-        function_name = function_obj.__class__.__name__
-        setattr(Model4LLMs,function_name,function_obj.__class__)
-        return self._add_new_obj(function_obj)
+    def add_new_llama(self,vendor_id:str,system_prompt:str = None) -> MODEL_CLASS_GROUP.Llama:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.Llama(vendor_id=vendor_id,system_prompt=system_prompt))
+    def add_new_function(self, function_obj:MODEL_CLASS_GROUP.Function)->MODEL_CLASS_GROUP.Function:
+        return self.add_new_obj(function_obj)
     
-    def find_function(self,function_id:str) -> Model4LLMs.Function:
+    def find_function(self,function_id:str) -> MODEL_CLASS_GROUP.Function:
         return self.find(function_id)
     
-    def find_all_vendors(self)->list[Model4LLMs.AbstractVendor]:
+    def find_all_vendors(self)->list[MODEL_CLASS_GROUP.AbstractVendor]:
         return self.find_all('*Vendor:*')
 
     @staticmethod    
