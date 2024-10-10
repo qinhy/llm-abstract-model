@@ -7,34 +7,7 @@ import uuid
 from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field
 
-def now_utc():
-    return datetime.now().replace(tzinfo=ZoneInfo("UTC"))
-class PythonDictStorage:
-    
-    class PythonDictStorageModel:
-        def __init__(self):
-            self.uuid = uuid.uuid4()
-            self.store = {}
-
-    def __init__(self):
-        self.model = PythonDictStorage.PythonDictStorageModel()
-
-    def exists(self, key: str)->bool: return key in self.model.store
-
-    def set(self, key: str, value: dict): self.model.store[key] = value
-
-    def get(self, key: str)->dict: return self.model.store.get(key,None)
-
-    def delete(self, key: str):
-        if key in self.model.store:     
-            del self.model.store[key]
-
-    def keys(self, pattern: str='*')->list[str]:
-        return fnmatch.filter(self.model.store.keys(), pattern)
-    
-    def dumps(self)->str:return json.dumps(self.model.store)
-    
-    def loads(self, json_string=r'{}'): [ self.set(k,v) for k,v in json.loads(json_string).items()]
+from .Storage import SingletonKeyValueStorage
 
 def now_utc():
     return datetime.now().replace(tzinfo=ZoneInfo("UTC"))
@@ -192,7 +165,7 @@ class Model4Basic:
         _controller: Controller4Basic.AbstractGroupController = None
         def get_controller(self):return self._controller
 
-class BasicStore(PythonDictStorage):
+class BasicStore(SingletonKeyValueStorage):
     
     def __init__(self, version_controll=False) -> None:
         super().__init__()
