@@ -317,16 +317,6 @@ class Model4LLMs:
         system_prompt: Optional[str] = None
 
     ##################### utils model #########
-    class MT5Account(AbstractObj):
-        account_id: int = None
-        password: str = ''
-        account_server: str = ''
-
-        def is_valid(self):
-            if self.account_id is None:raise ValueError('account_id is not set')
-            if self.password == '':raise ValueError('password is not set')
-            if self.account_server == '':raise ValueError('account_server is not set')
-            return True
     
     class Function(AbstractObj):
 
