@@ -1,3 +1,4 @@
+from graphlib import TopologicalSorter
 import inspect
 import json
 import os
@@ -51,7 +52,31 @@ class Controller4LLMs:
                 raise ValueError(f'vendor of {vendor_id} is not exists! Please do add new vendor')
             self.update(vendor_id=vendor.get_id())
             return vendor
+    
+    class WorkFlowController(AbstractObjController):
+        def __init__(self, store, model):
+            super().__init__(store, model)
+            self.model:Model4LLMs.WorkFlow = model
+            self._store:LLMsStore = store
+        
+        def _read_task(self,id:str):
+            """Builds the dependency graph for TopologicalSorter."""
+            s = self.storage()
+            return s.find(id)
 
+        def run(self):
+            """Executes tasks in the correct order, handling dependencies and results."""
+            tasks = self.model.tasks
+            sorter = TopologicalSorter(tasks)
+            # Execute tasks based on topological order
+            res = None
+            for task_id in sorter.static_order():
+                # Gather results from dependencies to pass as arguments
+                dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
+                # Execute the task and store its result
+                res = self.model.results[task_id] = self._read_task(task_id)(*dependency_results)
+            self.update(results=self.model.results)
+            return res
 
 class KeyOrEnv(BaseModel):
     key:str
@@ -391,6 +416,26 @@ class Model4LLMs:
         def get_controller(self)->Controller4LLMs.AbstractObjController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractObjController(store,self)
 
+
+    class WorkFlow(AbstractObj):
+        tasks: Dict[str, list[str]] # using uuids, task and dependencies
+        # tasks = {
+        #     "task1_uuid": ["task2_uuid", "task3_uuid"],  # task1 depends on task2 and task3
+        #     "task2_uuid": ["task4_uuid"],           # task2 depends on task4
+        #     "task3_uuid": [],                  # task3 has no dependencies
+        #     "task4_uuid": []                   # task4 has no dependencies
+        # }
+        results: Dict[str, Any] = {}
+
+        def get_result(self, task_uuid: str) -> Any:
+            """Returns the result of a specified task."""
+            return self.results.get(task_uuid, None)
+        
+        model_config = ConfigDict(arbitrary_types_allowed=True)    
+        _controller: Controller4LLMs.WorkFlowController = None
+        def get_controller(self)->Controller4LLMs.WorkFlowController: return self._controller
+        def init_controller(self,store):self._controller = Controller4LLMs.WorkFlowController(store,self)
+        
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   
 
