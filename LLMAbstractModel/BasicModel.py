@@ -152,7 +152,7 @@ class Model4Basic:
         def _get_controller_class(self,modelclass=Controller4Basic):
             class_type = self.__class__.__name__+'Controller'
             res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
-            res = res.get(class_type, None)
+            res = res.get(class_type, res.get('AbstractObjController', None))
             if res is None: raise ValueError(f'No such class of {class_type}')
             return res
         def get_controller(self): return self._controller
@@ -166,39 +166,43 @@ class Model4Basic:
         def get_controller(self):return self._controller
 
 class BasicStore(SingletonKeyValueStorage):
+    MODEL_CLASS_GROUP = Model4Basic
     
     def __init__(self, version_controll=False) -> None:
         super().__init__()
 
-    def _get_class(self, id: str, modelclass=Model4Basic):
+    def _get_class(self, id: str, modelclass=MODEL_CLASS_GROUP):
         class_type = id.split(':')[0]
         res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
         res = res.get(class_type, None)
         if res is None: raise ValueError(f'No such class of {class_type}')
         return res
     
-    def _get_as_obj(self,id,data_dict)->Model4Basic.AbstractObj:
-        obj:Model4Basic.AbstractObj = self._get_class(id)(**data_dict)
+    def _get_as_obj(self,id,data_dict)->MODEL_CLASS_GROUP.AbstractObj:
+        obj = self._get_class(id)(**data_dict)
         obj.set_id(id).init_controller(self)
         return obj
     
-    def _add_new_obj(self, obj:Model4Basic.AbstractObj, id:str=None):
+    def _add_new_obj(self, obj:MODEL_CLASS_GROUP.AbstractObj, id:str=None):
         id,d = obj.gen_new_id() if id is None else id, obj.model_dump_json_dict()
         self.set(id,d)
         return self._get_as_obj(id,d)
     
-    def add_new_obj(self, obj:Model4Basic.AbstractObj, id:str=None)->Model4Basic.AbstractObj:        
+    def add_new_obj(self, obj:MODEL_CLASS_GROUP.AbstractObj, id:str=None)->MODEL_CLASS_GROUP.AbstractObj:
+        function_name = obj.__class__.__name__
+        if not hasattr(self.MODEL_CLASS_GROUP,function_name):
+            setattr(self.MODEL_CLASS_GROUP,function_name,obj.__class__)  
+        if obj._id is not None: raise ValueError(f'obj._id is {obj._id}, must be none')
+        return self._add_new_obj(obj,id)
+
+    def add_new_group(self, obj:MODEL_CLASS_GROUP.AbstractGroup, id:str=None)->MODEL_CLASS_GROUP.AbstractGroup:        
         if obj._id is not None: raise ValueError(f'obj._id is {obj._id}, must be none')
         return self._add_new_obj(obj,id)
     
-    def add_new_group(self, obj:Model4Basic.AbstractGroup, id:str=None)->Model4Basic.AbstractGroup:        
-        if obj._id is not None: raise ValueError(f'obj._id is {obj._id}, must be none')
-        return self._add_new_obj(obj,id)
-    
-    def find(self,id:str) -> Model4Basic.AbstractObj:
+    def find(self,id:str) -> MODEL_CLASS_GROUP.AbstractObj:
         raw = self.get(id)
         if raw is None:return None
         return self._get_as_obj(id,raw)
     
-    def find_all(self,id:str=f'AbstractObj:*')->list[Model4Basic.AbstractObj]:
+    def find_all(self,id:str=f'AbstractObj:*')->list[MODEL_CLASS_GROUP.AbstractObj]:
         return [self.find(k) for k in self.keys(id)]
