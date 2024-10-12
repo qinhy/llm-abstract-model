@@ -3,19 +3,23 @@ import random
 import uuid
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional, List
-import mt5
+from LLMAbstractModel.LLMsModel import KeyOrEnv
+try:
+    import mt5
+except Exception as e:
+    print(e)
 from LLMAbstractModel import BasicModel, Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
 
 class MT5Account(Model4LLMs.AbstractObj):
     account_id: int = None
-    password: str = ''
-    account_server: str = ''
+    password: KeyOrEnv = None
+    account_server: KeyOrEnv = None
 
     def is_valid(self):
         if self.account_id is None:raise ValueError('account_id is not set')
-        if self.password == '':raise ValueError('password is not set')
-        if self.account_server == '':raise ValueError('account_server is not set')
+        # if self.password == '':raise ValueError('password is not set')
+        # if self.account_server == '':raise ValueError('account_server is not set')
         return True
 
 class MT5Action:
@@ -23,10 +27,10 @@ class MT5Action:
     #     retry_times on timeout
     #     retry_times on error
     
-    def __init__(self,account:Model4LLMs.MT5Account, retry_times_on_error=3) -> None:       
+    def __init__(self,account:MT5Account, retry_times_on_error=3) -> None:       
         # do set_account at first
         self.uuid = uuid.uuid4()
-        self._account:Model4LLMs.MT5Account = account
+        self._account:MT5Account = account
         self.retry_times_on_error = retry_times_on_error
 
     def set_account(self,account_id,password,account_server):
@@ -396,7 +400,7 @@ class Book(BaseModel):
 @descriptions('...',args='...')
 class MT5CopyLastRates(Model4LLMs.Function):
     # tools.CopyLastRates().set_account(**acc.model_dump())(symbol=c, timeframe=timeframe.value, count=int(bars.value))
-    account:Model4LLMs.MT5Account = Field(description='...')
+    account:MT5Account = Field(description='...')
     symbol:str
     timeframe:str
     count:int
@@ -408,7 +412,7 @@ class MT5CopyLastRates(Model4LLMs.Function):
 
 @descriptions('...',args='...')
 class MT5MakeOder(Model4LLMs.Function):
-    account:Model4LLMs.MT5Account = Field(description='...')
+    account:MT5Account = Field(description='...')
     def __call__(self,Symbol:str,EntryPrice:float,TakeProfitPrice:float,ProfitRiskRatio:float=2):
         # make book
         book = Book()
@@ -419,12 +423,12 @@ class MT5MakeOder(Model4LLMs.Function):
     
 # @descriptions('...',args='...')
 # class MT5BookSend(Model4LLMs.Function):
-#     account:Model4LLMs.MT5Account = Field(description='...')
+#     account:MT5Account = Field(description='...')
 #     def __call__(self,book:Book):
 #         book.send()
 
 # @descriptions('...',args='...')
 # class MT5BookClose(Model4LLMs.Function):
-#     account:Model4LLMs.MT5Account = Field(description='...')
+#     account:MT5Account = Field(description='...')
 #     def __call__(self,book:Book):
 #         book.close()  
