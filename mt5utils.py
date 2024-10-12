@@ -1,11 +1,12 @@
 from multiprocessing import Lock
 import random
+import time
 import uuid
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional, List
 from LLMAbstractModel.LLMsModel import KeyOrEnv
 try:
-    import mt5
+    import MetaTrader5 as mt5
 except Exception as e:
     print(e)
 from LLMAbstractModel import BasicModel, Model4LLMs
@@ -22,54 +23,14 @@ class MT5Account(Model4LLMs.AbstractObj):
         # if self.account_server == '':raise ValueError('account_server is not set')
         return True
 
-class MT5Action:
-    #     timeout 
-    #     retry_times on timeout
-    #     retry_times on error
-    
-    def __init__(self,account:MT5Account, retry_times_on_error=3) -> None:       
-        # do set_account at first
-        self.uuid = uuid.uuid4()
-        self._account:MT5Account = account
-        self.retry_times_on_error = retry_times_on_error
-
-    def set_account(self,account_id,password,account_server):
-        # do this at first
-        self._account.account_id=account_id
-        self._account.password=password
-        self._account.account_server=account_server
-        return self
-    
-    def _run(self):
-        res = None
-        try:
-            res = self.run()
-            self.on_end(res)
-        except Exception as e:
-            print(e)
-            return self._on_error(e)
-        return res
-
-    def run(self):
-        print('do your action at here with mt5')
-    
-    def on_error(self,e):
-        pass
-        # print('not implement')
-
-    def _on_error(self,e):
-        self.retry_times_on_error-=1
-        if self.retry_times_on_error>0:
-            time.sleep(1)
-            return self._run()
-        else:
-            return self.on_error(e)
-
-    def on_end(self,res):
-        pass
-        # print('not implement')
-
 class MT5Manager:
+    # statics for singleton
+    _uuid = uuid.uuid4()
+    _results:Dict[str,List[Any]] = {}
+    _terminals:Dict[str,List] = {}
+    _is_singleton = True
+    _meta = {}
+
     class TerminalLock:
         def __init__(self,exe_path="path/to/your/terminal64.exe"):
             self.exe_path=exe_path
@@ -85,15 +46,22 @@ class MT5Manager:
         def __exit__(self, type, value, traceback):
             self.release()
 
-    def __init__(self) -> None:
-        self.results:Dict[str,List[Any]] = {}
-        self.terminals:Dict[str,List[MT5Manager.TerminalLock]] = {}
+        
+    def __init__(self,id=None,results=None,terminals=None,is_singleton=None):
+        self.uuid = uuid.uuid4() if id is None else id
+        self.results:Dict[str,List[Any]] = None if results is None else results
+        self.terminals:Dict[str,List[MT5Manager.TerminalLock]] = None if terminals is None else terminals
+        self.is_singleton:bool = False if is_singleton is None else is_singleton
     # {
     #     'TitanFX':[
     #         MT5Manager.TerminalLock(exe_path="path/to/your/terminal64.exe")
     #     ],
-    #     'XMTrading':[],
+    #     'XMTrading':[ MT5Manager.TerminalLock(exe_path="path/to/your/terminal64.exe") ],
     # }
+    
+    def get_singleton(self):
+        return self.__class__(self._uuid,self._results,self._terminals,self._is_singleton)
+    
     def add_terminal(self, account_server='XMTrading', exe_path="path/to/your/terminal64.exe"):
         if account_server not in self.terminals:self.terminals[account_server]=[]
         self.terminals.get(account_server,[]).append(
@@ -105,7 +73,8 @@ class MT5Manager:
         if len(t_locks)==0:raise ValueError('the broker is not support!')
         return random.choice(t_locks)
 
-    def do(self, action:MT5Action):
+    def do(self, action:Model4LLMs.Function):
+        account:MT5Account = action.account
         # m = Manager()
         # m.addExe
 
@@ -117,23 +86,33 @@ class MT5Manager:
         # )
         
         # get lock
-        l = self._get_terminal_lock(action._account.account_server.get_secret_value())
+        l = self._get_terminal_lock(account.account_server.get())
         try:
             l.acquire()
             if not mt5.initialize(path=l.exe_path):
                 raise ValueError(f"Failed to initialize MT5 for executable path: {l.exe_path}")
             
-            if action._account is None:raise ValueError('_account is not set')
-            action._account.is_valid()
-            account = action._account
-    
+            if account is None:raise ValueError('account is not set')
+            account.is_valid()
+
             if not mt5.login(account.account_id,
-                             password=account.password.get_secret_value(),
-                             server=account.account_server.get_secret_value()):                
+                             password=account.password.get(),
+                             server=account.account_server.get()):                
                 raise ValueError(f"Failed to log in with account ID: {account.account_id}")
             
-            if action.uuid not in self.results:self.results[action.uuid]=[]
-            self.results[action.uuid].append(action._run())            
+            if action.get_id() not in self.results:self.results[action.get_id()]=[]
+            
+            retry_times_on_error = action.retry_times_on_error
+            res = None
+            while retry_times_on_error>0:
+                try:
+                    res = action.run()
+                    break
+                except Exception as e:
+                    print(e)
+                    time.sleep(1)
+                    retry_times_on_error -= 1
+            self.results[action.get_id()].append(res)            
         finally:
             mt5.shutdown()  # Ensure shutdown is called even if an error occurs
             l.release()
@@ -397,18 +376,64 @@ class Book(BaseModel):
         }
         return self._sendRequest(request)        
 
-@descriptions('...',args='...')
+@descriptions('Retrieve MT5 last N bars data in MetaTrader 5 terminal.',
+            account='MT5Account object for login.',
+            symbol='Financial instrument name (e.g., EURUSD).',
+            timeframe='Timeframe from which the bars are requested. {M1, H1, ...}',
+            # start_pos='Index of the first bar to retrieve.',
+            count='Number of bars to retrieve.')
 class MT5CopyLastRates(Model4LLMs.Function):
-    # tools.CopyLastRates().set_account(**acc.model_dump())(symbol=c, timeframe=timeframe.value, count=int(bars.value))
-    account:MT5Account = Field(description='...')
+    account:MT5Account
     symbol:str
     timeframe:str
     count:int
-    def __call__(self,*args):
-        MT5Manager().run(self.get_action())
+    retry_times_on_error:int=3
 
-    def get_action(self):
-        return MT5Action(self.account)
+    _start_pos=0
+    _digitsnum = {'AUDJPY':3,'CADJPY':3,'CHFJPY':3,'CNHJPY':3,'EURJPY':3,
+                    'GBPJPY':3,'USDJPY':3,'NZDJPY':3,'XAUJPY':0,'JPN225':1,'US500':1}
+
+    def __call__(self,*args):
+        manager = MT5Manager().get_singleton()
+        manager.do(self)
+        return manager.results.get(self.get_id(),[None])[-1]
+
+    def run(self):
+        symbol=self.symbol
+        timeframe=self.timeframe
+        count=self.count
+        digitsnum = mt5.symbol_info(symbol).digits
+        tf = {   'M1':mt5.TIMEFRAME_M1,
+                        'M2':mt5.TIMEFRAME_M2,
+                        'M3':mt5.TIMEFRAME_M3,
+                        'M4':mt5.TIMEFRAME_M4,
+                        'M5':mt5.TIMEFRAME_M5,
+                        'M6':mt5.TIMEFRAME_M6,
+                        'M10':mt5.TIMEFRAME_M10,
+                        'M12':mt5.TIMEFRAME_M12,
+                        'M12':mt5.TIMEFRAME_M12,
+                        'M20':mt5.TIMEFRAME_M20,
+                        'M30':mt5.TIMEFRAME_M30,
+                        'H1':mt5.TIMEFRAME_H1,
+                        'H2':mt5.TIMEFRAME_H2,
+                        'H3':mt5.TIMEFRAME_H3,
+                        'H4':mt5.TIMEFRAME_H4,
+                        'H6':mt5.TIMEFRAME_H6,
+                        'H8':mt5.TIMEFRAME_H8,
+                        'H12':mt5.TIMEFRAME_H12,
+                        'D1':mt5.TIMEFRAME_D1,
+                        'W1':mt5.TIMEFRAME_W1,
+                        'MN1':mt5.TIMEFRAME_MN1,
+                    }.get(timeframe,mt5.TIMEFRAME_H1)
+        # Retrieve the bar data from MetaTrader 5
+        rates = mt5.copy_rates_from_pos(symbol, tf, self._start_pos, count)
+        if rates is None:
+            return None, mt5.last_error()  # Return error details if retrieval fails
+        if digitsnum>0:
+            return '\n'.join([f'```{symbol} {timeframe} OHLC\n']+[f'{r[1]:.{digitsnum}f}\n{r[2]:.{digitsnum}f}\n{r[3]:.{digitsnum}f}\n{r[4]:.{digitsnum}f}\n' for r in rates]+['```'])
+        else:
+            return '\n'.join([f'```{symbol} {timeframe} OHLC\n']+[f'{int(r[1])}\n{int(r[2])}\n{int(r[3])}\n{int(r[4])}\n' for r in rates]+['```'])
+
 
 @descriptions('...',args='...')
 class MT5MakeOder(Model4LLMs.Function):
@@ -419,16 +444,197 @@ class MT5MakeOder(Model4LLMs.Function):
         MT5Manager().run(self.get_action(book))
 
     def get_action(self,book):
-        return MT5Action(self.account)
+        return MT5Account(self.account)
     
-# @descriptions('...',args='...')
-# class MT5BookSend(Model4LLMs.Function):
-#     account:MT5Account = Field(description='...')
-#     def __call__(self,book:Book):
-#         book.send()
 
-# @descriptions('...',args='...')
-# class MT5BookClose(Model4LLMs.Function):
-#     account:MT5Account = Field(description='...')
-#     def __call__(self,book:Book):
-#         book.close()  
+    # class ActiveBooks(Function):
+    #     description: str = 'Retrieve MT5 active orders and positions.'
+    #     _parameters_description = dict()
+    #     _book:Book = None
+
+    #     def __call__(self):
+    #         return self._book.getBooks()
+        
+    #     def __init__(self, *args, **kwargs):
+    #         super(self.__class__, self).__init__(*args, **kwargs)
+    #         self._extract_signature()
+
+    #     def setAccount(self,exe_path,account_id,password,account_server):
+    #         self._book._exe_path=exe_path
+    #         self._book._account_id=account_id
+    #         self._book._password=password
+    #         self._book._account_server=account_server
+
+    # class OrdersGet(Function):
+    #     description: str = 'Retrieve active MT5 orders with optional filters for symbol, group, or ticket.'
+    #     _parameters_description = dict(
+    #         symbol='Symbol name for specific orders.',
+    #         group='Filter for grouping symbols.',
+    #         ticket='Specific order ticket.'
+    #     )
+
+    #     def __call__(self, symbol: str = None, group: str = None, ticket: int = None):
+    #         # Determine which mode of operation based on the parameters provided
+    #         if symbol:
+    #             orders = mt5.orders_get(symbol=symbol)
+    #         elif group:
+    #             orders = mt5.orders_get(group=group)
+    #         elif ticket:
+    #             orders = mt5.orders_get(ticket=ticket)
+    #         else:
+    #             orders = mt5.orders_get()
+
+    #         if orders is None:
+    #             return None, mt5.last_error()  # Return error details if orders retrieval fails
+
+    #         return orders, None  # Return orders and None for error
+
+    #     def __init__(self, *args, **kwargs):
+    #         super(self.__class__, self).__init__(*args, **kwargs)
+    #         self._extract_signature()
+            
+    # class PositionsGet(Function):
+    #     description: str = 'Retrieve trading MT5 positions with optional filters for symbol, group, or ticket.'
+    #     _parameters_description = dict(
+    #         symbol='Symbol name for specific positions.',
+    #         group='Filter for grouping symbols.',
+    #         ticket='Specific position ticket.'
+    #     )
+
+    #     def __call__(self, symbol: str = None, group: str = None, ticket: int = None):
+    #         # Determine which mode of operation based on the parameters provided
+    #         if symbol:
+    #             positions = mt5.positions_get(symbol=symbol)
+    #         elif group:
+    #             positions = mt5.positions_get(group=group)
+    #         elif ticket:
+    #             positions = mt5.positions_get(ticket=ticket)
+    #         else:
+    #             positions = mt5.positions_get()
+
+    #         if positions is None:
+    #             return None, mt5.last_error()  # Return error details if positions retrieval fails
+
+    #         return positions, None  # Return positions and None for error
+
+    #     def __init__(self, *args, **kwargs):
+    #         super(self.__class__, self).__init__(*args, **kwargs)
+    #         self._extract_signature()
+
+    # class HistoryDealsGet(Function):
+    #     description: str = 'Retrieve trade MT5 history within a specified time interval, with optional filters for symbol group, ticket, or position.'
+    #     _parameters_description = dict(
+    #         date_from='The starting date for requested trades."YYYY-MM-DD"',
+    #         date_to='The ending date for requested trades."YYYY-MM-DD"',
+    #         group='Filter for selecting trades by currency pair symbol group.',
+    #         ticket='Ticket for specific order trades.',
+    #         position='Ticket for specific position trades.'
+    #     )
+
+    #     def __call__(self, date_from: str, date_to: str, group: str = None, ticket: int = None, position: int = None):
+    #         # Convert string dates to datetime objects
+    #         hours = 3
+    #         if isinstance(date_from, str):
+    #             date_from = datetime.strptime(date_from, "%Y-%m-%d") + relativedelta.relativedelta(hours=hours)
+    #         if isinstance(date_to, str):
+    #             date_to = datetime.strptime(date_to, "%Y-%m-%d") + relativedelta.relativedelta(hours=hours)
+    #         # Check for parameter type and existence
+    #         if not all([isinstance(date_from, (datetime, int)), isinstance(date_to, (datetime, int))]):
+    #             return None, "date_from and date_to must be datetime objects or integers."
+
+    #         if group:
+    #             deals = mt5.history_deals_get(date_from, date_to, group=group)
+    #         elif ticket:
+    #             deals = mt5.history_deals_get(ticket=ticket)
+    #         elif position:
+    #             deals = mt5.history_deals_get(position=position)
+    #         else:
+    #             deals = mt5.history_deals_get(date_from, date_to)
+
+    #         if deals is None:
+    #             return None, mt5.last_error()  # Return error details if deals retrieval fails
+
+    #         return deals, None  # Return deals and None for error
+
+    #     def __init__(self, *args, **kwargs):
+    #         super(self.__class__, self).__init__(*args, **kwargs)
+    #         self._extract_signature()
+
+    # class MakeOrder(Function):
+    #     description: str = 'Create an MT5 order based on symbol, entry price, exit price.'
+    #     _parameters_description = dict(
+    #         Symbol='The financial instrument for the order (e.g., USDJPY).',
+    #         EntryPrice='Price at which to enter the trade.',
+    #         TakeProfitPrice='Price at which to take profit in the trade.',
+    #         ProfitRiskRatio='The ratio of profit to risk.'
+    #     )
+
+    #     _ProfitRiskRatio: float = 2
+    #     _volume: float = 0.01
+        
+    #     _account_id: int = None # for @mt5_class_operation
+    #     _password: SecretStr = '' # for @mt5_class_operation
+    #     _account_server: SecretStr = '' # for @mt5_class_operation
+    #     def set_account(self,account_id: int = None,password: SecretStr = '',account_server: SecretStr = ''):
+    #         self._account_id=int(account_id)
+    #         self._password=password
+    #         self._account_server=account_server
+    #         return self
+    #     @mt5_class_operation
+    #     def __call__(self, Symbol: str, EntryPrice: float, TakeProfitPrice: float, ProfitRiskRatio: float=2.0):
+    #         # ProfitRiskRatio = self._ProfitRiskRatio
+    #         # Determine order type and calculate stop loss based on parameters
+            
+    #         res = Function.Result(description='MakeOrder',
+    #                               without_ai_check=True)
+
+    #         going_long = TakeProfitPrice > EntryPrice
+    #         current_price_info = mt5.symbol_info_tick(Symbol)
+    #         if current_price_info is None:
+    #             return f"Error getting current price for {Symbol}"
+
+    #         if going_long:
+    #             current_price = current_price_info.ask
+    #             order_type = mt5.ORDER_TYPE_BUY_STOP if EntryPrice > current_price else mt5.ORDER_TYPE_BUY_LIMIT
+    #             stop_loss = EntryPrice - (TakeProfitPrice - EntryPrice) / ProfitRiskRatio
+    #         else:
+    #             current_price = current_price_info.bid
+    #             order_type = mt5.ORDER_TYPE_SELL_STOP if EntryPrice < current_price else mt5.ORDER_TYPE_SELL_LIMIT
+    #             stop_loss = EntryPrice + (EntryPrice - TakeProfitPrice) / ProfitRiskRatio
+
+    #         digitsnum = mt5.symbol_info(Symbol).digits
+    #         EntryPrice,stop_loss,TakeProfitPrice = list(map(lambda x:round(x*10**digitsnum)/10**digitsnum,
+    #                                                         [EntryPrice,stop_loss,TakeProfitPrice]))
+    #         # Prepare trade request
+    #         request = {
+    #             "action": mt5.TRADE_ACTION_PENDING,
+    #             "symbol": Symbol,
+    #             "volume": self._volume,
+    #             "type": order_type,
+    #             "price": EntryPrice,
+    #             "sl": stop_loss,
+    #             "tp": TakeProfitPrice,
+    #             "deviation": 20,
+    #             "magic": 234000,
+    #             "comment": "auto order",
+    #             "type_time": mt5.ORDER_TIME_GTC,
+    #             "type_filling": mt5.ORDER_FILLING_RETURN,
+    #         }
+
+    #         result = mt5.order_send(request)
+    #         if result.retcode != mt5.TRADE_RETCODE_DONE:
+    #             res.status = FunctionCodes.failed
+    #             res.raw_result = f"Trade failure {result.retcode}"
+    #             # return f"order_send failed, retcode={result.retcode}"
+    #         else:
+    #             res.status = FunctionCodes.success
+    #             res.raw_result = "Trade successful"
+    #             # return "Trade successful"
+    #         return res
+        
+    #     def set_volume(self,v:float=0.01):
+    #         self._volume = v
+
+    #     def __init__(self, *args, **kwargs):
+    #         super(self.__class__, self).__init__(*args, **kwargs)
+    #         self._extract_signature()
