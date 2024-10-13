@@ -64,17 +64,25 @@ class Controller4LLMs:
             s = self.storage()
             return s.find(id)
 
-        def run(self):
+        def run(self,input=None):
             """Executes tasks in the correct order, handling dependencies and results."""
             tasks = self.model.tasks
             sorter = TopologicalSorter(tasks)
             # Execute tasks based on topological order
             res = None
-            for task_id in sorter.static_order():
-                # Gather results from dependencies to pass as arguments
-                dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
+            for i,task_id in enumerate(sorter.static_order()):
+                if i==0 and input is not None:
+                    if type(input) is not list:
+                        dependency_results = [input]
+                    else:
+                        dependency_results = input
+                    self.model.results['input'] = input
+                else:
+                    # Gather results from dependencies to pass as arguments
+                    dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
                 # Execute the task and store its result
                 res = self.model.results[task_id] = self._read_task(task_id)(*dependency_results)
+            self.model.results['final'] = res
             self.update(results=self.model.results)
             return res
 
@@ -495,8 +503,16 @@ class LLMsStore(BasicStore):
     
     def add_new_llama(self,vendor_id:str,system_prompt:str = None) -> MODEL_CLASS_GROUP.Llama:
         return self.add_new_obj(self.MODEL_CLASS_GROUP.Llama(vendor_id=vendor_id,system_prompt=system_prompt))
+    
     def add_new_function(self, function_obj:MODEL_CLASS_GROUP.Function)->MODEL_CLASS_GROUP.Function:
         return self.add_new_obj(function_obj)
+    
+    def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]])->MODEL_CLASS_GROUP.Function:
+        if type(tasks) is list:
+            tasks = tasks[::-1]
+            ds    = [[t] for t in tasks[1:]] + [[]]
+            tasks = {t:d for t,d in zip(tasks,ds)}
+        return self.add_new_obj(Model4LLMs.WorkFlow(tasks=tasks))
     
     def find_function(self,function_id:str) -> MODEL_CLASS_GROUP.Function:
         return self.find(function_id)
