@@ -435,6 +435,9 @@ class Model4LLMs:
         # }
         results: Dict[str, Any] = {}
 
+        def __call__(self, *args, **kwargs):
+            self.get_controller().run(*args, **kwargs)
+
         def get_result(self, task_uuid: str) -> Any:
             """Returns the result of a specified task."""
             return self.results.get(task_uuid, None)
