@@ -507,12 +507,12 @@ class LLMsStore(BasicStore):
     def add_new_function(self, function_obj:MODEL_CLASS_GROUP.Function)->MODEL_CLASS_GROUP.Function:
         return self.add_new_obj(function_obj)
     
-    def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]])->MODEL_CLASS_GROUP.Function:
+    def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]], metadata={})->MODEL_CLASS_GROUP.WorkFlow:
         if type(tasks) is list:
             tasks = tasks[::-1]
             ds    = [[t] for t in tasks[1:]] + [[]]
             tasks = {t:d for t,d in zip(tasks,ds)}
-        return self.add_new_obj(Model4LLMs.WorkFlow(tasks=tasks))
+        return self.add_new_obj(Model4LLMs.WorkFlow(tasks=tasks,metadata=metadata))
     
     def find_function(self,function_id:str) -> MODEL_CLASS_GROUP.Function:
         return self.find(function_id)

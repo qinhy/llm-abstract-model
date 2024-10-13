@@ -1,3 +1,4 @@
+import json
 import re
 from pydantic import Field
 from typing import Any, Optional, List
@@ -9,6 +10,7 @@ descriptions = Model4LLMs.Function.param_descriptions
               text='input text')
 class RegxExtractor(Model4LLMs.Function):
     regx:str = Field(description='regx pattern')
+    is_json:bool=False
     def __call__(self,text:str):
         return self.extract(text)
     
@@ -17,6 +19,7 @@ class RegxExtractor(Model4LLMs.Function):
         if not self._try_binary_error(lambda:matches[0]):
             self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
             return text
+        if self.is_json:return json.loads(matches[0])
         return matches[0]
 
 @descriptions('String Template for format function',

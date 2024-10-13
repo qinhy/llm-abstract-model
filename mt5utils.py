@@ -2,8 +2,9 @@ from multiprocessing import Lock
 import random
 import time
 import uuid
-from pydantic import BaseModel, Field
-from typing import Any, Dict, Optional, List
+from pydantic import BaseModel
+import json
+from typing import Any, Dict, List
 from LLMAbstractModel.LLMsModel import KeyOrEnv
 try:
     import MetaTrader5 as mt5
@@ -377,23 +378,28 @@ class Book(BaseModel):
         return self._sendRequest(request)        
 
 @descriptions('Retrieve MT5 last N bars data in MetaTrader 5 terminal.',
-            account='MT5Account object for login.',
-            symbol='Financial instrument name (e.g., EURUSD).',
-            timeframe='Timeframe from which the bars are requested. {M1, H1, ...}',
-            # start_pos='Index of the first bar to retrieve.',
-            count='Number of bars to retrieve.')
+            # account='MT5Account object for login.',
+            # symbol='Financial instrument name (e.g., EURUSD).',
+            # timeframe='Timeframe from which the bars are requested. {M1, H1, ...}',
+            # # start_pos='Index of the first bar to retrieve.',
+            # count='Number of bars to retrieve.'
+            )
+
 class MT5CopyLastRates(Model4LLMs.Function):
     account:MT5Account
     symbol:str
     timeframe:str
     count:int
     retry_times_on_error:int=3
+    debug:bool=False
 
     _start_pos=0
     _digitsnum = {'AUDJPY':3,'CADJPY':3,'CHFJPY':3,'CNHJPY':3,'EURJPY':3,
                     'GBPJPY':3,'USDJPY':3,'NZDJPY':3,'XAUJPY':0,'JPN225':1,'US500':1}
 
     def __call__(self,*args):
+        if self.debug:
+            return '```USDJPY H4 OHLC\n\n142.520\n143.087\n142.382\n142.511\n\n142.509\n142.606\n142.068\n142.266\n\n142.173\n142.954\n142.128\n142.688\n\n142.687\n142.846\n142.080\n142.127\n\n142.127\n142.579\n141.643\n142.534\n\n142.537\n143.004\n142.406\n142.945\n\n142.949\n143.370\n142.746\n143.112\n\n143.112\n143.914\n142.940\n143.624\n\n143.624\n144.125\n143.369\n143.966\n\n143.966\n144.397\n143.661\n144.279\n\n144.277\n144.528\n143.699\n143.807\n\n143.808\n144.069\n143.561\n144.041\n\n144.039\n144.072\n142.972\n143.635\n\n143.634\n143.922\n143.326\n143.553\n\n143.547\n143.881\n143.423\n143.818\n\n143.817\n144.190\n143.561\n143.735\n\n143.733\n144.329\n143.532\n144.328\n\n144.327\n145.446\n144.076\n145.370\n\n145.370\n146.261\n145.298\n146.029\n\n146.030\n146.514\n145.967\n146.454\n\n146.454\n147.054\n146.258\n146.992\n\n146.993\n147.240\n146.676\n146.724\n\n146.723\n146.863\n146.301\n146.749\n\n146.749\n146.993\n146.517\n146.772\n\n146.778\n147.179\n146.470\n146.716\n\n146.716\n146.964\n146.578\n146.922\n\n146.922\n146.932\n146.617\n146.646\n\n146.645\n146.681\n146.152\n146.230\n\n146.230\n146.411\n145.917\n146.341\n\n146.342\n148.061\n146.340\n147.975\n```'
         manager = MT5Manager().get_singleton()
         manager.do(self)
         return manager.results.get(self.get_id(),[None])[-1]
@@ -435,35 +441,82 @@ class MT5CopyLastRates(Model4LLMs.Function):
             return '\n'.join([f'```{symbol} {timeframe} OHLC\n']+[f'{int(r[1])}\n{int(r[2])}\n{int(r[3])}\n{int(r[4])}\n' for r in rates]+['```'])
 
 
-@descriptions('...',args='...')
+@descriptions('Create an MT5 order based on symbol, entry price, exit price.',
+        Symbol='The financial instrument for the order (e.g., USDJPY).',
+        EntryPrice='Price at which to enter the trade.',
+        TakeProfitPrice='Price at which to take profit in the trade.',
+        ProfitRiskRatio='The ratio of profit to risk.')
 class MT5MakeOder(Model4LLMs.Function):
-    account:MT5Account = Field(description='...')
-    def __call__(self,Symbol:str,EntryPrice:float,TakeProfitPrice:float,ProfitRiskRatio:float=2):
+    account:MT5Account
+    debug:bool=False
+
+    _ProfitRiskRatio: float = 2
+    _volume: float = 0.01
+
+    def __call__(self, Symbol: str, EntryPrice: float=None, TakeProfitPrice: float=None, ProfitRiskRatio: float=2.0):
+        if EntryPrice is None and TakeProfitPrice is None:
+            args = Symbol
+            Symbol, EntryPrice, TakeProfitPrice, ProfitRiskRatio = [args[i] for i in ['Symbol', 'EntryPrice', 'TakeProfitPrice', 'ProfitRiskRatio']]
+            
+        if self.debug:
+            return ['SUCESS!',Symbol, EntryPrice, TakeProfitPrice, ProfitRiskRatio]
         # make book
-        book = Book()
-        MT5Manager().run(self.get_action(book))
+        # book = Book()
+        # MT5Manager().run(self.get_action(book))
 
-    def get_action(self,book):
-        return MT5Account(self.account)
-    
+        # ProfitRiskRatio = self._ProfitRiskRatio
+        # Determine order type and calculate stop loss based on parameters
 
-    # class ActiveBooks(Function):
-    #     description: str = 'Retrieve MT5 active orders and positions.'
-    #     _parameters_description = dict()
-    #     _book:Book = None
+        going_long = TakeProfitPrice > EntryPrice
+        current_price_info = mt5.symbol_info_tick(Symbol)
+        if current_price_info is None:
+            return f"Error getting current price for {Symbol}"
 
-    #     def __call__(self):
-    #         return self._book.getBooks()
-        
-    #     def __init__(self, *args, **kwargs):
-    #         super(self.__class__, self).__init__(*args, **kwargs)
-    #         self._extract_signature()
+        if going_long:
+            current_price = current_price_info.ask
+            order_type = mt5.ORDER_TYPE_BUY_STOP if EntryPrice > current_price else mt5.ORDER_TYPE_BUY_LIMIT
+            stop_loss = EntryPrice - (TakeProfitPrice - EntryPrice) / ProfitRiskRatio
+        else:
+            current_price = current_price_info.bid
+            order_type = mt5.ORDER_TYPE_SELL_STOP if EntryPrice < current_price else mt5.ORDER_TYPE_SELL_LIMIT
+            stop_loss = EntryPrice + (EntryPrice - TakeProfitPrice) / ProfitRiskRatio
 
-    #     def setAccount(self,exe_path,account_id,password,account_server):
-    #         self._book._exe_path=exe_path
-    #         self._book._account_id=account_id
-    #         self._book._password=password
-    #         self._book._account_server=account_server
+        digitsnum = mt5.symbol_info(Symbol).digits
+        EntryPrice,stop_loss,TakeProfitPrice = list(map(lambda x:round(x*10**digitsnum)/10**digitsnum,
+                                                        [EntryPrice,stop_loss,TakeProfitPrice]))
+        # Prepare trade request
+        request = {
+            "action": mt5.TRADE_ACTION_PENDING,
+            "symbol": Symbol,
+            "volume": self._volume,
+            "type": order_type,
+            "price": EntryPrice,
+            "sl": stop_loss,
+            "tp": TakeProfitPrice,
+            "deviation": 20,
+            "magic": 234000,
+            "comment": "auto order",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_RETURN,
+        }
+
+        result = mt5.order_send(request)
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            res = f"Trade failure {result.retcode}"
+            # return f"order_send failed, retcode={result.retcode}"
+        else:
+            res = "Trade successful"
+            # return "Trade successful"
+        return res
+
+@descriptions('Retrieve MT5 active orders and positions.')
+class MT5ActiveBooks(Model4LLMs.Function):
+    account:MT5Account
+    debug:bool=False
+    def __call__(self):
+        if self.debug:
+            return []
+        return Book().getBooks()
 
     # class OrdersGet(Function):
     #     description: str = 'Retrieve active MT5 orders with optional filters for symbol, group, or ticket.'
@@ -560,81 +613,3 @@ class MT5MakeOder(Model4LLMs.Function):
     #         super(self.__class__, self).__init__(*args, **kwargs)
     #         self._extract_signature()
 
-    # class MakeOrder(Function):
-    #     description: str = 'Create an MT5 order based on symbol, entry price, exit price.'
-    #     _parameters_description = dict(
-    #         Symbol='The financial instrument for the order (e.g., USDJPY).',
-    #         EntryPrice='Price at which to enter the trade.',
-    #         TakeProfitPrice='Price at which to take profit in the trade.',
-    #         ProfitRiskRatio='The ratio of profit to risk.'
-    #     )
-
-    #     _ProfitRiskRatio: float = 2
-    #     _volume: float = 0.01
-        
-    #     _account_id: int = None # for @mt5_class_operation
-    #     _password: SecretStr = '' # for @mt5_class_operation
-    #     _account_server: SecretStr = '' # for @mt5_class_operation
-    #     def set_account(self,account_id: int = None,password: SecretStr = '',account_server: SecretStr = ''):
-    #         self._account_id=int(account_id)
-    #         self._password=password
-    #         self._account_server=account_server
-    #         return self
-    #     @mt5_class_operation
-    #     def __call__(self, Symbol: str, EntryPrice: float, TakeProfitPrice: float, ProfitRiskRatio: float=2.0):
-    #         # ProfitRiskRatio = self._ProfitRiskRatio
-    #         # Determine order type and calculate stop loss based on parameters
-            
-    #         res = Function.Result(description='MakeOrder',
-    #                               without_ai_check=True)
-
-    #         going_long = TakeProfitPrice > EntryPrice
-    #         current_price_info = mt5.symbol_info_tick(Symbol)
-    #         if current_price_info is None:
-    #             return f"Error getting current price for {Symbol}"
-
-    #         if going_long:
-    #             current_price = current_price_info.ask
-    #             order_type = mt5.ORDER_TYPE_BUY_STOP if EntryPrice > current_price else mt5.ORDER_TYPE_BUY_LIMIT
-    #             stop_loss = EntryPrice - (TakeProfitPrice - EntryPrice) / ProfitRiskRatio
-    #         else:
-    #             current_price = current_price_info.bid
-    #             order_type = mt5.ORDER_TYPE_SELL_STOP if EntryPrice < current_price else mt5.ORDER_TYPE_SELL_LIMIT
-    #             stop_loss = EntryPrice + (EntryPrice - TakeProfitPrice) / ProfitRiskRatio
-
-    #         digitsnum = mt5.symbol_info(Symbol).digits
-    #         EntryPrice,stop_loss,TakeProfitPrice = list(map(lambda x:round(x*10**digitsnum)/10**digitsnum,
-    #                                                         [EntryPrice,stop_loss,TakeProfitPrice]))
-    #         # Prepare trade request
-    #         request = {
-    #             "action": mt5.TRADE_ACTION_PENDING,
-    #             "symbol": Symbol,
-    #             "volume": self._volume,
-    #             "type": order_type,
-    #             "price": EntryPrice,
-    #             "sl": stop_loss,
-    #             "tp": TakeProfitPrice,
-    #             "deviation": 20,
-    #             "magic": 234000,
-    #             "comment": "auto order",
-    #             "type_time": mt5.ORDER_TIME_GTC,
-    #             "type_filling": mt5.ORDER_FILLING_RETURN,
-    #         }
-
-    #         result = mt5.order_send(request)
-    #         if result.retcode != mt5.TRADE_RETCODE_DONE:
-    #             res.status = FunctionCodes.failed
-    #             res.raw_result = f"Trade failure {result.retcode}"
-    #             # return f"order_send failed, retcode={result.retcode}"
-    #         else:
-    #             res.status = FunctionCodes.success
-    #             res.raw_result = "Trade successful"
-    #             # return "Trade successful"
-    #         return res
-        
-    #     def set_volume(self,v:float=0.01):
-    #         self._volume = v
-
-    #     def __init__(self, *args, **kwargs):
-    #         super(self.__class__, self).__init__(*args, **kwargs)
-    #         self._extract_signature()
