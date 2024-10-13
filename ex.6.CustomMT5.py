@@ -5,7 +5,7 @@ from pydantic import Field
 from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.LLMsModel import Controller4LLMs, KeyOrEnv, Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor
-from mt5utils import MT5Account, MT5ActiveBooks, MT5CopyLastRates, MT5MakeOder, MT5Manager
+from mt5utils import MT5Account, MT5ActiveBooks, MT5CopyLastRates, MT5MakeOder, MT5Manager, MockLLM
 descriptions = Model4LLMs.Function.param_descriptions
 
 # Configuration settings
@@ -72,19 +72,6 @@ print(get_books())
 vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
 llm = store.add_new_chatgpt4o(vendor_id='auto', system_prompt=system_prompt)
 
-# Define and add a mock LLM function if in debug mode
-@descriptions('Return a constant string')
-class MockLLM(Model4LLMs.Function):
-    def __call__(self, p):
-        return (
-            '```json\n{\n'
-            '"Symbol": "USDJPY",\n'
-            '"EntryPrice": 146.5,\n'
-            '"TakeProfitPrice": 149.0,\n'
-            '"ProfitRiskRatio": 2\n'
-            '}\n```'
-        )
-
 llm = store.add_new_function(MockLLM()) if debug else llm
 
 # Add functions to the store
@@ -125,10 +112,10 @@ data = store.dumps()
 store.clean()
 store.loads(data)
 workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
-
-res = workflow()
-print("Result:", res)
+workflow()
 print(json.dumps(workflow.model_dump_json_dict(), indent=2))
+
+store.dump('ex.6.CustomMT5.workflow.txt')
 
 # Monitoring loop
 while True:

@@ -5,7 +5,7 @@ import uuid
 from pydantic import BaseModel
 import json
 from typing import Any, Dict, List
-from LLMAbstractModel.LLMsModel import KeyOrEnv
+from LLMAbstractModel.LLMsModel import KeyOrEnv, LLMsStore
 try:
     import MetaTrader5 as mt5
 except Exception as e:
@@ -440,7 +440,6 @@ class MT5CopyLastRates(Model4LLMs.Function):
         else:
             return '\n'.join([f'```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n']+[f'{int(r[1])}\n{int(r[2])}\n{int(r[3])}\n{int(r[4])}\n' for r in rates]+['```'])
 
-
 @descriptions('Create an MT5 order based on symbol, entry price, exit price.',
         Symbol='The financial instrument for the order (e.g., USDJPY).',
         EntryPrice='Price at which to enter the trade.',
@@ -631,3 +630,47 @@ class MT5ActiveBooks(Model4LLMs.Function):
     #         super(self.__class__, self).__init__(*args, **kwargs)
     #         self._extract_signature()
 
+
+# Define and add a mock LLM function if in debug mode
+@descriptions('Return a constant string')
+class MockLLM(Model4LLMs.Function):
+    def __call__(self, p):
+        return (
+            '```json\n{\n'
+            '"Symbol": "USDJPY",\n'
+            '"EntryPrice": 146.5,\n'
+            '"TakeProfitPrice": 149.0,\n'
+            '"ProfitRiskRatio": 2\n'
+            '}\n```'
+        )
+
+store = LLMsStore()
+acc = store.add_new_obj(
+    MT5Account(
+        account_id=123,
+        password=KeyOrEnv(key=f"123_PASS"),
+        account_server=KeyOrEnv(key=f"123_SERVER")
+    )
+)
+store.add_new_obj(
+    MT5CopyLastRates(
+        account=acc, 
+        symbol="USDJPY", 
+        timeframe="H4", 
+        count=30,
+    )
+).get_controller().delete()
+
+store.add_new_obj(
+    MT5ActiveBooks(account=acc,)
+).get_controller().delete()
+
+store.add_new_obj(
+    MT5MakeOder(account=acc)
+).get_controller().delete()
+
+store.add_new_function(
+    MockLLM()
+).get_controller().delete()
+
+acc.get_controller().delete()

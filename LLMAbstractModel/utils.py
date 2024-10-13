@@ -4,7 +4,7 @@ from pydantic import Field
 from typing import Any, Optional, List
 
 from .BasicModel import Model4Basic
-from .LLMsModel import Model4LLMs
+from .LLMsModel import LLMsStore, Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
 @descriptions('Extract text by regx pattern',
               text='input text')
@@ -28,6 +28,11 @@ class StringTemplate(Model4LLMs.Function):
     string:str = Field(description='string of f"..."')
     def __call__(self,*args):
         return self.string.format(*args)
+
+
+store = LLMsStore()
+store.add_new_obj(RegxExtractor(regx='')).get_controller().delete()
+store.add_new_obj(StringTemplate(string='')).get_controller().delete()
 
 class TextFile(Model4Basic.AbstractObj):
     file_path: str
