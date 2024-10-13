@@ -435,6 +435,9 @@ class Model4LLMs:
         # }
         results: Dict[str, Any] = {}
 
+        def __init__(self, *args, **kwargs):
+            self.get_controller().run(*args, **kwargs)
+
         def get_result(self, task_uuid: str) -> Any:
             """Returns the result of a specified task."""
             return self.results.get(task_uuid, None)
@@ -507,7 +510,7 @@ class LLMsStore(BasicStore):
     def add_new_function(self, function_obj:MODEL_CLASS_GROUP.Function)->MODEL_CLASS_GROUP.Function:
         return self.add_new_obj(function_obj)
     
-    def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]])->MODEL_CLASS_GROUP.Function:
+    def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]])->MODEL_CLASS_GROUP.WorkFlow:
         if type(tasks) is list:
             tasks = tasks[::-1]
             ds    = [[t] for t in tasks[1:]] + [[]]
