@@ -99,7 +99,7 @@ store.clean()
 store.loads(data)
 workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
 
-res = workflow.get_controller().run()
+res = workflow()
 print("Result:", res)
 print(json.dumps(workflow.model_dump_json_dict(), indent=2))
 
