@@ -436,9 +436,9 @@ class MT5CopyLastRates(Model4LLMs.Function):
         if rates is None:
             return None, mt5.last_error()  # Return error details if retrieval fails
         if digitsnum>0:
-            return '\n'.join([f'```{symbol} {timeframe} OHLC\n']+[f'{r[1]:.{digitsnum}f}\n{r[2]:.{digitsnum}f}\n{r[3]:.{digitsnum}f}\n{r[4]:.{digitsnum}f}\n' for r in rates]+['```'])
+            return '\n'.join([f'```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n']+[f'{r[1]:.{digitsnum}f}\n{r[2]:.{digitsnum}f}\n{r[3]:.{digitsnum}f}\n{r[4]:.{digitsnum}f}\n' for r in rates]+['```'])
         else:
-            return '\n'.join([f'```{symbol} {timeframe} OHLC\n']+[f'{int(r[1])}\n{int(r[2])}\n{int(r[3])}\n{int(r[4])}\n' for r in rates]+['```'])
+            return '\n'.join([f'```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n']+[f'{int(r[1])}\n{int(r[2])}\n{int(r[3])}\n{int(r[4])}\n' for r in rates]+['```'])
 
 
 @descriptions('Create an MT5 order based on symbol, entry price, exit price.',
@@ -448,8 +448,13 @@ class MT5CopyLastRates(Model4LLMs.Function):
         ProfitRiskRatio='The ratio of profit to risk.')
 class MT5MakeOder(Model4LLMs.Function):
     account:MT5Account
+    
+    retry_times_on_error:int=3
     debug:bool=False
-
+    
+    _Symbol:str = ''
+    _EntryPrice:float = None
+    _TakeProfitPrice:float = None
     _ProfitRiskRatio: float = 2
     _volume: float = 0.01
 
@@ -460,12 +465,20 @@ class MT5MakeOder(Model4LLMs.Function):
             
         if self.debug:
             return ['SUCESS!',Symbol, EntryPrice, TakeProfitPrice, ProfitRiskRatio]
+        
+        self._Symbol,self._EntryPrice,self._TakeProfitPrice,self._ProfitRiskRatio = Symbol, EntryPrice, TakeProfitPrice, ProfitRiskRatio
+        manager = MT5Manager().get_singleton()
+        manager.do(self)
+        return manager.results.get(self.get_id(),[None])[-1]
+        
+    def run(self):
         # make book
         # book = Book()
         # MT5Manager().run(self.get_action(book))
 
         # ProfitRiskRatio = self._ProfitRiskRatio
         # Determine order type and calculate stop loss based on parameters
+        Symbol, EntryPrice, TakeProfitPrice, ProfitRiskRatio = self._Symbol,self._EntryPrice,self._TakeProfitPrice,self._ProfitRiskRatio
 
         going_long = TakeProfitPrice > EntryPrice
         current_price_info = mt5.symbol_info_tick(Symbol)
@@ -512,12 +525,17 @@ class MT5MakeOder(Model4LLMs.Function):
 @descriptions('Retrieve MT5 active orders and positions.')
 class MT5ActiveBooks(Model4LLMs.Function):
     account:MT5Account
+    retry_times_on_error:int=3
     debug:bool=False
     def __call__(self):
         if self.debug:
             return []
+        manager = MT5Manager().get_singleton()
+        manager.do(self)
+        return manager.results.get(self.get_id(),[None])[-1]
+        
+    def run(self):
         return Book().getBooks()
-
     # class OrdersGet(Function):
     #     description: str = 'Retrieve active MT5 orders with optional filters for symbol, group, or ticket.'
     #     _parameters_description = dict(
