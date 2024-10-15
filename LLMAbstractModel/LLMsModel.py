@@ -424,7 +424,6 @@ class Model4LLMs:
         def get_controller(self)->Controller4LLMs.AbstractObjController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractObjController(store,self)
 
-
     class WorkFlow(AbstractObj):
         tasks: Dict[str, list[str]] # using uuids, task and dependencies
         # tasks = {
@@ -446,6 +445,50 @@ class Model4LLMs:
         _controller: Controller4LLMs.WorkFlowController = None
         def get_controller(self)->Controller4LLMs.WorkFlowController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.WorkFlowController(store,self)
+        
+    @Function.param_descriptions('Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.',
+                                params='query parameters',
+                                data='form data',
+                                json='JSON payload')
+    class RequestsFunction(Function):
+        method: str
+        url: str
+        headers: Dict[str, str] = {}
+
+        def __call__(self,params: Optional[Dict[str, Any]] = None,
+                     data: Optional[Dict[str, Any]] = None,
+                     json: Optional[Dict[str, Any]] = None ) -> Dict[str, Any]:
+            try:
+                response = requests.request(
+                    method=self.method,
+                    url=self.url,
+                    headers=self.headers,
+                    params=params,
+                    data=data,
+                    json=json
+                )
+                response.raise_for_status()
+                try:
+                    return response.json()
+                except Exception as e:
+                    return {'text':response.text}
+            except requests.exceptions.RequestException as e:
+                return {"error": str(e), "status": getattr(e.response, "status_code", None)}
+
+                # # Example usage:
+                # request_function = RequestsFunction(
+                #     method="POST",
+                #     url="https://api.example.com/data",
+                #     headers={"Authorization": "Bearer YOUR_TOKEN"}
+                # )
+
+                # result = request_function(json={"key": "value"})
+
+                # if "error" in result:
+                #     print(f"Error: {result['error']}")
+                # else:
+                #     print(f"Success: {result['data']}")
+
         
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   
