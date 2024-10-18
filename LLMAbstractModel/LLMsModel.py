@@ -2,6 +2,7 @@ from graphlib import TopologicalSorter
 import inspect
 import json
 import os
+import time
 import unittest
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, field_validator, ConfigDict, Field
@@ -445,13 +446,13 @@ class Model4LLMs:
         _controller: Controller4LLMs.WorkFlowController = None
         def get_controller(self)->Controller4LLMs.WorkFlowController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.WorkFlowController(store,self)
-        
+
     @Function.param_descriptions('Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.',
                                 params='query parameters',
                                 data='form data',
                                 json='JSON payload')
     class RequestsFunction(Function):
-        method: str
+        method: str = 'GET'
         url: str
         headers: Dict[str, str] = {}
 
@@ -460,12 +461,9 @@ class Model4LLMs:
                      json: Optional[Dict[str, Any]] = None ) -> Dict[str, Any]:
             try:
                 response = requests.request(
-                    method=self.method,
-                    url=self.url,
-                    headers=self.headers,
-                    params=params,
-                    data=data,
-                    json=json
+                    method=self.method,url=self.url,
+                    headers=self.headers,params=params,
+                    data=data,json=json
                 )
                 response.raise_for_status()
                 try:
@@ -489,6 +487,48 @@ class Model4LLMs:
                 # else:
                 #     print(f"Success: {result['data']}")
 
+    @Function.param_descriptions('Makes an HTTP request to async Celery REST api.',
+                                params='query parameters',
+                                data='form data',
+                                json='JSON payload')
+    class AsyncCeleryWebApiFunction(Function):
+        method: str = 'GET'
+        url: str
+        headers: Dict[str, str] = {}
+        task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}'
+
+        def __call__(self,params: Optional[Dict[str, Any]] = None,
+                     data: Optional[Dict[str, Any]] = None,
+                     json: Optional[Dict[str, Any]] = None ) -> Dict[str, Any]:
+            try:
+                response = requests.request(
+                    method=self.method,url=self.url,
+                    headers=self.headers,params=params,
+                    data=data,json=json
+                )
+                # get task id
+                for k,v in response.json():
+                    if 'id' in k:
+                        task_id = v
+                
+                while True:
+                    response = requests.request(
+                        method=self.method,
+                        url= self.task_status_url.format(task_id=task_id),
+                        headers=self.headers,params=params,
+                        data=data,json=json
+                    )
+                    if 'PEDING' != response.json()['state']:
+                        break
+                    time.sleep(1)
+
+                response.raise_for_status()
+                try:
+                    return response.json()
+                except Exception as e:
+                    return {'text':response.text}
+            except requests.exceptions.RequestException as e:
+                return {"error": str(e), "status": getattr(e.response, "status_code", None)}
         
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   
