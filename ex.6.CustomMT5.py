@@ -11,7 +11,7 @@ def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
 # Configuration settings
-os.environ["MT5ACC_1"] = "9102374"  # Your account ID
+os.environ["MT5ACCs"] = "[9102374,]"  # Your account ID
 os.environ["9102374_PASS"] = "password"  # Password
 os.environ["9102374_SERVER"] = "XXXXXFX"  # Server name
 
@@ -42,30 +42,20 @@ myprint('req.model_dump()')
 myprint('req(params={"broker": "brokerX", "path": "/path/to/termial"})')
 # ->  {'task_id': 'some-task-id', 'status': 'STARTED', 'result': {'message': 'Task is started'}} 
 
-# # Add an MT5 account to the store
-# account_id = int(os.environ["MT5ACC_1"])
-# acc = store.add_new_obj(
-#     MT5Account(
-#         account_id=account_id,
-#         password=KeyOrEnv(key=f"{account_id}_PASS"),
-#         account_server=KeyOrEnv(key=f"{account_id}_SERVER"),
-#         metadata={'tags': [str(account_id)]}
-#     )
-# )
-# print(acc.model_dump_json_dict())
+# Add an MT5 accounts to the store
+account_id = int()
+accs = [ store.add_new_obj(
+            MT5Account(
+                account_id=i,
+                password=KeyOrEnv(key=f"{account_id}_PASS"),
+                account_server=KeyOrEnv(key=f"{account_id}_SERVER"),
+                metadata={'tags': [str(account_id)]}
+            )
+        ) for i in eval(os.environ["MT5ACCs"])]
+myprint('accs[0].model_dump_json_dict()')
 
-# # Add MT5 functions to the store
-# get_rates = store.add_new_obj(
-#     MT5CopyLastRates(
-#         account=acc, 
-#         symbol="USDJPY", 
-#         timeframe="H4", 
-#         count=30, 
-#         debug=debug,
-#         metadata={'tags': ['USDJPY']}
-#     )
-# )
-# print(get_rates())
+# Add MT5 functions to the store
+get_rates = store.add_new_celery_request(url='http://localhost:8000/terminals/add',method='POST')
 
 # print(filter_by_tag(store.find_all('MT5CopyLastRates:*'), 'USDJPY')[0])
 
