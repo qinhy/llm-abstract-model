@@ -43,13 +43,12 @@ myprint('req(params={"broker": "brokerX", "path": "/path/to/termial"})')
 # ->  {'task_id': 'some-task-id', 'status': 'STARTED', 'result': {'message': 'Task is started'}} 
 
 # Add an MT5 accounts to the store
-account_id = int()
 accs = [ store.add_new_obj(
             MT5Account(
                 account_id=i,
-                password=KeyOrEnv(key=f"{account_id}_PASS"),
-                account_server=KeyOrEnv(key=f"{account_id}_SERVER"),
-                metadata={'tags': [str(account_id)]}
+                password=KeyOrEnv(key=f"{i}_PASS"),
+                account_server=KeyOrEnv(key=f"{i}_SERVER"),
+                metadata={'tags': [str(i)]}
             )
         ) for i in eval(os.environ["MT5ACCs"])]
 myprint('accs[0].model_dump_json_dict()')
