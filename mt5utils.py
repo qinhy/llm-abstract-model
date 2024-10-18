@@ -1,4 +1,3 @@
-@ -1,676 +0,0 @@
 from multiprocessing import Lock
 import random
 import time

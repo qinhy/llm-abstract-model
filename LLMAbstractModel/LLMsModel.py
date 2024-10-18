@@ -486,7 +486,49 @@ class Model4LLMs:
                 #     print(f"Error: {result['error']}")
                 # else:
                 #     print(f"Success: {result['data']}")
-        
+    @Function.param_descriptions('Makes an HTTP request to async Celery REST api.',
+                                params='query parameters',
+                                data='form data',
+                                json='JSON payload')
+    class AsyncCeleryWebApiFunction(Function):
+        method: str = 'GET'
+        url: str
+        headers: Dict[str, str] = {}
+        task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}'
+
+        def __call__(self,params: Optional[Dict[str, Any]] = None,
+                     data: Optional[Dict[str, Any]] = None,
+                     json: Optional[Dict[str, Any]] = None ) -> Dict[str, Any]:
+            try:
+                response = requests.request(
+                    method=self.method,url=self.url,
+                    headers=self.headers,params=params,
+                    data=data,json=json
+                )
+                response.raise_for_status()
+                # get task id
+                for k,v in response.json().items():
+                    if 'id' in k:
+                        task_id = v
+                
+                while True:
+                    response = requests.request(
+                        method='GET',
+                        url= self.task_status_url.format(task_id=task_id),
+                        headers=self.headers,params=params,
+                        data=data,json=json
+                    )
+                    response.raise_for_status()
+                    if response.json()['status'] in ['SUCCESS','FAILURE','REVOKED']:
+                        break
+                    time.sleep(1)
+                try:
+                    return response.json()
+                except Exception as e:
+                    return {'text':response.text}
+            except requests.exceptions.RequestException as e:
+                return {"error": str(e), "status": getattr(e.response, "status_code", None)}
+            
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   
 
@@ -552,6 +594,12 @@ class LLMsStore(BasicStore):
     
     def add_new_request(self, url:str, method='GET', headers={})->MODEL_CLASS_GROUP.RequestsFunction:
         return self.add_new_obj(self.MODEL_CLASS_GROUP.RequestsFunction(method=method,url=url,headers=headers))
+    
+    def add_new_celery_request(self, url:str, method='GET', headers={},
+                               task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}'
+                               )->MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
+                                                        headers=headers,task_status_url=task_status_url))
     
     def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]], metadata={})->MODEL_CLASS_GROUP.WorkFlow:
         if type(tasks) is list:
