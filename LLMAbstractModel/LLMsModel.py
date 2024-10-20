@@ -69,14 +69,19 @@ class Controller4LLMs:
             """Executes tasks in the correct order, handling dependencies and results."""
             tasks = self.model.tasks
             sorter = TopologicalSorter(tasks)
+            
             # Execute tasks based on topological order
+            is_all = [i in self.model.results for i in list(tasks.keys())]
+            if all(is_all):
+                self.model.results = {}
+                
             res = None
             for d in kwargs:
                 self.model.results[d] = kwargs[d] #[args,kwargs]
                 tasks[d] = []
 
             for i,task_id in enumerate(sorter.static_order()):
-                if task_id in kwargs:
+                if task_id in kwargs or task_id in self.model.results:
                     continue
                 # Gather results from dependencies to pass as arguments
                 dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
@@ -86,7 +91,10 @@ class Controller4LLMs:
                     all_args += list(args)
                     all_kwargs.update(kwargs)
                 # Execute the task and store its result
-                res = self.model.results[task_id] = self._read_task(task_id)(*all_args,**all_kwargs)
+                try:
+                    res = self.model.results[task_id] = self._read_task(task_id)(*all_args,**all_kwargs)
+                except Exception as e:
+                    raise ValueError(f'[WorkFlow]: Error at {task_id}: {e}')
             self.model.results['final'] = res
             self.update(results=self.model.results)
             return res
@@ -533,9 +541,9 @@ class Model4LLMs:
                 try:
                     return response.json()
                 except Exception as e:
-                    return {'text':response.text}
+                    raise ValueError(f'"text":{response.text}')
             except requests.exceptions.RequestException as e:
-                return {"error": str(e), "status": getattr(e.response, "status_code", None)}
+                raise ValueError(f'"error": {e} "status": {getattr(e.response, "status_code", None)}')
             
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   

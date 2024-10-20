@@ -134,7 +134,7 @@ data = store.dumps()
 store.clean()
 store.loads(data)
 workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
-workflow(
+workflowf = lambda:workflow(
     init_deps=[(),
                 dict(
                     json=dict(
