@@ -268,7 +268,9 @@ class Model4LLMs:
                 messages = [{"role":"user","content":messages}]
             return msgs+messages
 
-        def __call__(self, messages:Optional[List|str])->str:
+        def __call__(self, messages:Optional[List|str], auto_str=True)->str:
+            if not isinstance(messages,list) and not isinstance(messages,str):
+                if auto_str:messages=str(messages)
             payload = self.construct_payload(self.construct_messages(messages))
             vendor = self.get_vendor()
             return vendor.chat_result(vendor.chat_request(payload))
