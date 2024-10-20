@@ -19,10 +19,6 @@ monitor_pairs = ['USDJPY']
 system_prompt = 'You are a smart financial assistant'
 debug = True
 
-# Initialize MT5 terminal manager
-# manager = MT5Manager().get_singleton()
-# manager.add_terminal('XXXXXFX', "C:/Program Files/XXXXXFX MetaTrader 5/terminal64.exe")
-
 # Initialize the LLM store
 store = LLMsStore()
 
@@ -42,8 +38,11 @@ myprint('req.model_dump()')
 myprint('req(params={"broker": "brokerX", "path": "/path/to/termial"})')
 # ->  {'task_id': 'some-task-id', 'status': 'STARTED', 'result': {'message': 'Task is started'}} 
 
+req = store.add_new_celery_request(url='http://localhost:8000/terminals/',method='GET')
+myprint('req()')
+
 # Add an MT5 accounts to the store
-accs = [ store.add_new_obj(
+accs:list[MT5Account] = [ store.add_new_obj(
             MT5Account(
                 account_id=i,
                 password=KeyOrEnv(key=f"{i}_PASS"),
@@ -53,19 +52,31 @@ accs = [ store.add_new_obj(
         ) for i in eval(os.environ["MT5ACCs"])]
 myprint('accs[0].model_dump_json_dict()')
 
-# Add MT5 functions to the store
-get_rates = store.add_new_celery_request(url='http://localhost:8000/terminals/add',method='POST')
+# get account info
+account_info = store.add_new_celery_request(url='http://localhost:8000/accounts/info/',method='GET')
+myprint('''account_info(json=dict(
+    account_id=accs[0].account_id,
+    password=accs[0].password.get(),
+    account_server=accs[0].account_server.get(),
+))''')
 
-# print(filter_by_tag(store.find_all('MT5CopyLastRates:*'), 'USDJPY')[0])
+# get books info
+books_info = store.add_new_celery_request(url='http://localhost:8000/books/',method='GET')
+myprint('''books_info(json=dict(
+    account_id=accs[0].account_id,
+    password=accs[0].password.get(),
+    account_server=accs[0].account_server.get(),
+))''')
 
-# get_books = store.add_new_obj(
-#     MT5ActiveBooks(
-#         account=acc, 
-#         debug=debug,
-#         metadata={'tags': [str(account_id)]}
-#     )
-# )
-# print(get_books())
+# get rates
+get_rates = store.add_new_celery_request(url='http://localhost:8000/rates/',method='GET')
+myprint('''get_rates(json=dict(
+    account_id=accs[0].account_id,
+    password=accs[0].password.get(),
+    account_server=accs[0].account_server.get()),
+    params=dict(symbol='USDPY',timeframe='H4',count=30))''')
+
+myprint('store.dumps()')
 
 # # Initialize LLM vendor and add to the store
 # vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
@@ -95,24 +106,49 @@ get_rates = store.add_new_celery_request(url='http://localhost:8000/terminals/ad
 #     )
 # )
 
-# # Define and save workflow
+# Define and save workflow
+workflow = store.add_new_workflow(
+    tasks={
+        account_info.get_id():['init_deps'],
+        books_info.get_id():['init_deps'],
+        get_rates.get_id():['init_deps','rates_param'],
+    },
+    metadata={'tags': [str(accs[0].account_id)]}
+)
 # workflow = store.add_new_workflow(
 #     tasks=[
-#         get_rates.get_id(),
-#         llm.get_id(),
-#         extract_json.get_id(),
-#         make_order.get_id(),
+#         account_info.get_id(),
+#         # books_info.get_id(),
+#         # get_rates.get_id(),
+
+#         # get_rates.get_id(),
+#         # llm.get_id(),
+#         # extract_json.get_id(),
+#         # make_order.get_id(),
 #     ],
-#     metadata={'tags': [str(account_id)]}
+#     metadata={'tags': [str(accs[0].account_id)]}
 # )
 
-# # Save and reload workflow data
-# data = store.dumps()
-# store.clean()
-# store.loads(data)
-# workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
-# workflow()
-# print(json.dumps(workflow.model_dump_json_dict(), indent=2))
+# Save and reload workflow data
+data = store.dumps()
+store.clean()
+store.loads(data)
+workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
+workflow(
+    init_deps=[(),
+                dict(
+                    json=dict(
+                        account_id=accs[0].account_id,
+                        password=accs[0].password.get(),
+                        account_server=accs[0].account_server.get(),
+                    )
+                )],
+    rates_param=[(),
+                dict(
+                    params=dict(symbol='USDPY',timeframe='H4',count=30)
+                )]
+)
+myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
 
 # store.dump('ex.6.CustomMT5.workflow.txt')
 

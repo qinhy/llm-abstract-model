@@ -65,24 +65,28 @@ class Controller4LLMs:
             s = self.storage()
             return s.find(id)
 
-        def run(self,input=None):
+        def run(self,**kwargs):
             """Executes tasks in the correct order, handling dependencies and results."""
             tasks = self.model.tasks
             sorter = TopologicalSorter(tasks)
             # Execute tasks based on topological order
             res = None
+            for d in kwargs:
+                self.model.results[d] = kwargs[d] #[args,kwargs]
+                tasks[d] = []
+
             for i,task_id in enumerate(sorter.static_order()):
-                if i==0 and input is not None:
-                    if type(input) is not list:
-                        dependency_results = [input]
-                    else:
-                        dependency_results = input
-                    self.model.results['input'] = input
-                else:
-                    # Gather results from dependencies to pass as arguments
-                    dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
+                if task_id in kwargs:
+                    continue
+                # Gather results from dependencies to pass as arguments
+                dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
+                all_args=[]
+                all_kwargs={}
+                for args,kwargs in dependency_results:
+                    all_args += list(args)
+                    all_kwargs.update(kwargs)
                 # Execute the task and store its result
-                res = self.model.results[task_id] = self._read_task(task_id)(*dependency_results)
+                res = self.model.results[task_id] = self._read_task(task_id)(*all_args,**all_kwargs)
             self.model.results['final'] = res
             self.update(results=self.model.results)
             return res
@@ -518,7 +522,11 @@ class Model4LLMs:
                         headers=self.headers,params=params,
                         data=data,json=json
                     )
-                    response.raise_for_status()
+                    if response is None:
+                        break
+                    response.raise_for_status()                    
+                    if response.json() is None:
+                        break
                     if response.json()['status'] in ['SUCCESS','FAILURE','REVOKED']:
                         break
                     time.sleep(1)
