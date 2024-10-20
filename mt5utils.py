@@ -68,7 +68,8 @@ class Book(BaseModel):
         TakeProfitPrice='Price at which to take profit in the trade.',
         ProfitRiskRatio='The ratio of profit to risk.')
 class MT5MakeOder(Model4LLMs.Function):    
-    def __call__(Symbol, EntryPrice, TakeProfitPrice, ProfitRiskRatio):
+    def __call__(self, data):
+        Symbol, EntryPrice, TakeProfitPrice, ProfitRiskRatio = data['Symbol'],data['EntryPrice'],data['TakeProfitPrice'],data['ProfitRiskRatio']
         going_long = TakeProfitPrice > EntryPrice
         if going_long:
             stop_loss = EntryPrice - (TakeProfitPrice - EntryPrice) / ProfitRiskRatio
@@ -91,7 +92,7 @@ class RatesReturn(Model4LLMs.Function):
         count: int = 10
         rates: list = None
         digitsnum: int = 0
-        error: tuple = None
+        error: Any = None
         header: str='```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n{join_formatted_rates}\n```'
 
         def __str__(self):
@@ -121,8 +122,8 @@ class RatesReturn(Model4LLMs.Function):
                 join_formatted_rates=join_formatted_rates
             )
         
-        def __call__(self, rates):
-            return str(RatesReturn.Rates(**rates))
+    def __call__(self, rates):
+        return str(RatesReturn.Rates(**json.loads(rates['result'])))
 
     
 # Define and add a mock LLM function if in debug mode

@@ -78,7 +78,7 @@ myprint('''decode_rates(
 vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
 llm = store.add_new_chatgpt4o(vendor_id='auto', system_prompt=system_prompt)
 
-# llm = store.add_new_function(MockLLM()) if debug else llm
+llm = store.add_new_function(MockLLM()) if debug else llm
 
 # Add functions to the store
 extract_json = store.add_new_function(RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True))
@@ -88,10 +88,7 @@ myprint('''books_send(json=dict(acc=acc,book=book))''')
 
 # manual workflow
 
-res = books_send(
-        json=dict(
-            acc=acc,
-            book=to_book_plan(
+to_book_plan(
                         extract_json(
                             llm(
                                 decode_rates(
@@ -101,9 +98,14 @@ res = books_send(
                             )
                         )
                     )
-            )
-)
-print(res)
+
+# res = books_send(
+#         json=dict(
+#             acc=acc,
+#             book=
+#             )
+# )
+# print(res)
 
 # Define and save workflow
 # workflow = store.add_new_workflow(

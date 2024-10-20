@@ -80,6 +80,10 @@ class Controller4LLMs:
                 self.model.results[d] = kwargs[d] #[args,kwargs]
                 tasks[d] = []
 
+            for k in list(self.model.results.keys()):
+                if self.model.results[k] is None:
+                    del self.model.results[k]
+
             for i,task_id in enumerate(sorter.static_order()):
                 if task_id in kwargs or task_id in self.model.results:
                     continue
@@ -87,8 +91,13 @@ class Controller4LLMs:
                 dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
                 all_args=[]
                 all_kwargs={}
-                for args,kwargs in dependency_results:
-                    all_args += list(args)
+                for args_kwargs in dependency_results:
+                    if isinstance(args_kwargs,list) and len(args_kwargs)==2 and isinstance(args_kwargs[1],dict):
+                        if isinstance(args_kwargs[0],tuple) or isinstance(args_kwargs[0],list):
+                            args,kwargs = args_kwargs
+                    else:
+                        args,kwargs = args_kwargs,{}
+                    all_args += list(args) if isinstance(args,tuple) else [args]
                     all_kwargs.update(kwargs)
                 # Execute the task and store its result
                 try:
@@ -450,7 +459,7 @@ class Model4LLMs:
         results: Dict[str, Any] = {}
 
         def __call__(self, *args, **kwargs):
-            self.get_controller().run(*args, **kwargs)
+            return self.get_controller().run(*args, **kwargs)
 
         def get_result(self, task_uuid: str) -> Any:
             """Returns the result of a specified task."""
@@ -534,12 +543,15 @@ class Model4LLMs:
                     )
                     if response is None:
                         break
-                    response.raise_for_status()                    
+                    response.raise_for_status()
                     if response.json() is None:
                         break
                     if response.json()['status'] in ['SUCCESS','FAILURE','REVOKED']:
+                        if response.json()['status'] == 'FAILURE':
+                            raise ValueError(f'{response.json()}')
                         break
                     time.sleep(1)
+
                 try:
                     return response.json()
                 except Exception as e:
