@@ -3,6 +3,8 @@ import json
 from LLMAbstractModel.utils import StringTemplate, RegxExtractor
 from LLMAbstractModel import LLMsStore,Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
+def myprint(string):
+    print('##',string,':\n',eval(string),'\n')
 
 store = LLMsStore()
 
@@ -47,13 +49,11 @@ workflow:Model4LLMs.WorkFlow = store.add_new_obj(
                     task_constant_five.get_id() : []                          
         }))
 
-print(workflow.model_dump_json_dict())
-
 # Run the workflow
-print(workflow.get_controller().run())
+myprint('workflow.get_controller().run()')
 
 # Retrieve and print the result of each task
-print(json.dumps(workflow.model_dump_json_dict(), indent=2))
+myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
 
 store.clean()
 
@@ -87,11 +87,10 @@ workflow = store.add_new_workflow(
         llm.get_id()              : [input_template.get_id()],
         extract_result.get_id()   : [llm.get_id()]
     })
-res = workflow(input=[(),dict(text="こんにちは！はじめてのチェーン作りです！")]) # input=[args,kwargs]
+# input=[args,kwargs]
+myprint('workflow(input=[(),dict(text="こんにちは！はじめてのチェーン作りです！")])')
+# myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
 
-# Retrieve and print the result
-print("Result:", res)
-# print(json.dumps(workflow.model_dump_json_dict(), indent=2))
 workflow.get_controller().delete()
 input_template.get_controller().delete()
 
@@ -108,15 +107,13 @@ workflow = store.add_new_workflow(
         extract_result.get_id(),#   : [llm.get_id()]
     ])
 # You can reuse the workflow by setting a new input
-res = workflow("常識とは、18歳までに身に付けた偏見のコレクションである。")
-print("Result:", res)
-# print(json.dumps(workflow.model_dump_json_dict(), indent=2))
+myprint('workflow("常識とは、18歳までに身に付けた偏見のコレクションである。")')
+# myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
 
 # save and load workflow
 data = store.dumps()
 store.clean()
 store.loads(data)
 workflow = store.find_all('WorkFlow:*')[0]
-res = workflow("为政以德，譬如北辰，居其所而众星共之。")
-print("Result:", res)
-# print(json.dumps(workflow.model_dump_json_dict(), indent=2))
+myprint('workflow("为政以德，譬如北辰，居其所而众星共之。")')
+# myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')

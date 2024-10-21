@@ -5,7 +5,7 @@ import os
 import time
 import unittest
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, field_validator, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 import requests
 from typing import Dict, Any
 
