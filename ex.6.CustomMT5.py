@@ -36,11 +36,11 @@ store.clean()
 req = store.add_new_celery_request(url='http://localhost:8000/terminals/add',method='POST')
 myprint('req.model_dump()')
 # ->  {'rank': [0], 'create_time': datetime.datetime(2024, 10, 18, 9, 44, 4, 502305, tzinfo=TzInfo(UTC)), 'update_time': datetime.datetime(2024, 10, 18, 9, 44, 4, 502305, tzinfo=TzInfo(UTC)), 'status': '', 'metadata': {}, 'name': 'RequestsFunction', 'description': 'Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.', 'parameters': {'type': 'object', 'properties': {'params': {'type': 'object', 'description': 'query parameters'}, 'data': {'type': 'object', 'description': 'form data'}, 'json': {'type': 'object', 'description': 'JSON payload'}}}, 'required': [], 'method': 'GET', 'url': 'http://localhost:8000/tasks/status/some-task-id', 'headers': {}} 
-myprint('req(params={"broker": "brokerX", "path": "/path/to/termial"})')
+myprint('req(params={"broker": "brokerX", "path": "/path/to/termial"},debug=debug,debug_data=dict())')
 # ->  {'task_id': 'some-task-id', 'status': 'STARTED', 'result': {'message': 'Task is started'}} 
 
 req = store.add_new_celery_request(url='http://localhost:8000/terminals/',method='GET')
-myprint('req()')
+myprint('req(debug=debug,debug_data=dict())')
 
 # Add an MT5 accounts to the store
 accs:list[MT5Account] = [ store.add_new_obj(
@@ -60,19 +60,19 @@ book=dict(symbol='USDJPY',price_open = 100.0,volume= 0.01)
 
 # get account info
 account_info = store.add_new_celery_request(url='http://localhost:8000/accounts/info/',method='GET')
-myprint('''account_info(json=acc)''')
+myprint('''account_info(json=acc,debug=debug,debug_data=dict())''')
 
 # get books info
 books_info = store.add_new_celery_request(url='http://localhost:8000/books/',method='GET')
-myprint('''books_info(json=acc))''')
+myprint('''books_info(json=acc,debug=debug,debug_data=dict())''')
 
 # get rates
 get_rates = store.add_new_celery_request(url='http://localhost:8000/rates/',method='GET')
-myprint('''get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30))''')
+myprint('''get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30),debug=debug,debug_data=dict())''')
 
 decode_rates = store.add_new_function(RatesReturn())
 myprint('''decode_rates(
-            get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30)))''')
+            get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30),debug=debug,debug_data=dict()))''')
 
 # Initialize LLM vendor and add to the store
 vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
@@ -84,7 +84,7 @@ llm = store.add_new_function(MockLLM()) if debug else llm
 extract_json = store.add_new_function(RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True))
 to_book_plan = store.add_new_function(MT5MakeOder())
 books_send = store.add_new_celery_request(url='http://localhost:8000/books/send',method='GET')
-myprint('''books_send(json=dict(acc=acc,book=book))''')
+myprint('''books_send(json=dict(acc=acc,book=book),debug=debug,debug_data=dict())''')
 
 # manual workflow
 
