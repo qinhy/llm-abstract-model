@@ -65,24 +65,45 @@ class Controller4LLMs:
             s = self.storage()
             return s.find(id)
 
-        def run(self,input=None):
+        def run(self,**kwargs):
             """Executes tasks in the correct order, handling dependencies and results."""
             tasks = self.model.tasks
             sorter = TopologicalSorter(tasks)
+            
             # Execute tasks based on topological order
+            is_all = [i in self.model.results for i in list(tasks.keys())]
+            if all(is_all):
+                self.model.results = {}
+                
             res = None
+            for d in kwargs:
+                self.model.results[d] = kwargs[d] #[args,kwargs]
+                tasks[d] = []
+
+            for k in list(self.model.results.keys()):
+                if self.model.results[k] is None:
+                    del self.model.results[k]
+
             for i,task_id in enumerate(sorter.static_order()):
-                if i==0 and input is not None:
-                    if type(input) is not list:
-                        dependency_results = [input]
+                if task_id in kwargs or task_id in self.model.results:
+                    continue
+                # Gather results from dependencies to pass as arguments
+                dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
+                all_args=[]
+                all_kwargs={}
+                for args_kwargs in dependency_results:
+                    if isinstance(args_kwargs,list) and len(args_kwargs)==2 and isinstance(args_kwargs[1],dict):
+                        if isinstance(args_kwargs[0],tuple) or isinstance(args_kwargs[0],list):
+                            args,kwargs = args_kwargs
                     else:
-                        dependency_results = input
-                    self.model.results['input'] = input
-                else:
-                    # Gather results from dependencies to pass as arguments
-                    dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
+                        args,kwargs = args_kwargs,{}
+                    all_args += list(args) if isinstance(args,tuple) else [args]
+                    all_kwargs.update(kwargs)
                 # Execute the task and store its result
-                res = self.model.results[task_id] = self._read_task(task_id)(*dependency_results)
+                try:
+                    res = self.model.results[task_id] = self._read_task(task_id)(*all_args,**all_kwargs)
+                except Exception as e:
+                    raise ValueError(f'[WorkFlow]: Error at {task_id}: {e}')
             self.model.results['final'] = res
             self.update(results=self.model.results)
             return res
@@ -256,7 +277,9 @@ class Model4LLMs:
                 messages = [{"role":"user","content":messages}]
             return msgs+messages
 
-        def __call__(self, messages:Optional[List|str])->str:
+        def __call__(self, messages:Optional[List|str], auto_str=True)->str:
+            if not isinstance(messages,list) and not isinstance(messages,str):
+                if auto_str:messages=str(messages)
             payload = self.construct_payload(self.construct_messages(messages))
             vendor = self.get_vendor()
             return vendor.chat_result(vendor.chat_request(payload))
@@ -436,7 +459,7 @@ class Model4LLMs:
         results: Dict[str, Any] = {}
 
         def __call__(self, *args, **kwargs):
-            self.get_controller().run(*args, **kwargs)
+            return self.get_controller().run(*args, **kwargs)
 
         def get_result(self, task_uuid: str) -> Any:
             """Returns the result of a specified task."""
@@ -486,7 +509,6 @@ class Model4LLMs:
                 #     print(f"Error: {result['error']}")
                 # else:
                 #     print(f"Success: {result['data']}")
-
     @Function.param_descriptions('Makes an HTTP request to async Celery REST api.',
                                 params='query parameters',
                                 data='form data',
@@ -506,30 +528,37 @@ class Model4LLMs:
                     headers=self.headers,params=params,
                     data=data,json=json
                 )
+                response.raise_for_status()
                 # get task id
-                for k,v in response.json():
+                for k,v in response.json().items():
                     if 'id' in k:
                         task_id = v
                 
                 while True:
                     response = requests.request(
-                        method=self.method,
+                        method='GET',
                         url= self.task_status_url.format(task_id=task_id),
                         headers=self.headers,params=params,
                         data=data,json=json
                     )
-                    if 'PEDING' != response.json()['state']:
+                    if response is None:
+                        break
+                    response.raise_for_status()
+                    if response.json() is None:
+                        break
+                    if response.json()['status'] in ['SUCCESS','FAILURE','REVOKED']:
+                        if response.json()['status'] == 'FAILURE':
+                            raise ValueError(f'{response.json()}')
                         break
                     time.sleep(1)
 
-                response.raise_for_status()
                 try:
                     return response.json()
                 except Exception as e:
-                    return {'text':response.text}
+                    raise ValueError(f'"text":{response.text}')
             except requests.exceptions.RequestException as e:
-                return {"error": str(e), "status": getattr(e.response, "status_code", None)}
-        
+                raise ValueError(f'"error": {e} "status": {getattr(e.response, "status_code", None)}')
+            
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   
 
@@ -592,6 +621,15 @@ class LLMsStore(BasicStore):
     
     def add_new_function(self, function_obj:MODEL_CLASS_GROUP.Function)->MODEL_CLASS_GROUP.Function:
         return self.add_new_obj(function_obj)
+    
+    def add_new_request(self, url:str, method='GET', headers={})->MODEL_CLASS_GROUP.RequestsFunction:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.RequestsFunction(method=method,url=url,headers=headers))
+    
+    def add_new_celery_request(self, url:str, method='GET', headers={},
+                               task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}'
+                               )->MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
+                                                        headers=headers,task_status_url=task_status_url))
     
     def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]], metadata={})->MODEL_CLASS_GROUP.WorkFlow:
         if type(tasks) is list:
