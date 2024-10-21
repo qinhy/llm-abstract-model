@@ -58,11 +58,15 @@ print(json.dumps(workflow.model_dump_json_dict(), indent=2))
 store.clean()
 
 ###############
-system_prompt = '''You are an expert in English translation. I will provide you with the text. Please translate it. You should reply with translations only, without any additional information.
+system_prompt = '''
+You are an expert in English translation.
+I will provide you with the text. Please translate it.
+You should reply with translations only, without any additional information.
 ## Your Reply Format Example
 ```translation
 ...
-```'''
+```
+'''
 
 vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")
 llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto', system_prompt=system_prompt)
@@ -71,7 +75,7 @@ llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto', system_promp
 input_template = store.add_new_function(
     StringTemplate(string='''
 ```text
-{}
+{text}
 ```'''))
 
 extract_result = store.add_new_function(RegxExtractor(regx=r"```translation\s*(.*)\s*\n```"))
@@ -79,38 +83,40 @@ extract_result = store.add_new_function(RegxExtractor(regx=r"```translation\s*(.
 # Define the workflow with tasks
 workflow = store.add_new_workflow(
     tasks={
-        input_template.get_id()   : [], 
+        input_template.get_id()   : ['input'],
         llm.get_id()              : [input_template.get_id()],
         extract_result.get_id()   : [llm.get_id()]
     })
-
-# Set input and run the workflow
-res = workflow.get_controller().run(input="こんにちは！はじめてのチェーン作りです！")
+res = workflow(input=[(),dict(text="こんにちは！はじめてのチェーン作りです！")]) # input=[args,kwargs]
 
 # Retrieve and print the result
 print("Result:", res)
-print(json.dumps(workflow.model_dump_json_dict(), indent=2))
-
+# print(json.dumps(workflow.model_dump_json_dict(), indent=2))
+workflow.get_controller().delete()
+input_template.get_controller().delete()
 
 # also support seqential list input
+input_template = store.add_new_function(
+    StringTemplate(string='''
+```text
+{}
+```'''))
 workflow = store.add_new_workflow(
     tasks=[
-        input_template.get_id(),
-        llm.get_id()           ,
-        extract_result.get_id(),
+        input_template.get_id(),#   : [],
+        llm.get_id(),#              : [input_template.get_id()],
+        extract_result.get_id(),#   : [llm.get_id()]
     ])
-
 # You can reuse the workflow by setting a new input
-res = workflow.get_controller().run(input="常識とは、18歳までに身に付けた偏見のコレクションである。")
+res = workflow("常識とは、18歳までに身に付けた偏見のコレクションである。")
 print("Result:", res)
-print(json.dumps(workflow.model_dump_json_dict(), indent=2))
+# print(json.dumps(workflow.model_dump_json_dict(), indent=2))
 
 # save and load workflow
 data = store.dumps()
 store.clean()
 store.loads(data)
 workflow = store.find_all('WorkFlow:*')[0]
-
-res = workflow.get_controller().run(input="为政以德，譬如北辰，居其所而众星共之。")
+res = workflow("为政以德，譬如北辰，居其所而众星共之。")
 print("Result:", res)
-print(json.dumps(workflow.model_dump_json_dict(), indent=2))
+# print(json.dumps(workflow.model_dump_json_dict(), indent=2))
