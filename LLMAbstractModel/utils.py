@@ -26,8 +26,8 @@ class RegxExtractor(Model4LLMs.Function):
               args='string.format args')
 class StringTemplate(Model4LLMs.Function):
     string:str = Field(description='string of f"..."')
-    def __call__(self,*args):
-        return self.string.format(*args)
+    def __call__(self,*args,**kwargs):
+        return self.string.format(*args,**kwargs)
 
 
 store = LLMsStore()

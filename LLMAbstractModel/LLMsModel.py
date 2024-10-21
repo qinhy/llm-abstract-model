@@ -53,61 +53,70 @@ class Controller4LLMs:
                 raise ValueError(f'vendor of {vendor_id} is not exists! Please do add new vendor')
             self.update(vendor_id=vendor.get_id())
             return vendor
-    
+        
     class WorkFlowController(AbstractObjController):
         def __init__(self, store, model):
             super().__init__(store, model)
-            self.model:Model4LLMs.WorkFlow = model
-            self._store:LLMsStore = store
-        
-        def _read_task(self,id:str):
-            """Builds the dependency graph for TopologicalSorter."""
-            s = self.storage()
-            return s.find(id)
+            self.model: Model4LLMs.WorkFlow = model
+            self._store: LLMsStore = store
+            
+        def _read_task(self, task_id: str):
+            """Fetches a task from storage."""
+            return self.storage().find(task_id)
 
-        def run(self,**kwargs):
+        def run(self, **kwargs: Dict[str, Any]) -> Any:
             """Executes tasks in the correct order, handling dependencies and results."""
-            tasks = self.model.tasks
+            tasks: Dict[str, List[str]] = self.model.tasks
             sorter = TopologicalSorter(tasks)
             
-            # Execute tasks based on topological order
-            is_all = [i in self.model.results for i in list(tasks.keys())]
-            if all(is_all):
-                self.model.results = {}
-                
-            res = None
-            for d in kwargs:
-                self.model.results[d] = kwargs[d] #[args,kwargs]
-                tasks[d] = []
-
-            for k in list(self.model.results.keys()):
-                if self.model.results[k] is None:
-                    del self.model.results[k]
-
-            for i,task_id in enumerate(sorter.static_order()):
-                if task_id in kwargs or task_id in self.model.results:
+            # Reset results if 'final' is in them
+            if 'final' in self.model.results:
+                self.model.results.clear()
+                                    
+            # Initialize results from kwargs
+            self.model.results.update({
+                task_id: result for task_id, result in kwargs.items() if result is not None})
+            
+            # Execute tasks in topological order
+            result = None
+            for task_id in sorter.static_order():
+                if task_id in self.model.results:
                     continue
+                
                 # Gather results from dependencies to pass as arguments
                 dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
-                all_args=[]
-                all_kwargs={}
-                for args_kwargs in dependency_results:
-                    if isinstance(args_kwargs,list) and len(args_kwargs)==2 and isinstance(args_kwargs[1],dict):
-                        if isinstance(args_kwargs[0],tuple) or isinstance(args_kwargs[0],list):
-                            args,kwargs = args_kwargs
-                    else:
-                        args,kwargs = args_kwargs,{}
-                    all_args += list(args) if isinstance(args,tuple) else [args]
-                    all_kwargs.update(kwargs)
+                all_args, all_kwargs = self._extract_args_kwargs(dependency_results)
+
                 # Execute the task and store its result
                 try:
-                    res = self.model.results[task_id] = self._read_task(task_id)(*all_args,**all_kwargs)
+                    result = self._read_task(task_id)(*all_args, **all_kwargs)
+                    self.model.results[task_id] = result
                 except Exception as e:
                     raise ValueError(f'[WorkFlow]: Error at {task_id}: {e}')
-            self.model.results['final'] = res
+            
+            # Set the final result
+            if result is not None:
+                self.model.results['final'] = result
+            
             self.update(results=self.model.results)
-            return res
+            return result
 
+        def _extract_args_kwargs(self, dependency_results: List[Any]):
+            """Extracts positional arguments and keyword arguments from dependency results."""
+            all_args = []
+            all_kwargs = {}
+            for args_kwargs in dependency_results:
+                if isinstance(args_kwargs, list) and len(args_kwargs) == 2 and isinstance(args_kwargs[1], dict):
+                    args, kwargs = args_kwargs
+                    if isinstance(args, (list, tuple)):
+                        all_args.extend(args)
+                    else:
+                        all_args.append(args)
+                    all_kwargs.update(kwargs)
+                else:
+                    all_args.append(args_kwargs)
+            return all_args, all_kwargs
+        
 class KeyOrEnv(BaseModel):
     key:str
 
@@ -459,7 +468,17 @@ class Model4LLMs:
         results: Dict[str, Any] = {}
 
         def __call__(self, *args, **kwargs):
-            return self.get_controller().run(*args, **kwargs)
+            if '__input__' in  self.tasks:
+                del  self.tasks['__input__']
+
+            # if a sequential task input
+            if len(args)!=0:
+                first_task_id = list(self.tasks.keys())[-1]
+                first_task_deps = self.tasks[first_task_id]
+                if '__input__' not in first_task_deps:
+                    self.tasks[first_task_id].append('__input__')
+                kwargs['__input__'] = [args,{}]
+            return self.get_controller().run(**kwargs)
 
         def get_result(self, task_uuid: str) -> Any:
             """Returns the result of a specified task."""
