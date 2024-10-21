@@ -5,7 +5,7 @@ from pydantic import Field
 from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.LLMsModel import Controller4LLMs, KeyOrEnv, Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor
-from mt5utils import MT5Account, Book, MT5MakeOder, make_book_plan, MockLLM, RatesReturn
+from mt5utils import MT5Account, Book, MT5MakeOder, MockLLM, RatesReturn
 descriptions = Model4LLMs.Function.param_descriptions
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
@@ -68,11 +68,11 @@ myprint('''books_info(json=acc))''')
 
 # get rates
 get_rates = store.add_new_celery_request(url='http://localhost:8000/rates/',method='GET')
-myprint('''get_rates(json=acc,params=dict(symbol='USDPY',timeframe='H4',count=30))''')
+myprint('''get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30))''')
 
 decode_rates = store.add_new_function(RatesReturn())
 myprint('''decode_rates(
-            get_rates(json=acc,params=dict(symbol='USDPY',timeframe='H4',count=30)))''')
+            get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30)))''')
 
 # Initialize LLM vendor and add to the store
 vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
@@ -89,15 +89,15 @@ myprint('''books_send(json=dict(acc=acc,book=book))''')
 # manual workflow
 
 to_book_plan(
-                        extract_json(
-                            llm(
-                                decode_rates(
-                                    get_rates(json=acc,
-                                              params=dict(symbol='USDPY',timeframe='H4',count=30))
-                                )
-                            )
+                extract_json(
+                    llm(
+                        decode_rates(
+                            get_rates(json=acc,
+                                        params=dict(symbol='USDJPY',timeframe='H4',count=30))
                         )
                     )
+                )
+            )
 
 # res = books_send(
 #         json=dict(
@@ -146,7 +146,7 @@ to_book_plan(
 #                 )],
 #     rates_param=[(),
 #                 dict(
-#                     params=dict(symbol='USDPY',timeframe='H4',count=30)
+#                     params=dict(symbol='USDJPY',timeframe='H4',count=30)
 #                 )]
 # )
 # myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
