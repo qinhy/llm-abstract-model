@@ -500,8 +500,11 @@ class Model4LLMs:
 
         def __call__(self,params: Optional[Dict[str, Any]] = None,
                      data: Optional[Dict[str, Any]] = None,
-                     json: Optional[Dict[str, Any]] = None ) -> Dict[str, Any]:
+                     json: Optional[Dict[str, Any]] = None,
+                     debug=False,
+                     debug_data=None) -> Dict[str, Any]:
             try:
+                if debug: return debug_data
                 response = requests.request(
                     method=self.method,url=self.url,
                     headers=self.headers,params=params,
@@ -540,8 +543,11 @@ class Model4LLMs:
 
         def __call__(self,params: Optional[Dict[str, Any]] = None,
                      data: Optional[Dict[str, Any]] = None,
-                     json: Optional[Dict[str, Any]] = None ) -> Dict[str, Any]:
+                     json: Optional[Dict[str, Any]] = None,
+                     debug=False,
+                     debug_data=None) -> Dict[str, Any]:
             try:
+                if debug: return debug_data
                 response = requests.request(
                     method=self.method,url=self.url,
                     headers=self.headers,params=params,
