@@ -1,7 +1,7 @@
 import json
 import re
 from pydantic import Field
-from typing import Any, Optional, List
+from typing import Any, Callable, Optional, List
 
 from .BasicModel import Model4Basic
 from .LLMsModel import LLMsStore, Model4LLMs
@@ -30,9 +30,29 @@ class StringTemplate(Model4LLMs.Function):
         return self.string.format(*args,**kwargs)
 
 
+@descriptions('Classification Template for performing conditional checks on a target',
+              target='The object or value to be classified',
+              condition_funcs='List of condition functions to evaluate the target')
+class ClassificationTemplate(Model4LLMs.Function):
+    def __call__(self, target: Any, condition_funcs: List[Callable[[Any], Any]] = []) -> List[bool]:
+        # Initialize an empty result list
+        results = []
+        for idx, func in enumerate(condition_funcs):
+            try:
+                # Attempt to apply the function to the target and ensure it's a boolean result
+                result = bool(func(target))
+                results.append(result)
+            except Exception as e:
+                # Log the error gracefully and append False as a default failure value
+                print(f"Error in condition function {idx} for target {target}: {e}")
+                results.append(False)
+
+        return results
+    
 store = LLMsStore()
 store.add_new_obj(RegxExtractor(regx='')).get_controller().delete()
 store.add_new_obj(StringTemplate(string='')).get_controller().delete()
+store.add_new_obj(ClassificationTemplate()).get_controller().delete()
 
 class TextFile(Model4Basic.AbstractObj):
     file_path: str
