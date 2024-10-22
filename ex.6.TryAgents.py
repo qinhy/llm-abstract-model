@@ -42,21 +42,22 @@ coordinates_extract = store.add_new_function(RegxExtractor(regx=r"```json\s*(.*)
 
 # Workflow for querying French address agent and handling responses
 def french_address_llm_workflow(question='I am in France and My GPS shows (47.665176, 3.353434), where am I?'):
+    debugprint = lambda msg:print(f'--> [french_address_llm_workflow]: {msg}') if debug else lambda:None
     query = question
     while True:
-        if debug: print(f'--> Asking french_address_llm with: [{query}]')
+        debugprint(f'Asking french_address_llm with: [{dict(question=query)}]')
         response = french_address_llm(query)
         coord_or_query = coordinates_extract(response)
         
         # If the response contains coordinates, perform a reverse geocode search
         if isinstance(coord_or_query, dict) and "lon" in coord_or_query and "lat" in coord_or_query:
-            if debug: print(f'--> Searching address with coordinates: [{coord_or_query}]')
+            debugprint(f'Searching address with coordinates: [{coord_or_query}]')
             query = french_address_search_function(**coord_or_query)
             query = f'\n## Question\n{question}\n## Information\n```\n{query}\n```\n'
         else:
             # Return the final response if no coordinates were found
             answer = coord_or_query
-            if debug: print(f'--> Final answer: [{dict(answer=answer)}]')
+            debugprint(f'Final answer: [{dict(answer=answer)}]')
             return answer
 
 # Define the triage agent
@@ -79,15 +80,16 @@ agent_extract = store.add_new_function(RegxExtractor(regx=r"```agent\s*(.*)\s*\n
 
 # Workflow for handling triage queries and routing to the appropriate agent
 def triage_llm_workflow(question='I am in France and My GPS shows (47.665176, 3.353434), where am I?'):
-    if debug: print(f'--> Asking triage_llm with: [{question}]')
-    
+    debugprint = lambda msg:print(f'--> [triage_llm_workflow]: {msg}') if debug else lambda:None
+
+    debugprint(f'Asking triage_llm with: [{dict(question=question)}]')    
     while True:
         # Get the response from triage_llm and extract the agent name
         response = triage_llm(question)
         agent_name = agent_extract(response)
         if agent_name not in ['french_address_llm_workflow']:
             continue
-        if debug: print(f'--> Switching to agent: [{agent_name}]')
+        debugprint(f'Switching to agent: [{agent_name}]')
         break    
     # Dynamically call the extracted agent
     return eval(agent_name)(question)
