@@ -17,7 +17,7 @@ class BasicModel(BaseModel):
         raise NotImplementedError('This method should be implemented by subclasses.')
     
     def _log_error(self, e):
-        print(f"[{self.__class__.__name__}] Error: {str(e)}")
+        return f"[{self.__class__.__name__}] Error: {str(e)}"
     
     def _try_error(self, func, default_value=('NULL',None)):
         try:

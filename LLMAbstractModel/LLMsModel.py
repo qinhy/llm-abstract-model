@@ -609,7 +609,7 @@ class LLMsStore(BasicStore):
                                 top_p:float = 1.0,
                                 frequency_penalty:float = 0.0,
                                 presence_penalty:float = 0.0,
-                                system_prompt:str = None ) -> MODEL_CLASS_GROUP.ChatGPT4o:
+                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.ChatGPT4o:
         
         return self.add_new_obj(self.MODEL_CLASS_GROUP.ChatGPT4o(vendor_id=vendor_id,
                                 limit_output_tokens=limit_output_tokens,
@@ -617,7 +617,7 @@ class LLMsStore(BasicStore):
                                 top_p=top_p,
                                 frequency_penalty=frequency_penalty,
                                 presence_penalty=presence_penalty,
-                                system_prompt=system_prompt,))
+                                system_prompt=system_prompt,),id=id)
     
     def add_new_chatgpt4omini(self,vendor_id:str,
                                 limit_output_tokens:int = 1024,
@@ -625,7 +625,7 @@ class LLMsStore(BasicStore):
                                 top_p:float = 1.0,
                                 frequency_penalty:float = 0.0,
                                 presence_penalty:float = 0.0,
-                                system_prompt:str = None ) -> MODEL_CLASS_GROUP.ChatGPT4oMini:
+                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.ChatGPT4oMini:
         
         return self.add_new_obj(self.MODEL_CLASS_GROUP.ChatGPT4oMini(vendor_id=vendor_id,
                                 limit_output_tokens=limit_output_tokens,
@@ -633,35 +633,35 @@ class LLMsStore(BasicStore):
                                 top_p=top_p,
                                 frequency_penalty=frequency_penalty,
                                 presence_penalty=presence_penalty,
-                                system_prompt=system_prompt,))
+                                system_prompt=system_prompt,),id=id)
     
-    def add_new_gemma2(self,vendor_id:str,system_prompt:str = None) -> MODEL_CLASS_GROUP.Gemma2:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.Gemma2(vendor_id=vendor_id,system_prompt=system_prompt))
+    def add_new_gemma2(self,vendor_id:str,system_prompt:str = None, id:str=None) -> MODEL_CLASS_GROUP.Gemma2:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.Gemma2(vendor_id=vendor_id,system_prompt=system_prompt),id=id)
     
-    def add_new_phi3(self,vendor_id:str,system_prompt:str = None) -> MODEL_CLASS_GROUP.Phi3:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.Phi3(vendor_id=vendor_id,system_prompt=system_prompt))
+    def add_new_phi3(self,vendor_id:str,system_prompt:str = None, id:str=None) -> MODEL_CLASS_GROUP.Phi3:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.Phi3(vendor_id=vendor_id,system_prompt=system_prompt),id=id)
     
-    def add_new_llama(self,vendor_id:str,system_prompt:str = None) -> MODEL_CLASS_GROUP.Llama:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.Llama(vendor_id=vendor_id,system_prompt=system_prompt))
+    def add_new_llama(self,vendor_id:str,system_prompt:str = None, id:str=None) -> MODEL_CLASS_GROUP.Llama:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.Llama(vendor_id=vendor_id,system_prompt=system_prompt),id=id)
     
-    def add_new_function(self, function_obj:MODEL_CLASS_GROUP.Function)->MODEL_CLASS_GROUP.Function:
-        return self.add_new_obj(function_obj)
+    def add_new_function(self, function_obj:MODEL_CLASS_GROUP.Function, id:str=None)->MODEL_CLASS_GROUP.Function:
+        return self.add_new_obj(function_obj,id=id)
     
-    def add_new_request(self, url:str, method='GET', headers={})->MODEL_CLASS_GROUP.RequestsFunction:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.RequestsFunction(method=method,url=url,headers=headers))
+    def add_new_request(self, url:str, method='GET', headers={}, id:str=None)->MODEL_CLASS_GROUP.RequestsFunction:
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.RequestsFunction(method=method,url=url,headers=headers),id=id)
     
     def add_new_celery_request(self, url:str, method='GET', headers={},
-                               task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}'
+                               task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}', id:str=None
                                )->MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction:
         return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
-                                                        headers=headers,task_status_url=task_status_url))
+                                                        headers=headers,task_status_url=task_status_url),id=id)
     
-    def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]], metadata={})->MODEL_CLASS_GROUP.WorkFlow:
+    def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]], metadata={}, id:str=None)->MODEL_CLASS_GROUP.WorkFlow:
         if type(tasks) is list:
             tasks = tasks[::-1]
             ds    = [[t] for t in tasks[1:]] + [[]]
             tasks = {t:d for t,d in zip(tasks,ds)}
-        return self.add_new_obj(Model4LLMs.WorkFlow(tasks=tasks,metadata=metadata))
+        return self.add_new_obj(Model4LLMs.WorkFlow(tasks=tasks,metadata=metadata),id=id)
     
     def find_function(self,function_id:str) -> MODEL_CLASS_GROUP.Function:
         return self.find(function_id)
