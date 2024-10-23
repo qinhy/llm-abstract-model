@@ -117,19 +117,27 @@ class TriageAgent(Model4LLMs.Function):
                 debugprint(f'Switching to agent: [{agent_name}]')
                 return french_address_agent(question,debug=debug)
 
-# Example usage
-french_address_agent = store.add_new_obj(FrenchAddressAgent(
+
+store.add_new_obj(FrenchAddressAgent(
                                     french_address_llm_id='ChatGPT4oMini:french_address_llm',
                                     first_json_extract_id='RegxExtractor:first_json_extract',
                                     french_address_search_function_id='ReverseGeocodeFunction:french_address_search_function'),
                                 id='FrenchAddressAgent:french_address_agent')
 
-answer = store.add_new_obj(TriageAgent(
-            triage_llm_id='ChatGPT4oMini:triage_llm',
-            agent_extract_id='RegxExtractor:agent_extract',
-            french_address_agent_id='FrenchAddressAgent:french_address_agent')
-            )(
+store.add_new_obj(TriageAgent(
+                triage_llm_id='ChatGPT4oMini:triage_llm',
+                agent_extract_id='RegxExtractor:agent_extract',
+                french_address_agent_id='FrenchAddressAgent:french_address_agent'),
+            id='TriageAgent:triage_agent')
+
+data = store.dumps()
+store.clean()
+store.loads(data)
+
+# Example usage
+answer = store.find('TriageAgent:triage_agent')(
                 question='I am in France and My GPS shows (47.665176, 3.353434), where am I?',
                 debug=True)
+
 
 print(f'\n\n######## Answer ########\n\n{answer}')
