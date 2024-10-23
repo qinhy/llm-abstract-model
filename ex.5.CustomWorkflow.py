@@ -1,4 +1,5 @@
 
+import json
 from LLMAbstractModel.utils import StringTemplate, RegxExtractor
 from LLMAbstractModel import LLMsStore,Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
@@ -50,9 +51,11 @@ workflow:Model4LLMs.WorkFlow = store.add_new_obj(
 
 # Run the workflow
 myprint('workflow.get_controller().run()')
+## -> 13
 
 # Retrieve and print the result of each task
 myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
+## -> ...
 
 store.clean()
 
@@ -88,7 +91,7 @@ workflow = store.add_new_workflow(
     })
 # input=[args,kwargs]
 myprint('workflow(input=[(),dict(text="こんにちは！はじめてのチェーン作りです！")])')
-# myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
+## -> Hello! This is my first time making a chain!
 
 workflow.get_controller().delete()
 input_template.get_controller().delete()
@@ -107,7 +110,7 @@ workflow = store.add_new_workflow(
     ])
 # You can reuse the workflow by setting a new input
 myprint('workflow("常識とは、18歳までに身に付けた偏見のコレクションである。")')
-# myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
+## -> Common sense is a collection of prejudices acquired by the age of 18.
 
 # save and load workflow
 data = store.dumps()
@@ -115,4 +118,4 @@ store.clean()
 store.loads(data)
 workflow = store.find_all('WorkFlow:*')[0]
 myprint('workflow("为政以德，譬如北辰，居其所而众星共之。")')
-# myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
+## -> Governing with virtue is like the North Star, which occupies its position while all the other stars revolve around it.

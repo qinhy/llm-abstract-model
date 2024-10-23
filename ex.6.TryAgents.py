@@ -1,6 +1,6 @@
 
 import requests
-from LLMAbstractModel.utils import StringTemplate, RegxExtractor
+from LLMAbstractModel.utils import ClassificationTemplate, StringTemplate, RegxExtractor
 from LLMAbstractModel import LLMsStore,Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
 def myprint(string):
@@ -10,7 +10,7 @@ store = LLMsStore()
 vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")
 debug = True
 
-## add French Address Search functionimport requests
+## add French Address Search function
 @descriptions('Reverse geocode coordinates to an address', lon='longitude', lat='latitude')
 class ReverseGeocodeFunction(Model4LLMs.Function):
     def __call__(self, lon: float, lat: float):
@@ -34,31 +34,45 @@ If you want to use an address searching by coordinates, please only reply with t
 ```json
 {"lon":2.37,"lat":48.357}
 ```
-''')
+''',
+id='ChatGPT4oMini:french_address_llm')
 
 # Add functions for reverse geocoding and address extraction
-french_address_search_function = store.add_new_function(ReverseGeocodeFunction())
-coordinates_extract = store.add_new_function(RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True))
+french_address_search_function = store.add_new_obj(ReverseGeocodeFunction(),
+                                                   id='ReverseGeocodeFunction:french_address_search_function')
+first_json_extract = store.add_new_obj(RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True),
+                                       id='RegxExtractor:first_json_extract')
 
-# Workflow for querying French address agent and handling responses
-def french_address_llm_workflow(question='I am in France and My GPS shows (47.665176, 3.353434), where am I?'):
-    debugprint = lambda msg:print(f'--> [french_address_llm_workflow]: {msg}') if debug else lambda:None
-    query = question
-    while True:
-        debugprint(f'Asking french_address_llm with: [{dict(question=query)}]')
-        response = french_address_llm(query)
-        coord_or_query = coordinates_extract(response)
+# Workflow function for querying French address agent and handling responses
+@descriptions('Workflow function of querying French address agent', question='The question to ask the LLM')
+class FrenchAddressAgent(Model4LLMs.Function):
+    french_address_llm_id:str
+    first_json_extract_id:str
+    french_address_search_function_id:str
+    
+    def __call__(self,question='I am in France and My GPS shows (47.665176, 3.353434), where am I?',
+                 debug=False):
+        debugprint = lambda msg:print(f'--> [french_address_agent]: {msg}') if debug else lambda:None
+        query = question
+        french_address_llm = self.get_controller().storage().find(self.french_address_llm_id)
+        first_json_extract = self.get_controller().storage().find(self.first_json_extract_id)
+        french_address_search_function = self.get_controller().storage().find(self.french_address_search_function_id)
         
-        # If the response contains coordinates, perform a reverse geocode search
-        if isinstance(coord_or_query, dict) and "lon" in coord_or_query and "lat" in coord_or_query:
-            debugprint(f'Searching address with coordinates: [{coord_or_query}]')
-            query = french_address_search_function(**coord_or_query)
-            query = f'\n## Question\n{question}\n## Information\n```\n{query}\n```\n'
-        else:
-            # Return the final response if no coordinates were found
-            answer = coord_or_query
-            debugprint(f'Final answer: [{dict(answer=answer)}]')
-            return answer
+        while True:
+            debugprint(f'Asking french_address_llm with: [{dict(question=query)}]')
+            response = french_address_llm(query)
+            coord_or_query = first_json_extract(response)
+            
+            # If the response contains coordinates, perform a reverse geocode search
+            if isinstance(coord_or_query, dict) and "lon" in coord_or_query and "lat" in coord_or_query:
+                debugprint(f'Searching address with coordinates: [{coord_or_query}]')
+                query = french_address_search_function(**coord_or_query)
+                query = f'\n## Question\n{question}\n## Information\n```\n{query}\n```\n'
+            else:
+                # Return the final response if no coordinates were found
+                answer = coord_or_query
+                debugprint(f'Final answer: [{dict(answer=answer)}]')
+                return answer
 
 # Define the triage agent
 triage_llm = store.add_new_chatgpt4omini(
@@ -66,35 +80,56 @@ triage_llm = store.add_new_chatgpt4omini(
     system_prompt='''
 You are a professional guide who can connect the asker to the correct agent.
 ## Available Agents:
-- french_address_llm_workflow: Familiar with France and speaks English.
+- french_address_agent: Familiar with France and speaks English.
 
 ## How to connect the agent:
 ```agent
-french_address_llm_workflow
+french_address_agent
 ```
-'''
-)
+''',
+id='ChatGPT4oMini:triage_llm')
 
 # Function to extract the agent from triage agent's response
-agent_extract = store.add_new_function(RegxExtractor(regx=r"```agent\s*(.*)\s*\n```"))
+agent_extract = store.add_new_obj(RegxExtractor(regx=r"```agent\s*(.*)\s*\n```"),id='RegxExtractor:agent_extract')
 
 # Workflow for handling triage queries and routing to the appropriate agent
-def triage_llm_workflow(question='I am in France and My GPS shows (47.665176, 3.353434), where am I?'):
-    debugprint = lambda msg:print(f'--> [triage_llm_workflow]: {msg}') if debug else lambda:None
+@descriptions('Workflow function of triage queries and routing to the appropriate agent', question='The question to ask the LLM')
+class TriageAgent(Model4LLMs.Function):
+    triage_llm_id:str
+    agent_extract_id:str
+    french_address_agent_id:str
+    
+    def __call__(self,
+                 question='I am in France and My GPS shows (47.665176, 3.353434), where am I?',
+                 debug=False):
+        debugprint = lambda msg:print(f'--> [triage_agent]: {msg}') if debug else lambda:None
 
-    debugprint(f'Asking triage_llm with: [{dict(question=question)}]')    
-    while True:
-        # Get the response from triage_llm and extract the agent name
-        response = triage_llm(question)
-        agent_name = agent_extract(response)
-        if agent_name not in ['french_address_llm_workflow']:
-            continue
-        debugprint(f'Switching to agent: [{agent_name}]')
-        break    
-    # Dynamically call the extracted agent
-    return eval(agent_name)(question)
+        triage_llm = self.get_controller().storage().find(self.triage_llm_id)
+        agent_extract = self.get_controller().storage().find(self.agent_extract_id)
+        french_address_agent = self.get_controller().storage().find(self.french_address_agent_id)
+
+        debugprint(f'Asking triage_llm with: [{dict(question=question)}]')    
+        while True:
+            # Get the response from triage_llm and extract the agent name
+            response = triage_llm(question)
+            agent_name = agent_extract(response)
+            if agent_name  == 'french_address_agent':
+                debugprint(f'Switching to agent: [{agent_name}]')
+                return french_address_agent(question,debug=debug)
 
 # Example usage
-answer = triage_llm_workflow('I am in France and My GPS shows (47.665176, 3.353434), where am I?')
+french_address_agent = store.add_new_obj(FrenchAddressAgent(
+                                    french_address_llm_id='ChatGPT4oMini:french_address_llm',
+                                    first_json_extract_id='RegxExtractor:first_json_extract',
+                                    french_address_search_function_id='ReverseGeocodeFunction:french_address_search_function'),
+                                id='FrenchAddressAgent:french_address_agent')
+
+answer = store.add_new_obj(TriageAgent(
+            triage_llm_id='ChatGPT4oMini:triage_llm',
+            agent_extract_id='RegxExtractor:agent_extract',
+            french_address_agent_id='FrenchAddressAgent:french_address_agent')
+            )(
+                question='I am in France and My GPS shows (47.665176, 3.353434), where am I?',
+                debug=True)
 
 print(f'\n\n######## Answer ########\n\n{answer}')
