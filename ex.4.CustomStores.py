@@ -34,7 +34,7 @@ myprint('get_fibo.model_dump()')
 myprint('store.find_all("FibonacciFunction:*")[0](7)')
 # -> 13
 
-## add custom Obj
+## add custom Obj ( need moving this obj to some custom_utils.py when restore store obj )
 class FibonacciObj(Model4LLMs.AbstractObj):
     n:int
 

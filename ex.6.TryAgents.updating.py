@@ -10,7 +10,7 @@ store = LLMsStore()
 vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")
 debug = True
 
-## add French Address Search functionimport requests
+## add French Address Search function ( this )
 @descriptions('Reverse geocode coordinates to an address', lon='longitude', lat='latitude')
 class ReverseGeocodeFunction(Model4LLMs.Function):
     def __call__(self, lon: float, lat: float):
