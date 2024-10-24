@@ -54,7 +54,7 @@ store.add_new_function(ConstantFiveFunction()).get_controller().delete()
 ## ex.6.TryAgents.py ##
 #######################
 @descriptions('Reverse geocode coordinates to an address', lon='longitude', lat='latitude')
-class ReverseGeocodeFunction(Model4LLMs.Function):
+class FrenchReverseGeocodeFunction(Model4LLMs.Function):
     def __call__(self, lon: float, lat: float):
         # Construct the URL with the longitude and latitude parameters
         url = f"https://api-adresse.data.gouv.fr/reverse/?lon={lon}&lat={lat}"        
@@ -126,7 +126,7 @@ class TriageAgent(Model4LLMs.Function):
                 return french_address_agent(question,debug=debug)
             
 ### registeration magic
-store.add_new_obj(ReverseGeocodeFunction()).get_controller().delete()
+store.add_new_obj(FrenchReverseGeocodeFunction()).get_controller().delete()
 store.add_new_obj(FrenchAddressAgent(french_address_llm_id='',
                                     first_json_extract_id='',
                                     french_address_search_function_id='')).get_controller().delete()

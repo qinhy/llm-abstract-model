@@ -1,6 +1,6 @@
 
 import requests
-from LLMAbstractModel.utils import ClassificationTemplate, StringTemplate, RegxExtractor
+from LLMAbstractModel.utils import RegxExtractor
 from LLMAbstractModel import LLMsStore,Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
 def myprint(string):
@@ -11,8 +11,8 @@ vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")
 debug = True
 
 ## add French Address Search function
-@descriptions('Reverse geocode coordinates to an address', lon='longitude', lat='latitude')
-class ReverseGeocodeFunction(Model4LLMs.Function):
+@descriptions('French reverse geocode coordinates to an address', lon='longitude', lat='latitude')
+class FrenchReverseGeocodeFunction(Model4LLMs.Function):
     def __call__(self, lon: float, lat: float):
         # Construct the URL with the longitude and latitude parameters
         url = f"https://api-adresse.data.gouv.fr/reverse/?lon={lon}&lat={lat}"        
@@ -38,8 +38,8 @@ If you want to use an address searching by coordinates, please only reply with t
 id='ChatGPT4oMini:french_address_llm')
 
 # Add functions for reverse geocoding and address extraction
-french_address_search_function = store.add_new_obj(ReverseGeocodeFunction(),
-                                                   id='ReverseGeocodeFunction:french_address_search_function')
+french_address_search_function = store.add_new_obj(FrenchReverseGeocodeFunction(),
+                                                   id='FrenchReverseGeocodeFunction:french_address_search_function')
 first_json_extract = store.add_new_obj(RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True),
                                        id='RegxExtractor:first_json_extract')
 
@@ -117,19 +117,27 @@ class TriageAgent(Model4LLMs.Function):
                 debugprint(f'Switching to agent: [{agent_name}]')
                 return french_address_agent(question,debug=debug)
 
-# Example usage
-french_address_agent = store.add_new_obj(FrenchAddressAgent(
+
+store.add_new_obj(FrenchAddressAgent(
                                     french_address_llm_id='ChatGPT4oMini:french_address_llm',
                                     first_json_extract_id='RegxExtractor:first_json_extract',
-                                    french_address_search_function_id='ReverseGeocodeFunction:french_address_search_function'),
+                                    french_address_search_function_id='FrenchReverseGeocodeFunction:french_address_search_function'),
                                 id='FrenchAddressAgent:french_address_agent')
 
-answer = store.add_new_obj(TriageAgent(
-            triage_llm_id='ChatGPT4oMini:triage_llm',
-            agent_extract_id='RegxExtractor:agent_extract',
-            french_address_agent_id='FrenchAddressAgent:french_address_agent')
-            )(
+store.add_new_obj(TriageAgent(
+                triage_llm_id='ChatGPT4oMini:triage_llm',
+                agent_extract_id='RegxExtractor:agent_extract',
+                french_address_agent_id='FrenchAddressAgent:french_address_agent'),
+            id='TriageAgent:triage_agent')
+
+data = store.dumps()
+store.clean()
+store.loads(data)
+
+# Example usage
+answer = store.find('TriageAgent:triage_agent')(
                 question='I am in France and My GPS shows (47.665176, 3.353434), where am I?',
                 debug=True)
+
 
 print(f'\n\n######## Answer ########\n\n{answer}')
