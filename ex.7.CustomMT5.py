@@ -1,4 +1,5 @@
 import os
+import time
 from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.LLMsModel import Controller4LLMs, KeyOrEnv, Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor
@@ -86,83 +87,62 @@ myprint('''books_send(json=dict(acc=acc,book=book),debug=debug,debug_data=dict()
 # manual workflow
 
 to_book_plan(
-                extract_json(
-                    llm(
-                        decode_rates(
-                            get_rates(json=acc,
-                                        params=dict(symbol='USDJPY',timeframe='H4',count=30))
-                        )
+            extract_json(
+                llm(
+                    decode_rates(
+                        get_rates(json=acc,
+                                  params=dict(symbol='USDJPY',timeframe='H4',count=30))
                     )
                 )
             )
+        )
 
-# res = books_send(
-#         json=dict(
-#             acc=acc,
-#             book=
-#             )
-# )
-# print(res)
+# Make book plan workflow
+book_plan_workflow = store.add_new_workflow(
+    tasks={
+        get_rates.get_id():['acc','rate_param'],
+        llm.get_id():['init_deps'],
+        get_rates.get_id():['init_deps','rates_param'],
+    },
+    metadata={'tags': [str(accs[0].account_id)]}
+)
 
-# Define and save workflow
-# workflow = store.add_new_workflow(
-#     tasks={
-#         get_rates.get_id():['acc','rate_param'],
-#         llm.get_id():['init_deps'],
-#         get_rates.get_id():['init_deps','rates_param'],
-#     },
-#     metadata={'tags': [str(accs[0].account_id)]}
-# )
-# workflow = store.add_new_workflow(
-#     tasks=[
-#         account_info.get_id(),
-#         # books_info.get_id(),
-#         # get_rates.get_id(),
-
-#         # get_rates.get_id(),
-#         # llm.get_id(),
-#         # extract_json.get_id(),
-#         # make_order.get_id(),
-#     ],
-#     metadata={'tags': [str(accs[0].account_id)]}
-# )
 
 # Save and reload workflow data
-# data = store.dumps()
-# store.clean()
-# store.loads(data)
-# workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
-# workflowf = lambda:workflow(
-#     init_deps=[(),
-#                 dict(
-#                     json=dict(
-#                         account_id=accs[0].account_id,
-#                         password=accs[0].password.get(),
-#                         account_server=accs[0].account_server.get(),
-#                     )
-#                 )],
-#     rates_param=[(),
-#                 dict(
-#                     params=dict(symbol='USDJPY',timeframe='H4',count=30)
-#                 )]
-# )
-# myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
+store.dump('ex.6.CustomMT5.workflow.txt')
+data = store.dumps()
+store.clean()
+store.loads(data)
+book_plan_workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
+make_plan = lambda:book_plan_workflow(
+    init_deps=[(),
+                dict(
+                    json=dict(
+                        account_id=accs[0].account_id,
+                        password=accs[0].password.get(),
+                        account_server=accs[0].account_server.get(),
+                    )
+                )],
+    rates_param=[(),
+                dict(
+                    params=dict(symbol='USDJPY',timeframe='H4',count=30)
+                )]
+)
+myprint('json.dumps(book_plan_workflow.model_dump_json_dict(), indent=2)')
 
-# store.dump('ex.6.CustomMT5.workflow.txt')
+# Monitoring loop
+while True:
+    try:
+        for currency in set(monitor_pairs) - {book['symbol'] for book in books_info()}:
+            get_rates.get_controller().update(symbol=currency)
+            workflow_result = book_plan_workflow()
+            print(
+                "Result:",book_plan_workflow.results['final'], 
+            )
+            with open('../llm-abstract-model-logs.txt', 'a') as log_file:
+                log_file.write(book_plan_workflow.results[llm.get_id()] + '\n')
 
-# # Monitoring loop
-# while True:
-#     try:
-#         for currency in set(monitor_pairs) - {book.symbol for book in get_books()}:
-#             get_rates.get_controller().update(symbol=currency)
-#             workflow_result = workflow()
-#             print(
-#                 "Result:", 
-#                 workflow.results[extract_json.get_id()], 
-#                 workflow.results[make_order.get_id()]
-#             )
-#             with open('../llm-abstract-model-logs.txt', 'a') as log_file:
-#                 log_file.write(workflow.results[llm.get_id()] + '\n')
-#         time.sleep(10)
-#     except Exception as e:
-#         print("Error:", e)
+            books_send(json=dict(acc=acc,book=workflow_result))
+        time.sleep(10)
+    except Exception as e:
+        print("Error:", e)
