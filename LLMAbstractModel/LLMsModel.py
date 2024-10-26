@@ -220,7 +220,6 @@ class Model4LLMs:
                                     headers=headers, timeout=self.timeout)
             try:
                 response = json.loads(response.text, strict=False)['data'][0]['embedding']
-                print(response)
             except Exception as e:
                 return {'error': f'{e}'}
             return response
