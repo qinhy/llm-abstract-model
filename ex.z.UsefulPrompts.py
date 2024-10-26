@@ -78,3 +78,19 @@ Your reply format in Markdown as below:
 ```
 {}
 ```'''
+
+
+# Designing a hierarchical memory system for a personal assistant that covers all aspects of daily life. The system has 3 layers of topic, section or category.
+# The top layer is root and includes 10 topics.
+# Every topioc includes 10 sections.
+# Every section includes 10 categories.
+# Please provide reply in JSON like following.
+# ```json
+# [
+#     {
+#         "key":"The topic, section or category name",
+#         "description":" ... "
+#     }
+#     ...
+# ]
+# ```
