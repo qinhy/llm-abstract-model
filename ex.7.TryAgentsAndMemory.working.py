@@ -97,6 +97,7 @@ class MemTree:
                 best_child = child
 
         # Check if best similarity meets threshold
+        print(best_similarity, self.get_threshold(current_node.depth))
         if best_child and best_similarity >= self.get_threshold(current_node.depth):
             # Traverse further if similarity threshold is met
             self._insert_node(best_child, new_node)
@@ -138,49 +139,49 @@ class MemTree:
 
 # Sample complex personal data for Alex
 complex_sample_data = [
-    # Work-related memories
-    "Prepare quarterly report on sales trends by end of September",
+    '''Work-related memories''',
+    "Work on quarterly report on sales trends by end of September",
     "Team meeting every Monday at 10 AM to discuss project updates",
     "Read the latest research paper on artificial intelligence in medicine",
     "Finish the product pitch presentation for the client next week",
     "Coordinate with the marketing team on the new campaign for social media",
     
-    # Personal relationships and social interactions
+    '''Personal relationships and social interactions''',
     "Birthday dinner for Emily on October 12th at her favorite Italian restaurant",
     "Remind Mom about her doctor's appointment next Tuesday",
     "Catch up with John over coffee this weekend to discuss the hiking trip",
     "Send anniversary wishes to Sarah and Mike on November 5th",
     "Plan a game night with friends for Friday evening",
     
-    # Hobbies and personal interests
+    '''Hobbies and personal interests''',
     "Practice guitar chords for 'Hey Jude' by The Beatles",
     "Sign up for a pottery class to explore new creative outlets",
     "Research the latest DSLR cameras for landscape photography",
     "Look into joining a weekend hiking club for outdoor activities",
     "Try a new recipe for Thai curry with coconut milk this weekend",
     
-    # Health and self-care
+    '''Health and self-care''',
     "Yoga session every morning at 6:30 AM for better flexibility",
     "Drink more water throughout the day to stay hydrated",
     "Schedule annual dental checkup in the first week of December",
     "Take vitamin supplements daily for general well-being",
     "Set a reminder to take a 5-minute break every hour when working",
     
-    # Goals and personal development
+    '''Goals and personal development''',
     "Complete an online course on data science by the end of this month",
     "Read one new book each month; currently reading 'Sapiens' by Yuval Noah Harari",
     "Practice mindfulness meditation in the evening to reduce stress",
     "Write a journal entry every night to reflect on daily events",
     "Set a target to run 5 kilometers without stopping by the end of the year",
     
-    # Random thoughts and reflections
+    '''Random thoughts and reflections''',
     "Consider adopting a pet dog; research breeds that are good with kids",
     "The sunset at the beach yesterday was beautiful, and I’d love to visit again soon",
     "Wondering if switching to a standing desk would help with posture",
     "Had a deep conversation with Sarah about life goals and future plans",
     "Noticed that productivity peaks after a good night's sleep",
     
-    # Miscellaneous reminders and notes
+    '''Miscellaneous reminders and notes''',
     "Buy groceries: milk, eggs, bread, and fresh vegetables",
     "Research flight options for the vacation trip in December",
     "Pick up the dry cleaning by Thursday evening",
