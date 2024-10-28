@@ -1,3 +1,4 @@
+import json
 import os
 from typing import List, Optional
 from uuid import uuid4
@@ -97,9 +98,16 @@ class MemTree:
             node.embedding = []
         return embeddings
     
-    def load_all_embeddings(self,embeddings:dict):
+    def dump_all_embeddings(self,path='embeddings.json'):
+        embeddings = self.extract_all_embeddings()
+        with open(path, "w") as tf: tf.write(json.dumps(embeddings))
+    
+    def put_all_embeddings(self,embeddings:dict):
         for node in self.traverse(self.root):
             node.embedding = embeddings[node.id]
+    
+    def load_all_embeddings(self,path='embeddings.json'):
+        with open(path, "r") as tf: self.put_all_embeddings(json.loads(tf.read()))
     
     def retrieve(self, query: str, top_k: int = 3) -> List[tuple[Node, float]]:
         nodes_with_scores = []
@@ -172,80 +180,80 @@ class MemTree:
         for child in node.children:
             self.print_tree(child, level + 1)
 
-# Sample complex personal data for Alex
-complex_sample_data = [
-    '''Work-related''',
-    "Work on quarterly report on sales trends by end of September",
-    "Team meeting every Monday at 10 AM to discuss project updates",
-    # "Read the latest research paper on artificial intelligence in medicine",
-    # "Finish the product pitch presentation for the client next week",
-    # "Coordinate with the marketing team on the new campaign for social media",
+# # Sample complex personal data for Alex
+# complex_sample_data = [
+#     '''Work-related''',
+#     "Work on quarterly report on sales trends by end of September",
+#     "Team meeting every Monday at 10 AM to discuss project updates",
+#     # "Read the latest research paper on artificial intelligence in medicine",
+#     # "Finish the product pitch presentation for the client next week",
+#     # "Coordinate with the marketing team on the new campaign for social media",
     
-    '''Personal relationships and social nets''',
-    "Birthday dinner for Emily on October 12th at her favorite Italian restaurant",
-    "Remind Mom about her doctor's appointment next Tuesday",
-    # "Catch up with John over coffee this weekend to discuss the hiking trip",
-    # "Send anniversary wishes to Sarah and Mike on November 5th",
-    # "Plan a game night with friends for Friday evening",
+#     '''Personal relationships and social nets''',
+#     "Birthday dinner for Emily on October 12th at her favorite Italian restaurant",
+#     "Remind Mom about her doctor's appointment next Tuesday",
+#     # "Catch up with John over coffee this weekend to discuss the hiking trip",
+#     # "Send anniversary wishes to Sarah and Mike on November 5th",
+#     # "Plan a game night with friends for Friday evening",
     
-    '''Hobbies and personal interests''',
-    "Practice guitar chords for 'Hey Jude' by The Beatles",
-    "Sign up for a pottery class to explore new creative outlets",
-    # "Research the latest DSLR cameras for landscape photography",
-    # "Look into joining a weekend hiking club for outdoor activities",
-    # "Try a new recipe for Thai curry with coconut milk this weekend",
+#     '''Hobbies and personal interests''',
+#     "Practice guitar chords for 'Hey Jude' by The Beatles",
+#     "Sign up for a pottery class to explore new creative outlets",
+#     # "Research the latest DSLR cameras for landscape photography",
+#     # "Look into joining a weekend hiking club for outdoor activities",
+#     # "Try a new recipe for Thai curry with coconut milk this weekend",
     
-    '''Health and self-care''',
-    "Yoga session every morning at 6:30 AM for better flexibility",
-    "Drink more water throughout the day to stay hydrated",
-    # "Take vitamin supplements daily for general well-being",
-    # "Set a reminder to take a 5-minute break every hour when working",
+#     '''Health and self-care''',
+#     "Yoga session every morning at 6:30 AM for better flexibility",
+#     "Drink more water throughout the day to stay hydrated",
+#     # "Take vitamin supplements daily for general well-being",
+#     # "Set a reminder to take a 5-minute break every hour when working",
     
-    '''Goals and personal development''',
-    "Complete an online course on data science by the end of this month",
-    "Read one new book each month; currently reading 'Sapiens' by Yuval Noah Harari",
-    # "Practice mindfulness meditation in the evening to reduce stress",
-    # "Write a journal entry every night to reflect on daily events",
-    # "Set a target to run 5 kilometers without stopping by the end of the year",
+#     '''Goals and personal development''',
+#     "Complete an online course on data science by the end of this month",
+#     "Read one new book each month; currently reading 'Sapiens' by Yuval Noah Harari",
+#     # "Practice mindfulness meditation in the evening to reduce stress",
+#     # "Write a journal entry every night to reflect on daily events",
+#     # "Set a target to run 5 kilometers without stopping by the end of the year",
     
-    '''Random thoughts and reflections''',
-    "Consider adopting a pet dog; research breeds that are good with kids",
-    "The sunset at the beach yesterday was beautiful, and I’d love to visit again soon",
-    # "Wondering if switching to a standing desk would help with posture",
-    # "Had a deep conversation with Sarah about life goals and future plans",
-    # "Noticed that productivity peaks after a good night's sleep",
+#     '''Random thoughts and reflections''',
+#     "Consider adopting a pet dog; research breeds that are good with kids",
+#     "The sunset at the beach yesterday was beautiful, and I’d love to visit again soon",
+#     # "Wondering if switching to a standing desk would help with posture",
+#     # "Had a deep conversation with Sarah about life goals and future plans",
+#     # "Noticed that productivity peaks after a good night's sleep",
     
-    '''reminders and notes''',
-    "Buy groceries: milk, eggs, bread, and fresh vegetables",
-    "Research flight options for the vacation trip in December",
-    # "Pick up the dry cleaning by Thursday evening",
-    # "Renew library membership by the end of the month",
-    # "Replace the batteries in the smoke detector this weekend",
-]
+#     '''reminders and notes''',
+#     "Buy groceries: milk, eggs, bread, and fresh vegetables",
+#     "Research flight options for the vacation trip in December",
+#     # "Pick up the dry cleaning by Thursday evening",
+#     # "Renew library membership by the end of the month",
+#     # "Replace the batteries in the smoke detector this weekend",
+# ]
 
-# Example usage of MemTree with complex personal data
-memory_tree = MemTree(llm=llm,text_embedding=text_embedding)
+# # Example usage of MemTree with complex personal data
+# memory_tree = MemTree(llm=llm,text_embedding=text_embedding)
 
-# Insert each memory into the memory tree
-for i in complex_sample_data: memory_tree.insert(i)
+# # Insert each memory into the memory tree
+# for i in complex_sample_data: memory_tree.insert(i)
 
-# Define a function to test retrieval with sample queries
-def test_retrieval(query: str, top_k: int = 5):
-    print(f"\nTop {top_k} matches for query: '{query}'")
-    results = memory_tree.retrieve(query, top_k)
-    for i, (node, score) in enumerate(results, start=1):
-        print(f"{i}. score: {score:.4f} | [ {node.content} ]'")
+# # Define a function to test retrieval with sample queries
+# def test_retrieval(query: str, top_k: int = 5):
+#     print(f"\nTop {top_k} matches for query: '{query}'")
+#     results = memory_tree.retrieve(query, top_k)
+#     for i, (node, score) in enumerate(results, start=1):
+#         print(f"{i}. score: {score:.4f} | [ {node.content} ]'")
 
-# Testing with example queries that reflect personal scenarios
-test_retrieval("Remind me about family events", top_k=6)
-test_retrieval("Health and self-care routines", top_k=6)
-test_retrieval("Work project deadlines", top_k=6)
-test_retrieval("Weekend plans with friends", top_k=6)
-test_retrieval("Personal development goals", top_k=6)
+# # Testing with example queries that reflect personal scenarios
+# test_retrieval("Remind me about family events", top_k=6)
+# test_retrieval("Health and self-care routines", top_k=6)
+# test_retrieval("Work project deadlines", top_k=6)
+# test_retrieval("Weekend plans with friends", top_k=6)
+# test_retrieval("Personal development goals", top_k=6)
 
-# Print the tree structure to visualize organization
-print("\nMemory Tree Structure:")
-memory_tree.print_tree()
+# # Print the tree structure to visualize organization
+# print("\nMemory Tree Structure:")
+# memory_tree.print_tree()
 
 # @descriptions('Workflow function of triage queries and routing to the appropriate agent', 
 #               question='The question to ask the LLM')
@@ -254,7 +262,7 @@ class PersonalAssistantAgent(BaseModel):
     text_embedding: Model4LLMs.AbstractEmbedding = text_embedding
     memory_root: Node = Node()
     memory_top_k: int = Field(default=5, ge=1, description="Number of top memories to retrieve.")
-    system_prompt: str = "¥nYou are a capable, friendly assistant with a strong memory.¥nUse a mix of past information and new insights to answer effectively. ¥nFeel free to save something in memory without any permission, just reply with ```memory something```.¥nYou will be provided most relevant information.¥nSave new, important details like preferences or routines.¥n¥n## **Conversational Style**:¥n   - **Tone**: Be friendly, clear, and professional.¥n   - **Clarity and Conciseness**: Keep responses clear and to the point.¥n   - **Empathy and Politeness**: Show understanding, especially when users share concerns.¥n¥n## **Task Assistance**¥nAssist with information, suggestions, answering questions, and summaries as needed.¥n¥n## **Adaptability**:¥nAdjust to the user’s style, whether concise or detailed.¥n"
+    system_prompt: str = "You are a capable, friendly assistant use a mix of past information and new insights to answer effectively. Save new, important details—such as preferences or routines—in your own words. Simply reply with ```memory ... ```."
 
     def get_memory(self):
         return MemTree(self.memory_root,llm=self.llm,
@@ -268,8 +276,9 @@ class PersonalAssistantAgent(BaseModel):
 
     def memory_retrieval(self, query: str) -> str:
         # Perform retrieval and format the results
-        res = f"\nTop {self.memory_top_k} memories for query: '{query}'\n"
+        res = f"## Top {self.memory_top_k} memories for query: '{query}'\n"
         results = self.get_memory().retrieve(query, self.memory_top_k)
+        if len(results)==0:return res+"No memories.\n"
         for i, (node, score) in enumerate(results, start=1):
             res += f"{i}. Score: {score:.3f} | Content: {node.content}\n"
         return res
@@ -279,7 +288,10 @@ class PersonalAssistantAgent(BaseModel):
         # Retrieve relevant memory and format it for context
         memory = self.memory_retrieval(query)
         # Format the query with memory context
-        query_with_context = f"{memory}\nUser Query: {query}"
+        query_with_context = f"{memory}## User Query\n{query}"
+        print("##########################")
+        print(query_with_context)
+        print("##########################")
         # Generate a response using the LLM
         self.llm.system_prompt=self.system_prompt
         response = self.llm(query_with_context)
@@ -288,10 +300,24 @@ class PersonalAssistantAgent(BaseModel):
             self.add_memory(new_memo)
         return response
 
-
+memory_tree = MemTree(llm=llm,text_embedding=text_embedding)
 agent = PersonalAssistantAgent(memory_root=memory_tree.root,llm=llm,text_embedding=text_embedding)
 # print(agent('hi! Please tell me my events.'))
 print(agent('Please remider me to schedule annual dental checkup in the first week of December, I am not decide the date yet.'))
 
+def save_memory_agent(store:LLMsStore,memory_tree:MemTree):
+    memory_tree.dump_all_embeddings('./tmp/embeddings.json')
+    store.set('Memory',memory_tree.root.model_dump())
+    store.dump_RSA('./tmp/store.rjson','./tmp/public_key.pem')
+
+def load_memory_agent():
+    store = LLMsStore()
+    store.load_RSA('./tmp/store.rjson','./tmp/private_key.pem')
+    llm = store.find_all('ChatGPT4oMini:*')[0]
+    text_embedding = store.find_all('TextEmbedding3Small:*')[0]
+    memory_tree = MemTree(store.get('Memory'),llm=llm,text_embedding=text_embedding)
+    memory_tree.load_all_embeddings('./tmp/embeddings.json')
+    agent = PersonalAssistantAgent(memory_root=memory_tree.root,llm=llm,text_embedding=text_embedding)
+    return agent,memory_tree,store
 
 
