@@ -81,6 +81,26 @@ class MemTree:
         emb1, emb2 = np.asarray(emb1), np.asarray(emb2)
         coss = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
         return coss
+    
+    def traverse(self, node:Node):
+        # Yield the current node
+        if node.content != 'Root':
+            yield node
+        # Recursively yield each child node
+        for child in node.children:
+            yield from self.traverse(child)
+
+    def extract_all_embeddings(self):
+        embeddings = {}
+        for node in self.traverse(self.root):
+            embeddings[node.id] = node.embedding
+            node.embedding = []
+        return embeddings
+    
+    def load_all_embeddings(self,embeddings:dict):
+        for node in self.traverse(self.root):
+            node.embedding = embeddings[node.id]
+    
     def retrieve(self, query: str, top_k: int = 3) -> List[tuple[Node, float]]:
         nodes_with_scores = []
         query = self.calc_embedding(Node(content=query))
@@ -263,12 +283,9 @@ class PersonalAssistantAgent(BaseModel):
         # Generate a response using the LLM
         self.llm.system_prompt=self.system_prompt
         response = self.llm(query_with_context)
-        try:
+        if '```memory' in response:
             new_memo = memo_ext(response)
             self.add_memory(new_memo)
-        except Exception as e:
-            pass
-            # print(e)
         return response
 
 
