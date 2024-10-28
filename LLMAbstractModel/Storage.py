@@ -7,6 +7,8 @@ import fnmatch
 import json
 import unittest
 
+from LLMAbstractModel.rsa import SimpleRSAChunkEncryptor
+
 class AbstractStorage:
     # statics for singleton
     _uuid = uuid.uuid4()
@@ -51,6 +53,19 @@ class AbstractStorageController:
 
     def load(self,path):
         with open(path, "r") as tf: self.loads(tf.read())
+
+    def dump_RSA(self,path,public_key_path):
+        data = self.dumps()        
+        public_key = SimpleRSAChunkEncryptor.load_public_key_from_pkcs8(public_key_path)
+        encryptor = SimpleRSAChunkEncryptor(public_key, None)
+        with open(path, "w") as tf: tf.write(encryptor.encrypt_string(data))
+        return data
+
+    def load_RSA(self,path,private_key_path):
+        private_key = SimpleRSAChunkEncryptor.load_private_key_from_pkcs8(private_key_path)
+        encryptor = SimpleRSAChunkEncryptor(None, private_key)
+        with open(path, "r") as tf: self.loads(encryptor.decrypt_string(tf.read()))
+
 
 class PythonDictStorage(AbstractStorage):
     def __init__(self, id=None, store=None, is_singleton=None):
