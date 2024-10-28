@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 from typing import List, Optional
@@ -128,7 +129,7 @@ class MemTree:
     
     def insert(self, content: str):
         # Use OpenAI's embedding function to get the embedding
-        new_node = self.calc_embedding(Node(content=content))
+        new_node = self.calc_embedding(Node(content=content.strip()))
         # Add to _node_dict
         MemTree.get_node(new_node.id)
         self._node_dict[new_node.id] = new_node
@@ -173,12 +174,43 @@ class MemTree:
         #     new_node.parent_id = current_node.id
         #     new_node.depth = current_node.depth + 1
 
+    def parse_indented_text(text):
+        lines = text.splitlines()
+        stack = [([], -1)]  # Stack with root item
+        root = stack[0][0]
+        
+        for line in lines:
+            stripped = line.lstrip()
+            if not stripped:
+                continue  # Skip empty lines
+            indent = len(line) - len(stripped)
+            content = stripped[2:].strip()  # Remove bullet and any additional whitespace
+            level = indent // 4  # Determine level based on indent (4 spaces per level)
+            
+            # Pop stack to match current indentation level
+            while stack and stack[-1][1] >= level:
+                stack.pop()
+            
+            # Append new item to current level's parent
+            parent, _ = stack[-1]
+            item = [content]
+            parent.append(item)
+            
+            # Prepare to add child items in subsequent lines
+            stack.append((item, level))
+        
+        return root
+    
     def print_tree(self, node: Optional[Node] = None, level: int = 0):
+        res = ''
         if node is None: node = self.root
         # Print current node with indentation corresponding to its depth
-        print(" " * (level * 4) + f"- {node.content} (Depth: {node.depth})")
+        res += " " * (level * 4) + f"- {node.content.strip()}\n"
         for child in node.children:
-            self.print_tree(child, level + 1)
+            res += self.print_tree(child, level + 1)
+        if node == self.root:
+            print(res)
+        return res
 
 # # Sample complex personal data for Alex
 # complex_sample_data = [
@@ -276,7 +308,7 @@ class PersonalAssistantAgent(BaseModel):
 
     def memory_retrieval(self, query: str) -> str:
         # Perform retrieval and format the results
-        res = f"## Top {self.memory_top_k} memories for query: '{query}'\n"
+        res = f"## Top {self.memory_top_k} memories for the query:\n"
         results = self.get_memory().retrieve(query, self.memory_top_k)
         if len(results)==0:return res+"No memories.\n"
         for i, (node, score) in enumerate(results, start=1):
@@ -284,17 +316,18 @@ class PersonalAssistantAgent(BaseModel):
         return res
     
     def __call__(self, query: str) -> str:
+        query = f"## User Query\n{query} ({str(datetime.datetime.now())})\n"
         memo_ext = RegxExtractor(regx=r"```memory\s*(.*)\s*```")
         # Retrieve relevant memory and format it for context
         memory = self.memory_retrieval(query)
         # Format the query with memory context
-        query_with_context = f"{memory}## User Query\n{query}"
+        query = f"{memory}\n{query}"
         print("##########################")
-        print(query_with_context)
+        print(query)
         print("##########################")
         # Generate a response using the LLM
         self.llm.system_prompt=self.system_prompt
-        response = self.llm(query_with_context)
+        response = self.llm(query)
         if '```memory' in response:
             new_memo = memo_ext(response)
             self.add_memory(new_memo)
@@ -303,7 +336,7 @@ class PersonalAssistantAgent(BaseModel):
 memory_tree = MemTree(llm=llm,text_embedding=text_embedding)
 agent = PersonalAssistantAgent(memory_root=memory_tree.root,llm=llm,text_embedding=text_embedding)
 # print(agent('hi! Please tell me my events.'))
-print(agent('Please remider me to schedule annual dental checkup in the first week of December, I am not decide the date yet.'))
+# print(agent('Please remider me to schedule annual dental checkup in the first week of December, I am not decide the date yet.'))
 
 def save_memory_agent(store:LLMsStore,memory_tree:MemTree):
     memory_tree.dump_all_embeddings('./tmp/embeddings.json')
