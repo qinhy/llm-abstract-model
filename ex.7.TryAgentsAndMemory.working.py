@@ -16,7 +16,7 @@ llm = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),temperature=0.0)
 # Node model for each node in the memory tree
 class Node(BaseModel):
     id: str = Field(default_factory=lambda: f"Node:{uuid4()}")
-    content: str = 'Root'
+    content: str = 'Root(Category)'
     embedding: list[float] = []
     parent_id: str = 'NULL'
     children: List['Node'] = Field(default_factory=list)
@@ -74,14 +74,19 @@ class MemTree:
     
     def calc_embedding(self, node:Node):
         if len(node.embedding)>0:return node
-        node.embedding = self.text_embedding(node.content)
+        if 'Category' in node.content:
+            node.embedding = np.zeros(self.text_embedding.embedding_dim).tolist()
+        else:
+            node.embedding = self.text_embedding(node.content)
         return node
 
     def similarity(self, src: Node, ref: Node)->float:
         # Cosine similarity calculation
         emb1, emb2 = self.calc_embedding(ref).embedding, self.calc_embedding(src).embedding
         emb1, emb2 = np.asarray(emb1), np.asarray(emb2)
-        coss = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
+        norm = (np.linalg.norm(emb1) * np.linalg.norm(emb2))
+        if norm == 0:return 0.0
+        coss = np.dot(emb1, emb2) / norm
         return coss
     
     def traverse(self, node:Node):
@@ -174,15 +179,19 @@ class MemTree:
         #     new_node.parent_id = current_node.id
         #     new_node.depth = current_node.depth + 1
 
-    def parse_indented_text(text):
+    def parse_text_tree(self, text:str):
         lines = text.splitlines()
-        stack = [([], -1)]  # Stack with root item
-        root = stack[0][0]
+        # Skip empty lines
+        lines = [line for line in lines if line.lstrip()]
         
+        stack = [(Node(), -1)]  # Stack with root item
+        root = stack[0][0]
+
+        if 'Root' not in lines[0]:raise ValueError('first Node must be Root.')
+        lines.pop(0)
+
         for line in lines:
             stripped = line.lstrip()
-            if not stripped:
-                continue  # Skip empty lines
             indent = len(line) - len(stripped)
             content = stripped[2:].strip()  # Remove bullet and any additional whitespace
             level = indent // 4  # Determine level based on indent (4 spaces per level)
@@ -193,8 +202,8 @@ class MemTree:
             
             # Append new item to current level's parent
             parent, _ = stack[-1]
-            item = [content]
-            parent.append(item)
+            item = Node(content=content)
+            parent.add_child(item)
             
             # Prepare to add child items in subsequent lines
             stack.append((item, level))
@@ -209,7 +218,8 @@ class MemTree:
         for child in node.children:
             res += self.print_tree(child, level + 1)
         if node == self.root:
-            print(res)
+            print(res[:-1])
+            res = res[:-1]
         return res
 
 # # Sample complex personal data for Alex
