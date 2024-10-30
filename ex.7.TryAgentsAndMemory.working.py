@@ -348,9 +348,9 @@ agent = PersonalAssistantAgent(memory_root=memory_tree.root,llm=llm,text_embeddi
 # print(agent('hi! Please tell me my events.'))
 # print(agent('Please remider me to schedule annual dental checkup in the first week of December, I am not decide the date yet.'))
 
-def save_memory_agent(store:LLMsStore,memory_tree:MemTree):
-    memory_tree.dump_all_embeddings('./tmp/embeddings.json')
-    store.set('Memory',memory_tree.root.model_dump())
+def save_memory_agent(store:LLMsStore,root_node:Node):
+    MemTree(root_node).dump_all_embeddings('./tmp/embeddings.json')
+    store.set('Memory',root_node.model_dump())
     store.dump_RSA('./tmp/store.rjson','./tmp/public_key.pem')
 
 def load_memory_agent():
