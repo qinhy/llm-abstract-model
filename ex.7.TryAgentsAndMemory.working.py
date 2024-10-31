@@ -16,7 +16,7 @@ llm = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),temperature=0.0)
 # Node model for each node in the memory tree
 class Node(BaseModel):
     id: str = Field(default_factory=lambda: f"Node:{uuid4()}")
-    content: str = 'Root(Category)'
+    content: str = 'Root(Group)'
     embedding: list[float] = []
     parent_id: str = 'NULL'
     children: List['Node'] = Field(default_factory=list)
@@ -68,13 +68,16 @@ class MemTree:
         res:str = self.llm(f'## src¥n{src.content}¥n## ref¥n{ref.content}')
         return {'parent':-1,'isolate':0,'child':1}[res.strip().lower()]
 
+    def tidytree(self,):
+        sys = '''Please organize the following memory list and respond using the original tree structure format. If a node represents a group, include 'Group' at the end of the node.'''
+
     def get_threshold(self, depth: int) -> float:
         # Adaptive threshold calculation based on node depth
         return self.base_threshold * np.exp(self.lambda_factor * depth)
     
     def calc_embedding(self, node:Node):
         if len(node.embedding)>0:return node
-        if 'Category' in node.content:
+        if 'Group' in node.content:
             node.embedding = np.zeros(self.text_embedding.embedding_dim).tolist()
         else:
             node.embedding = self.text_embedding(node.content)
