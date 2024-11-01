@@ -1,6 +1,7 @@
 import json
 import re
-from pydantic import Field
+from uuid import uuid4
+from pydantic import BaseModel, Field
 from typing import Any, Callable, Optional, List
 
 from .BasicModel import Model4Basic

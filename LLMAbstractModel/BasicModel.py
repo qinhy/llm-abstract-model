@@ -165,6 +165,7 @@ class Model4Basic:
         children_id: list[str] = []
         _controller: Controller4Basic.AbstractGroupController = None
         def get_controller(self):return self._controller
+        
 class BasicStore(SingletonKeyValueStorage):
     MODEL_CLASS_GROUP = Model4Basic
     
