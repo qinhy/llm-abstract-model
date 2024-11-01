@@ -572,54 +572,78 @@ complex_sample_data = [
     "Replace the batteries in the smoke detector this weekend",
 ]
 
-# Example usage of TextMemoryTree with complex personal data
+
+# Initialize the LLM Store and vendor
 store = LLMsStore()
-vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
+vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY', 'null'))
+
+# Add the necessary components
 text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
-llm = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),temperature=0.0)
+llm = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(), temperature=0.0)
 
+# Create the root node and initialize the memory tree
 root = TextContentNode()
-memory_tree =TextMemoryTree(root,llm=llm,text_embedding=text_embedding)
+memory_tree = TextMemoryTree(root, llm=llm, text_embedding=text_embedding)
 
-# Insert each memory into the memory tree
-for i in complex_sample_data: memory_tree.insert(i)
+# Insert complex sample data into the memory tree
+for memory in complex_sample_data:
+    memory_tree.insert(memory)
 
-# Print the tree structure to visualize organization
+# Print the tree structure to visualize the organization
 print("\nMemory Tree Structure:")
 memory_tree.print_tree()
 
-print("\nMemory tidy Tree Structure:")
+print("\nTidied Memory Tree Structure:")
 memory_tree.tidytree()
 
-# Define a function to test retrieval with sample queries
-def test_retrieval(memory_tree:TextMemoryTree, query: str, top_k: int = 5):
+# Define a function to test memory retrieval with various sample queries
+def test_retrieval(memory_tree: TextMemoryTree, query: str, top_k: int = 5):
     print(f"\nTop {top_k} matches for query: '{query}'")
     results = memory_tree.retrieve(query, top_k)
     for i, (node, score) in enumerate(results, start=1):
-        print(f"{i}. score: {score:.4f} | [ {node.content} ]'")
+        print(f"{i}. score: {score:.4f} | [ {node.content} ]")
 
-# Testing with example queries that reflect personal scenarios
-test_retrieval(memory_tree, "Remind me about family events", top_k=6)
-test_retrieval(memory_tree, "Health and self-care routines", top_k=6)
-test_retrieval(memory_tree, "Work project deadlines",        top_k=6)
-test_retrieval(memory_tree, "Weekend plans with friends",    top_k=6)
-test_retrieval(memory_tree, "Personal development goals",    top_k=6)
+# Sample queries reflecting various personal scenarios
+queries = [
+    "Remind me about family events",
+    "Health and self-care routines",
+    "Work project deadlines",
+    "Weekend plans with friends",
+    "Personal development goals"
+]
 
-agent = PersonalAssistantAgent(memory_root=memory_tree.root,llm=llm,text_embedding=text_embedding)
-print(agent('hi! Please tell me my events.'))
+# Run retrieval tests
+for query in queries:
+    test_retrieval(memory_tree, query, top_k=6)
 
-## usages for private data saving , using RSA key pair.
-def save_memory_agent(store:LLMsStore,root_node:TextContentNode):
-    TextMemoryTree(root_node).dump_all_embeddings('./tmp/embeddings.json')
-    store.set('Memory',root_node.model_dump())
-    store.dump_RSA('./tmp/store.rjson','./tmp/public_key.pem')
+# Initialize the personal assistant agent using the memory tree
+agent = PersonalAssistantAgent(memory_root=memory_tree.root, llm=llm, text_embedding=text_embedding)
+print(agent("Hi! Please tell me my events."))
+
+# Functions for secure data storage and retrieval using RSA key pair
+def save_memory_agent(store: LLMsStore, root_node: TextContentNode):
+    # Save memory tree embeddings and RSA-encrypted data
+    memory_tree = TextMemoryTree(root_node)
+    memory_tree.dump_all_embeddings('./tmp/embeddings.json')
+    store.set('Memory', root_node.model_dump())
+    store.dump_RSA('./tmp/store.rjson', './tmp/public_key.pem')
 
 def load_memory_agent():
+    # Load stored RSA-encrypted data and initialize the agent
     store = LLMsStore()
-    store.load_RSA('./tmp/store.rjson','./tmp/private_key.pem')
+    store.load_RSA('./tmp/store.rjson', './tmp/private_key.pem')
+    
+    # Retrieve saved model instances
     llm = store.find_all('ChatGPT4oMini:*')[0]
     text_embedding = store.find_all('TextEmbedding3Small:*')[0]
-    root = TextMemoryTree(store.get('Memory'),llm=llm,text_embedding=text_embedding
-            ).load_all_embeddings('./tmp/embeddings.json').root
-    agent = PersonalAssistantAgent(memory_root=root,llm=llm,text_embedding=text_embedding)
-    return agent,store
+    
+    # Reconstruct memory tree from stored data
+    root = TextMemoryTree(store.get('Memory'), llm=llm, text_embedding=text_embedding
+                         ).load_all_embeddings('./tmp/embeddings.json').root
+    agent = PersonalAssistantAgent(memory_root=root, llm=llm, text_embedding=text_embedding)
+    return agent, store
+
+# Example usage of saving and loading the memory agent
+save_memory_agent(store, root)
+agent, store = load_memory_agent()
+print(agent("Welcome back! What's planned for today?"))
