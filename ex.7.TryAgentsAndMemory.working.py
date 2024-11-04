@@ -34,7 +34,8 @@ class TextContentNode(BaseModel):
 
     def get_node(self, node_id: str) -> Optional['TextContentNode']:
         """Retrieve a node by search ID recursively within children."""
-        root = self if self.is_root() else self._root_node        
+        root = self if self.is_root() else self._root_node
+        if root is None: return None
         for child in root.traverse(root):
             if child.id == node_id:
                 return child
@@ -202,7 +203,11 @@ class TextMemoryTree:
             if node.content in TextMemoryTree._embedding_cache_dict:
                 node.embedding = TextMemoryTree._embedding_cache_dict[node.content]
             if len(node.embedding)==0:
-                node.embedding = self.text_embedding(node.content)
+                groups = [g.content for g in node.groups()]
+                content = node.content
+                if len(groups)>0:content += f' [{",".join(groups)}]'
+                print(content)
+                node.embedding = self.text_embedding(content)
         return node
 
     def similarity(self, src: TextContentNode, ref: TextContentNode)->float:
