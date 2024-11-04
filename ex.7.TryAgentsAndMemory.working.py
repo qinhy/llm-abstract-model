@@ -598,6 +598,6 @@ def load_memory_agent():
     return agent, store
 
 # Example usage of saving and loading the memory agent
-# save_memory_agent(store, root)
+# save_memory_agent(store, agent.memory_root)
 agent, store = load_memory_agent()
 print(agent("Welcome back! What's planned for today?"))
