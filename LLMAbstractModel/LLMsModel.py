@@ -5,6 +5,7 @@ import os
 import time
 import unittest
 from typing import Any, Dict, List, Optional
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 import requests
 from typing import Dict, Any
@@ -46,6 +47,7 @@ class Controller4LLMs:
                     else: return vs[0]
                     # try other vendors
                     pass
+            raise ValueError(f'not support vendor of {self.model.vendor_id}')
         
         def change_vendor(self,vendor_id:str):
             vendor:Model4LLMs.AbstractVendor = self._store.find(vendor_id)
@@ -54,6 +56,27 @@ class Controller4LLMs:
             self.update(vendor_id=vendor.get_id())
             return vendor
         
+    class AbstractEmbeddingController(AbstractObjController):
+        def __init__(self, store, model):
+            super().__init__(store, model)
+            self.model:Model4LLMs.AbstractEmbedding = model
+            self._store:LLMsStore = store
+        
+        def get_vendor(self,auto=False):
+            if not auto:
+                vendor:Model4LLMs.AbstractVendor = self._store.find(self.model.vendor_id)
+                if vendor is None:
+                    raise ValueError(f'vendor of {self.model.vendor_id} is not exists! Please change_vendor(...)')
+                return vendor
+            else:
+                if type(self.model) in [Model4LLMs.TextEmbedding3Small]:
+                    # try openai vendor
+                    vs:list[Model4LLMs.AbstractVendor] = self._store.find_all('OpenAIVendor:*')
+                    if len(vs)==0:raise ValueError(f'auto get endor of OpenAIVendor:* is not exists! Please (add and) change_vendor(...)')
+                    else: return vs[0]
+                    # try other vendors
+                    pass
+            raise ValueError(f'not support vendor of {self.model.vendor_id}')
     class WorkFlowController(AbstractObjController):
         def __init__(self, store, model):
             super().__init__(store, model)
@@ -135,6 +158,9 @@ class Model4LLMs:
         
         chat_endpoint:str = None # e.g., '/v1/chat/completions'
         models_endpoint:str = None # e.g., '/v1/models'
+        embeddings_endpoint:str = None
+        default_timeout: int = 30        # Timeout for API requests in seconds
+        rate_limit: Optional[int] = None # Requests per minute, if applicable
         
         def format_llm_model_name(self,llm_model_name:str)->str:
             return llm_model_name       
@@ -181,6 +207,27 @@ class Model4LLMs:
         def chat_result(self,response)->str:
             return response
         
+        def embedding_request(self, payload={}) -> Dict[str, Any]:
+            """
+            Method to make embedding requests. Requires the payload to have 'model' and 'input' keys.
+            """
+            if not self.embeddings_endpoint:
+                return {'error': 'Embeddings endpoint not defined for this vendor.'}
+
+            url = self._build_url(self.embeddings_endpoint)
+            headers = self._build_headers()
+            response = requests.post(url=url, data=json.dumps(payload, ensure_ascii=True),
+                                    headers=headers, timeout=self.timeout)
+            try:
+                response = json.loads(response.text, strict=False)['data'][0]['embedding']
+            except Exception as e:
+                return {'error': f'{e}'}
+            return response
+        
+        def get_embedding(self, text: str, model: str) -> Dict[str, Any]:
+            payload = {"model": model,"input": text}
+            return self.embedding_request(payload)
+
         model_config = ConfigDict(arbitrary_types_allowed=True)    
         _controller: Controller4LLMs.AbstractVendorController = None
         def get_controller(self)->Controller4LLMs.AbstractVendorController: return self._controller
@@ -191,15 +238,22 @@ class Model4LLMs:
         api_url:str = 'https://api.openai.com'
         chat_endpoint:str = '/v1/chat/completions'
         models_endpoint:str = '/v1/models'
-
+        embeddings_endpoint:str = '/v1/embeddings'
+        default_timeout: int = 30               # Timeout for API requests in seconds
+        rate_limit: Optional[int] = None        # Requests per minute, if applicable
+        
         def get_available_models(self) -> Dict[str, Any]:
             response = super().get_available_models()
             return {model['id']: model for model in response.json().get('data', [])}
-        
-        def chat_result(self,response)->str:
-            if not self._try_binary_error(lambda:response['choices'][0]['message']['content']):
+
+        def chat_result(self, response) -> str:
+            if not self._try_binary_error(lambda: response['choices'][0]['message']['content']):
                 return self._log_error(ValueError(f'cannot get result from {response}'))
             return response['choices'][0]['message']['content']
+
+        def get_embedding(self, text: str, model: str='text-embedding-3-small') -> Dict[str, Any]:
+            payload = {"model": model,"input": text}
+            return self.embedding_request(payload)
 
     class AbstractLLM(AbstractObj):
         vendor_id:str='auto'
@@ -391,6 +445,85 @@ class Model4LLMs:
         frequency_penalty: Optional[float] = None
         presence_penalty: Optional[float] = None
         system_prompt: Optional[str] = None
+    
+    ##################### embedding model #####
+    class AbstractEmbedding(AbstractObj):
+        vendor_id: str = 'auto'                # Vendor identifier (e.g., OpenAI, Google)
+        embedding_model_name: str              # Model name (e.g., "text-embedding-3-small")
+        embedding_dim: int                     # Dimensionality of the embeddings, e.g., 768 or 1024
+        normalize_embeddings: bool = True      # Whether to normalize the embeddings to unit vectors
+        
+        max_input_length: Optional[int] = None # Optional limit on input length (e.g., max tokens or chars)
+        pooling_strategy: Optional[str] = 'mean'  # Pooling strategy if working with sentence embeddings (e.g., "mean", "max")
+        distance_metric: Optional[str] = 'cosine' # Metric for comparing embeddings ("cosine", "euclidean", etc.)
+        
+        cache_embeddings: bool = False         # Option to cache embeddings to improve efficiency
+        cache: Optional[dict[str,List[float]]] = None
+        embedding_context: Optional[str] = None # Optional context or description to customize embedding generation
+        additional_features: Optional[List[str]] = None  # Additional features for embeddings, e.g., "entity", "syntax"
+        
+        def __call__(self, input_text: str) -> List[float]:
+            return self.generate_embedding(input_text)
+
+        def get_vendor(self):
+            return self.get_controller().get_vendor(auto=(self.vendor_id=='auto'))
+        
+        def generate_embedding(self, input_text: str) -> List[float]:
+            raise NotImplementedError("This method should be implemented by subclasses.")
+        
+        def similarity_score(self, embedding1: List[float], embedding2: List[float]) -> float:
+            raise NotImplementedError("This method should be implemented by subclasses.")
+
+        model_config = ConfigDict(arbitrary_types_allowed=True)    
+        _controller: Controller4LLMs.AbstractEmbeddingController = None
+        def get_controller(self)->Controller4LLMs.AbstractEmbeddingController: return self._controller
+        def init_controller(self,store):self._controller = Controller4LLMs.AbstractEmbeddingController(store,self)
+    
+    class TextEmbedding3Small(AbstractEmbedding):
+        vendor_id: str = "auto"
+        embedding_model_name: str = "text-embedding-3-small"
+        embedding_dim: int = 1536  # As specified by OpenAI's "text-embedding-3-small" model
+        normalize_embeddings: bool = True
+        max_input_length: int = 8192  # Default max token length for text-embedding-3-small
+        
+        def generate_embedding(self, input_text: str) -> List[float]:
+            # Check for cached result
+            if self.cache_embeddings and input_text in self.cache:
+                return self.cache[input_text]
+            
+            # Generate embedding using OpenAI API
+            embedding = self.get_vendor().get_embedding(input_text, model=self.embedding_model_name)
+            
+            # Normalize if specified
+            if self.normalize_embeddings:
+                embedding = self._normalize_embedding(embedding)
+            
+            # Cache result if caching is enabled
+            if self.cache_embeddings:
+                self.cache[input_text] = embedding
+            
+            return embedding
+
+        def similarity_score(self, embedding1: List[float], embedding2: List[float]) -> float:
+            if self.distance_metric == "cosine":
+                return self._cosine_similarity(embedding1, embedding2)
+            elif self.distance_metric == "euclidean":
+                return self._euclidean_distance(embedding1, embedding2)
+            else:
+                raise ValueError("Unsupported distance metric. Choose 'cosine' or 'euclidean'.")
+
+        def _normalize_embedding(self, embedding: List[float]) -> List[float]:
+            norm = np.linalg.norm(embedding)
+            return (np.asarray(embedding) / norm).tolist() if norm != 0 else embedding
+
+        def _cosine_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
+            dot_product = np.dot(embedding1, embedding2)
+            norm1 = np.linalg.norm(embedding1)
+            norm2 = np.linalg.norm(embedding2)
+            return dot_product / (norm1 * norm2) if norm1 != 0 and norm2 != 0 else 0.0
+
+        def _euclidean_distance(self, embedding1: List[float], embedding2: List[float]) -> float:
+            return np.linalg.norm(np.array(embedding1) - np.array(embedding2))
 
     ##################### utils model #########
     
