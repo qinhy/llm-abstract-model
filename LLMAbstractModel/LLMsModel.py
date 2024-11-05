@@ -1,11 +1,11 @@
 from graphlib import TopologicalSorter
 import inspect
 import json
+import math
 import os
 import time
 import unittest
 from typing import Any, Dict, List, Optional
-import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 import requests
 from typing import Dict, Any
@@ -513,17 +513,17 @@ class Model4LLMs:
                 raise ValueError("Unsupported distance metric. Choose 'cosine' or 'euclidean'.")
 
         def _normalize_embedding(self, embedding: List[float]) -> List[float]:
-            norm = np.linalg.norm(embedding)
-            return (np.asarray(embedding) / norm).tolist() if norm != 0 else embedding
+            norm = math.sqrt(sum(x * x for x in embedding))
+            return [x / norm for x in embedding] if norm != 0 else embedding
 
         def _cosine_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
-            dot_product = np.dot(embedding1, embedding2)
-            norm1 = np.linalg.norm(embedding1)
-            norm2 = np.linalg.norm(embedding2)
+            dot_product = sum(x * y for x, y in zip(embedding1, embedding2))
+            norm1 = math.sqrt(sum(x * x for x in embedding1))
+            norm2 = math.sqrt(sum(y * y for y in embedding2))
             return dot_product / (norm1 * norm2) if norm1 != 0 and norm2 != 0 else 0.0
 
         def _euclidean_distance(self, embedding1: List[float], embedding2: List[float]) -> float:
-            return np.linalg.norm(np.array(embedding1) - np.array(embedding2))
+            return math.sqrt(sum((x - y) ** 2 for x, y in zip(embedding1, embedding2)))
 
     ##################### utils model #########
     
