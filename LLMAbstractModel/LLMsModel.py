@@ -352,21 +352,8 @@ class Model4LLMs:
         def get_controller(self)->Controller4LLMs.AbstractLLMController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractLLMController(store,self)
     
-    class OpenAIChatGPT(AbstractLLM):        
-        # New attributes for advanced configurations
-        stop_sequences: Optional[List[str]]
-        n: Optional[int]
-        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:
-            payload = super().construct_payload(messages)            
-            payload.update({"stop": self.stop_sequences, "n": self.n,})
-            return {k: v for k, v in payload.items() if v is not None}
-                    
-    class ChatGPT4o(OpenAIChatGPT):
-        llm_model_name:str = 'gpt-4o'
+    class OpenAIChatGPT(AbstractLLM):
 
-        context_window_tokens:int = 128000
-        max_output_tokens:int = 4096
-        
         limit_output_tokens: Optional[int] = 1024
         temperature: Optional[float] = 0.7
         top_p: Optional[float] = 1.0
@@ -377,9 +364,37 @@ class Model4LLMs:
         # New attributes for advanced configurations
         stop_sequences: Optional[List[str]] = Field(default_factory=list)
         n: Optional[int] = 1  # Number of completions to generate for each input prompt
+
+        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:
+            payload = super().construct_payload(messages)            
+            payload.update({"stop": self.stop_sequences, "n": self.n,})
+            return {k: v for k, v in payload.items() if v is not None}
+                    
+    class ChatGPT4o(OpenAIChatGPT):
+        llm_model_name:str = 'gpt-4o'
+        context_window_tokens:int = 128000
+        max_output_tokens:int = 4096
         
     class ChatGPT4oMini(ChatGPT4o):
         llm_model_name:str = 'gpt-4o-mini'
+        
+    class ChatGPTO1(OpenAIChatGPT):
+        llm_model_name: str = 'o1-preview'
+        context_window_tokens: int = 128000
+        max_output_tokens: int = 32768
+
+        def construct_messages(self,messages:Optional[List|str])->list:
+            msgs = []
+            if self.system_prompt:
+                msgs.append({"role":"user","content":self.system_prompt})
+            if type(messages) is str:
+                msgs[-1]['content'] += '¥n'+messages
+            return msgs+messages
+        
+    class ChatGPTO1Mini(ChatGPTO1):
+        llm_model_name: str = 'o1-mini'
+        context_window_tokens: int = 128000
+        max_output_tokens: int = 65536
 
     class OllamaVendor(AbstractVendor):
         vendor_name:str = 'Ollama'
