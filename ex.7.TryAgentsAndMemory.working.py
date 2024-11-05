@@ -20,6 +20,12 @@ class TextContentNode(BaseModel):
 
     _root_node: 'TextContentNode' = None
 
+    def content_with_groups(self):
+        groups = [g.content for g in self.groups()]
+        content = self.content
+        if len(groups)>0:content += f' [{",".join(groups)}]'
+        return content
+
     def reflesh_root(self):
         if self.is_root():
             for child in self.traverse(self):
@@ -183,10 +189,7 @@ class TextMemoryTree:
             if node.content in TextMemoryTree._embedding_cache_dict:
                 node.embedding = TextMemoryTree._embedding_cache_dict[node.content]
             if len(node.embedding)==0:
-                groups = [g.content for g in node.groups()]
-                content = node.content
-                if len(groups)>0:content += f' [{",".join(groups)}]'
-                node.embedding = self.text_embedding(content)
+                node.embedding = self.text_embedding(node.content_with_groups())
         return node
 
     def similarity(self, src: TextContentNode, ref: TextContentNode)->float:
@@ -485,7 +488,7 @@ class PersonalAssistantAgent(BaseModel):
         results = self.get_memory().retrieve(query, self.memory_top_k)
         if len(results)==0:return res+"No memories.\n"
         for i, (node, score) in enumerate(results, start=1):
-            res += f"{i}. Score: {score:.3f} | Content: {node.content}\n"
+            res += f"{i}. Score: {score:.3f} | Content: {node.content_with_groups()}\n"
         return res
     
     def __call__(self, query: str, print_memory=True) -> str:
