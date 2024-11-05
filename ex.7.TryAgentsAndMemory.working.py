@@ -27,13 +27,11 @@ class TextContentNode(BaseModel):
                     child._root_node = self
 
     def traverse(self, node: 'TextContentNode'):
-        """Yield each node in the tree starting from a given node."""
         yield node
         for child in node.children:
             yield from self.traverse(child)
 
     def get_node(self, node_id: str) -> Optional['TextContentNode']:
-        """Retrieve a node by search ID recursively within children."""
         root = self if self.is_root() else self._root_node
         if root is None: return None
         for child in root.traverse(root):
@@ -43,15 +41,12 @@ class TextContentNode(BaseModel):
         return None
 
     def is_group(self) -> bool:
-        """Check if this node represents a group."""
         return "Group" in self.content
 
     def is_root(self) -> bool:
-        """Check if this node is the root."""
         return self.content == "Root(Group)"
     
     def clone(self) -> 'TextContentNode':
-        """Create a deep copy of this node and all its descendants."""
         new_node = TextContentNode(
             content=self.content,
             embedding=self.embedding[:],
@@ -63,32 +58,26 @@ class TextContentNode(BaseModel):
         return new_node
     
     def dispose(self):
-        """Remove this node from its parent's children list."""
         parent = self.get_parent()
         if parent:
             parent.children = [child for child in parent.children if child.id != self.id]
 
     def swap(self, other: 'TextContentNode'):
-        """Swap content and embeddings with another node."""
         self.content, other.content = other.content, self.content
         self.embedding, other.embedding = other.embedding, self.embedding
 
     def add(self, child: 'TextContentNode'):
-        """Add a child to this node."""
         self.children.append(child)
         child.parent_id = self.id
         child.depth = self.depth + 1
 
     def get_parent(self) -> Optional['TextContentNode']:
-        """Retrieve the parent node from the tree."""
         return self.get_node(self.parent_id) if self.parent_id else None
 
     def groups(self) -> List['TextContentNode']:
-        """Return a list of groups along the path to the root."""
         return [TextContentNode(content=p) for p in self.get_path_to_root() if TextContentNode(content=p).is_group()]
 
     def get_all_children(self) -> List['TextContentNode']:
-        """Retrieve all descendants of this node."""
         descendants = []
         def collect_children(node: 'TextContentNode'):
             descendants.append(node)
@@ -98,7 +87,6 @@ class TextContentNode(BaseModel):
         return descendants
 
     def move_to(self, new_parent: 'TextContentNode'):
-        """Move this node under a new parent node and update depth for all descendants."""
         if self.get_parent():self.dispose()
         new_parent.add(self)
         old_depth = self.depth
@@ -107,7 +95,6 @@ class TextContentNode(BaseModel):
             child.depth = child.depth - old_depth + self.depth
 
     def get_path_to_root(self) -> List[str]:
-        """Retrieve the path from this node to the root as a list of contents."""
         path = []
         current = self
         while current and not current.is_root():
@@ -116,7 +103,6 @@ class TextContentNode(BaseModel):
         return list(reversed(path))[:-1]
 
     def has_keyword(self, keyword: str) -> bool:
-        """Check if the node's content or any descendant's content contains the keyword."""
         if keyword in self.content:
             return True
         return any(child.has_keyword(keyword) for child in self.children)
@@ -137,31 +123,25 @@ class TextMemoryTree:
             TextMemoryTree._embedding_cache_dict[node.content] = node.embedding
 
     def traverse(self, node: TextContentNode):
-        """Yield each node in the tree starting from a given node."""
         yield node
         for child in node.children:
             yield from self.traverse(child)
 
     def get_node(self, node_id: str) -> Optional[TextContentNode]:
-        """Retrieve a node by its ID."""
         return self.root.get_node(node_id)
 
     def remove_content(self, content: str):
-        """Remove all nodes that contain specific content."""
         to_remove = [node for node in self.traverse(self.root) if node.content == content]
         for node in to_remove:
             node.dispose()
 
     def find_nodes_by_content(self, keyword: str) -> List[TextContentNode]:
-        """Find all nodes containing a specific keyword in their content."""
         return [node for node in self.traverse(self.root) if keyword in node.content]
 
     def get_leaf_nodes(self) -> List[TextContentNode]:
-        """Retrieve all leaf nodes (nodes without children)."""
         return [node for node in self.traverse(self.root) if not node.children]
 
     def reparent_node(self, node_id: str, new_parent_id: str):
-        """Reparent a node under a new parent."""
         node = self.get_node(node_id)
         new_parent = self.get_node(new_parent_id)
         if node and new_parent:
@@ -531,7 +511,6 @@ class PersonalAssistantAgent(BaseModel):
 
 
 # main usage form here
-
 # Sample queries reflecting various personal scenarios
 queries = [
     "Remind me about family events",
@@ -554,8 +533,7 @@ root = TextContentNode()
 memory_tree = TextMemoryTree(root, llm=llm, text_embedding=text_embedding)
 
 # Insert complex sample data into the memory tree
-for memory in queries:
-    memory_tree.insert(memory)
+for memory in queries: memory_tree.insert(memory)
 
 # Print the tree structure to visualize the organization
 print("\nMemory Tree Structure:")
