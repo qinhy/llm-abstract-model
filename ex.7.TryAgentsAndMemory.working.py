@@ -1,9 +1,9 @@
 import datetime
 import json
+import math
 import os
 from typing import List, Optional
 from uuid import uuid4
-import numpy as np
 from pydantic import BaseModel, Field
 from LLMAbstractModel.LLMsModel import LLMsStore, Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor
@@ -178,7 +178,6 @@ class TextMemoryTree:
         self.llm.system_prompt=sys
         res:str = self.llm(f'```text\n{self.print_tree()}\n```')
         res:str = RegxExtractor(regx=r"```text\s*(.*)\s*```")(res)
-        print(res)
         root = self.parse_text_tree(res)
         embeddings = {}
         for node in self.traverse(self.root):
@@ -193,12 +192,13 @@ class TextMemoryTree:
         
     def get_threshold(self, depth: int) -> float:
         # Adaptive threshold calculation based on node depth
-        return self.base_threshold * np.exp(self.lambda_factor * depth)
+        return self.base_threshold * math.exp(self.lambda_factor * depth)
+
     
     def calc_embedding(self, node:TextContentNode):
         if len(node.embedding)>0:return node
         if node.is_group():
-            node.embedding = np.zeros(self.text_embedding.embedding_dim).tolist()
+            node.embedding = [0.0] * self.text_embedding.embedding_dim
         else:
             if node.content in TextMemoryTree._embedding_cache_dict:
                 node.embedding = TextMemoryTree._embedding_cache_dict[node.content]
@@ -206,17 +206,20 @@ class TextMemoryTree:
                 groups = [g.content for g in node.groups()]
                 content = node.content
                 if len(groups)>0:content += f' [{",".join(groups)}]'
-                print(content)
                 node.embedding = self.text_embedding(content)
         return node
 
     def similarity(self, src: TextContentNode, ref: TextContentNode)->float:
         # Cosine similarity calculation
         emb1, emb2 = self.calc_embedding(ref).embedding, self.calc_embedding(src).embedding
-        emb1, emb2 = np.asarray(emb1), np.asarray(emb2)
-        norm = (np.linalg.norm(emb1) * np.linalg.norm(emb2))
-        if norm == 0:return 0.0
-        coss = np.dot(emb1, emb2) / norm
+        norm_emb1 = math.sqrt(sum(x ** 2 for x in emb1))
+        norm_emb2 = math.sqrt(sum(x ** 2 for x in emb2))
+
+        norm = norm_emb1 * norm_emb2
+        if norm == 0: return 0.0
+        dot_product = sum(x * y for x, y in zip(emb1, emb2))
+
+        coss = dot_product / norm
         return coss
     
     def extract_all_embeddings(self):
@@ -480,20 +483,22 @@ class PersonalAssistantAgent(BaseModel):
     memory_top_k: int = Field(default=5, ge=1, description="Number of top memories to retrieve.")
     system_prompt: str = "You are a capable, friendly assistant use a mix of past information and new insights to answer effectively. Save new, important details—such as preferences or routines—in your own words. Simply reply with ```memory ... ```."
 
-    def tidy_memory(self):
-        self.memory_root = TextMemoryTree(self.memory_root,llm=self.llm,
-                       text_embedding=self.text_embedding).tidytree().root
-
     def get_memory(self):
         return TextMemoryTree(self.memory_root,llm=self.llm,
                        text_embedding=self.text_embedding)
         
+    def tidy_memory(self):
+        self.memory_root = self.get_memory().tidytree().root
+
     def print_memory(self):
         self.get_memory().print_tree()
 
-    def add_memory(self, content: str) -> None:
+    def add_memory(self, content: str):
         self.get_memory().insert(content)
-
+    
+    def load_embeddings(self,path='embeddings.json'):
+        self.get_memory().load_all_embeddings(path)
+    
     def memory_retrieval(self, query: str) -> str:
         # Perform retrieval and format the results
         res = f"## Top {self.memory_top_k} memories for the query:\n"
@@ -592,9 +597,9 @@ def load_memory_agent():
     text_embedding = store.find_all('TextEmbedding3Small:*')[0]
     
     # Reconstruct memory tree from stored data
-    root = TextMemoryTree(store.get('Memory'), llm=llm, text_embedding=text_embedding
-                         ).load_all_embeddings('./tmp/embeddings.json').root
-    agent = PersonalAssistantAgent(memory_root=root, llm=llm, text_embedding=text_embedding)
+    agent = PersonalAssistantAgent(memory_root=store.get('Memory'),
+                                    llm=llm, text_embedding=text_embedding)
+    agent.load_embeddings('./tmp/embeddings.json')
     return agent, store
 
 # Example usage of saving and loading the memory agent
