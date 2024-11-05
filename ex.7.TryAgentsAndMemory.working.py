@@ -463,7 +463,8 @@ class PersonalAssistantAgent(BaseModel):
     llm: Model4LLMs.AbstractLLM = None
     text_embedding: Model4LLMs.AbstractEmbedding = None
     memory_root: TextContentNode = TextContentNode()
-    memory_top_k: int = Field(default=5, ge=1, description="Number of top memories to retrieve.")
+    memory_top_k: int = Field(default=5, ge=1, description="Number of top memories to retrieve.")    
+    memory_min_score: float = Field(default=0.4, ge=0.0, description="min similarity of top memories to retrieve.")
     system_prompt: str = "You are a capable, friendly assistant use a mix of past information and new insights to answer effectively. Save new, important details—such as preferences or routines—in your own words. Simply reply with ```memory ... ```."
 
     def get_memory(self):
@@ -484,10 +485,11 @@ class PersonalAssistantAgent(BaseModel):
     
     def memory_retrieval(self, query: str) -> str:
         # Perform retrieval and format the results
-        res = f"## Top {self.memory_top_k} memories for the query:\n"
+        res = f"## Memories for the query:\n"
         results = self.get_memory().retrieve(query, self.memory_top_k)
         if len(results)==0:return res+"No memories.\n"
         for i, (node, score) in enumerate(results, start=1):
+            if score < self.memory_min_score:continue
             res += f"{i}. Score: {score:.3f} | Content: {node.content_with_groups()}\n"
         return res
     
@@ -579,7 +581,7 @@ def load_memory_agent():
     
     # Reconstruct memory tree from stored data
     agent = PersonalAssistantAgent(memory_root=store.get('Memory'),
-                                    llm=llm, text_embedding=text_embedding)
+                                    llm=llm, text_embedding=text_embedding, memory_top_k=10)
     agent.load_embeddings('./tmp/embeddings.json')
     return agent, store
 
