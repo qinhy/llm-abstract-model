@@ -6,7 +6,7 @@ import fnmatch
 import json
 import unittest
 
-from LLMAbstractModel.rsa import SimpleRSAChunkEncryptor
+from .RSA import SimpleRSAChunkEncryptor
 
 class AbstractStorage:
     # statics for singleton
