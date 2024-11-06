@@ -400,6 +400,34 @@ class PersonalAssistantAgent(BaseModel):
             self.add_memory(new_memo)
         return response
 
+# Functions for secure data storage and retrieval using RSA key pair
+def save_memory_agent(store: LLMsStore, root_node: TextContentNode):
+    # Save memory tree embeddings and RSA-encrypted data
+    memory_tree = TextMemoryTree(root_node)
+    memory_tree.dump_all_embeddings('./tmp/embeddings.json')
+    store.set('Memory', root_node.model_dump())
+    store.dump_RSA('./tmp/store.rjson', './tmp/public_key.pem')
+
+def load_memory_agent():
+    # Load stored RSA-encrypted data and initialize the agent
+    store = LLMsStore()
+    store.load_RSA('./tmp/store.rjson', './tmp/private_key.pem')
+    
+    # Retrieve saved model instances
+    llm = store.find_all('ChatGPT4oMini:*')[0]
+    text_embedding = store.find_all('TextEmbedding3Small:*')[0]
+    
+    # Reconstruct memory tree from stored data
+    agent = PersonalAssistantAgent(memory_root=store.get('Memory'), llm=llm,
+                                   text_embedding=text_embedding, memory_top_k=10)
+    agent.load_embeddings('./tmp/embeddings.json')
+    return agent, store
+
+# Example usage of saving and loading the memory agent
+# save_memory_agent(store, agent.memory_root)
+# agent, store = load_memory_agent()
+# print(agent("Welcome back! What's planned for today?"))
+
 
 # main usage form here
 # Sample queries reflecting various personal scenarios
@@ -457,31 +485,3 @@ for query in questions:
 agent = PersonalAssistantAgent(memory_root=memory_tree.root,
                                llm=llm, text_embedding=text_embedding)
 print(agent("Hi! Please tell me Taylor info."))
-
-# Functions for secure data storage and retrieval using RSA key pair
-def save_memory_agent(store: LLMsStore, root_node: TextContentNode):
-    # Save memory tree embeddings and RSA-encrypted data
-    memory_tree = TextMemoryTree(root_node)
-    memory_tree.dump_all_embeddings('./tmp/embeddings.json')
-    store.set('Memory', root_node.model_dump())
-    store.dump_RSA('./tmp/store.rjson', './tmp/public_key.pem')
-
-def load_memory_agent():
-    # Load stored RSA-encrypted data and initialize the agent
-    store = LLMsStore()
-    store.load_RSA('./tmp/store.rjson', './tmp/private_key.pem')
-    
-    # Retrieve saved model instances
-    llm = store.find_all('ChatGPT4oMini:*')[0]
-    text_embedding = store.find_all('TextEmbedding3Small:*')[0]
-    
-    # Reconstruct memory tree from stored data
-    agent = PersonalAssistantAgent(memory_root=store.get('Memory'), llm=llm,
-                                   text_embedding=text_embedding, memory_top_k=10)
-    agent.load_embeddings('./tmp/embeddings.json')
-    return agent, store
-
-# Example usage of saving and loading the memory agent
-# save_memory_agent(store, agent.memory_root)
-# agent, store = load_memory_agent()
-# print(agent("Welcome back! What's planned for today?"))
