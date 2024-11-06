@@ -20,11 +20,24 @@ class TextContentNode(BaseModel):
 
     _root_node: 'TextContentNode' = None
 
-    def content_with_groups(self):
-        groups = [g.content for g in self.groups()]
+    def is_group(self) -> bool:
+        return "Group" in self.content
+
+    def is_root(self) -> bool:
+        return self.content == "Root(Group)"
+    
+    def content_with_parents(self):
+        groups = [g.content for g in self.parents()]
         content = self.content
-        if len(groups)>0:content += f' [{",".join(groups)}]'
+        if len(groups)>0:content += f' [{";".join(groups)}]'
         return content
+
+    def content_with_groups(self):
+        return self.content_with_parents()
+        # groups = [g.content for g in self.groups()]
+        # content = self.content
+        # if len(groups)>0:content += f' [{";".join(groups)}]'
+        # return content
 
     def reflesh_root(self):
         if self.is_root():
@@ -45,12 +58,6 @@ class TextContentNode(BaseModel):
                 return child
         # # If no node found, return None
         return None
-
-    def is_group(self) -> bool:
-        return "Group" in self.content
-
-    def is_root(self) -> bool:
-        return self.content == "Root(Group)"
     
     def clone(self) -> 'TextContentNode':
         new_node = TextContentNode(
@@ -64,9 +71,9 @@ class TextContentNode(BaseModel):
         return new_node
     
     def dispose(self):
-        parent = self.get_parent()
-        if parent:
-            parent.children = [child for child in parent.children if child.id != self.id]
+        p = self.get_parent()
+        if p:
+            p.children = [c for c in p.children if c.id != self.id]
 
     def swap(self, other: 'TextContentNode'):
         self.content, other.content = other.content, self.content
@@ -80,8 +87,16 @@ class TextContentNode(BaseModel):
     def get_parent(self) -> Optional['TextContentNode']:
         return self.get_node(self.parent_id) if self.parent_id else None
 
+    def parents(self) -> List['TextContentNode']:
+        path = []
+        current = self
+        while current and not current.is_root():
+            path.append(current)
+            current = current.get_parent()
+        return list(reversed(path))[:-1]
+
     def groups(self) -> List['TextContentNode']:
-        return [TextContentNode(content=p) for p in self.get_path_to_root() if TextContentNode(content=p).is_group()]
+        return [c for c in self.parents() if c.is_group()]
 
     def get_all_children(self) -> List['TextContentNode']:
         descendants = []
@@ -99,14 +114,6 @@ class TextContentNode(BaseModel):
         self.depth = new_parent.depth + 1
         for child in self.get_all_children():
             child.depth = child.depth - old_depth + self.depth
-
-    def get_path_to_root(self) -> List[str]:
-        path = []
-        current = self
-        while current and not current.is_root():
-            path.append(current.content)
-            current = current.get_parent()
-        return list(reversed(path))[:-1]
 
     def has_keyword(self, keyword: str) -> bool:
         if keyword in self.content:
@@ -136,9 +143,14 @@ class TextMemoryTree:
     def get_node(self, node_id: str) -> Optional[TextContentNode]:
         return self.root.get_node(node_id)
 
+    def update_content(self, old_content: str, new_content: str):
+        if old_content == new_content:return
+        for n in self.find_nodes_by_content(old_content):
+            n.content = new_content
+            n.embedding = []
+
     def remove_content(self, content: str):
-        to_remove = [node for node in self.traverse(self.root) if node.content == content]
-        for node in to_remove:
+        for node in self.find_nodes_by_content(content):
             node.dispose()
 
     def find_nodes_by_content(self, keyword: str) -> List[TextContentNode]:
@@ -162,24 +174,22 @@ class TextMemoryTree:
     def tidytree(self):
         sys = '''Please organize the following memory list and respond in the original tree structure format. If a node represents a group, add 'Group' at the end of the node name. Feel free to add new group nodes as needed.'''
         self.llm.system_prompt=sys
-        res:str = self.llm(f'```text\n{self.print_tree()}\n```')
+        res:str = self.llm(f'```text\n{self.print_tree(is_print=False)}\n```')
         res:str = RegxExtractor(regx=r"```text\s*(.*)\s*```")(res)
         root = self.parse_text_tree(res)
         embeddings = {}
         for node in self.traverse(self.root):
-            embeddings[node.content] = node.embedding
+            embeddings[node.content_with_groups()] = node.embedding
             node.embedding = []
         
         for node in self.traverse(root):
-            node.embedding = embeddings.get(node.content,[])
+            node.embedding = embeddings.get(node.content_with_groups(),[])
             
         self.root = root
         return self
         
     def get_threshold(self, depth: int) -> float:
-        # Adaptive threshold calculation based on node depth
         return self.base_threshold * math.exp(self.lambda_factor * depth)
-
     
     def calc_embedding(self, node:TextContentNode):
         if len(node.embedding)>0:return node
@@ -206,7 +216,7 @@ class TextMemoryTree:
         return coss
     
     def extract_all_embeddings(self):
-        embeddings = {}
+        embeddings:dict[str,list[float]] = {}
         for node in self.traverse(self.root):
             embeddings[node.id] = node.embedding
             node.embedding = []
@@ -216,7 +226,7 @@ class TextMemoryTree:
         embeddings = self.extract_all_embeddings()
         with open(path, "w") as tf: tf.write(json.dumps(embeddings))
     
-    def put_all_embeddings(self,embeddings:dict):
+    def put_all_embeddings(self,embeddings:dict[str,list[float]]):
         for node in self.traverse(self.root):
             node.embedding = embeddings[node.id]
     
@@ -238,7 +248,6 @@ class TextMemoryTree:
         return [(node, score) for node, score in nodes_with_scores[:top_k]]
     
     def insert(self, content: str):
-        # Use OpenAI's embedding function to get the embedding
         new_node = self.calc_embedding(TextContentNode(content=content.strip()))
         self._insert_node(self.root, new_node)
         self.print_tree()
@@ -293,20 +302,20 @@ class TextMemoryTree:
             current_node.add(new_node)
 
     def parse_text_tree(self, text:str):
+        text = text.replace('- ','')
         lines = text.splitlines()
         # Skip empty lines
         lines = [line for line in lines if line.lstrip()]
         
-        stack = [(TextContentNode(), -1)]  # Stack with root item
+        stack = [(TextContentNode(content=lines.pop(0)), -1)]
         root = stack[0][0]
 
-        if 'Root' not in lines[0]:raise ValueError('first Node must be Root.')
-        lines.pop(0)
+        if not root.is_root():raise ValueError('first Node must be Root.')        
 
         for line in lines:
             stripped = line.lstrip()
             indent = len(line) - len(stripped)
-            content = stripped[2:].strip()  # Remove bullet and any additional whitespace
+            content = stripped.strip()  # Remove bullet and any additional whitespace
             level = indent // 4  # Determine level based on indent (4 spaces per level)
             
             # Pop stack to match current indentation level
@@ -324,7 +333,7 @@ class TextMemoryTree:
         root.reflesh_root()
         return root
     
-    def print_tree(self, node: Optional[TextContentNode] = None, level: int = 0):
+    def print_tree(self, node: Optional[TextContentNode] = None, level: int = 0, is_print=True):
         res = ''
         if node is None: node = self.root
         # Print current node with indentation corresponding to its depth
@@ -332,7 +341,7 @@ class TextMemoryTree:
         for child in node.children:
             res += self.print_tree(child, level + 1)
         if node == self.root:
-            print(res[:-1])
+            if is_print:print(res[:-1])
             res = res[:-1]
         return res
     
@@ -391,8 +400,8 @@ def test_tree():
 
     def test_get_path_to_root(sample_tree:tuple[TextMemoryTree,list[TextContentNode]]):
         tree, [root, child1, child2, grandchild1] = sample_tree
-        path = grandchild1.get_path_to_root()
-        assert path == ["Child 1"]
+        path = grandchild1.parents()
+        assert path[0].content == ["Child 1"]
 
     def test_is_root(sample_tree:tuple[TextMemoryTree,list[TextContentNode]]):
         tree, [root, child1, child2, grandchild1] = sample_tree
@@ -468,7 +477,7 @@ class PersonalAssistantAgent(BaseModel):
     system_prompt: str = "You are a capable, friendly assistant use a mix of past information and new insights to answer effectively. Save new, important details—such as preferences or routines—in your own words. Simply reply with ```memory ... ```."
 
     def get_memory(self):
-        return TextMemoryTree(self.memory_root,llm=self.llm,
+        return TextMemoryTree(root=self.memory_root,llm=self.llm,
                        text_embedding=self.text_embedding)
         
     def tidy_memory(self):
@@ -518,16 +527,15 @@ class PersonalAssistantAgent(BaseModel):
 # main usage form here
 # Sample queries reflecting various personal scenarios
 queries = [
-    "Remind me about family events",
-    "Health and self-care routines",
-    "Work project deadlines",
-    "Weekend plans with friends",
-    "Personal development goals"
+    "Basic Info: Name - Alex Johnson, Birthday - 1995-08-15, Phone - +1-555-1234, Email - alex.johnson@email.com, Address - 123 Maple Street, Springfield",
+    "Personal Details: Occupation - Software Developer, Hobbies - reading, hiking, coding, photography",
+    "Friends: Taylor Smith (Birthday: 1994-02-20, Phone: +1-555-5678), Jordan Lee (Birthday: 1993-11-30, Phone: +1-555-9101), Morgan Brown (Birthday: 1996-05-25, Phone: +1-555-1213)",
+    "Work & Goals: Company - Tech Solutions Inc., Position - Front-End Developer, Work Email - alex.j@techsolutions.com, Work Phone - +1-555-4321, Goals - Learn a new programming language, Complete a marathon, Read 20 books this year"
 ]
 
 # Initialize the LLM Store and vendor
 store = LLMsStore()
-vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY', 'null'))
+vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
 
 # Add the necessary components
 text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
@@ -541,11 +549,11 @@ memory_tree = TextMemoryTree(root, llm=llm, text_embedding=text_embedding)
 for memory in queries: memory_tree.insert(memory)
 
 # Print the tree structure to visualize the organization
-print("\nMemory Tree Structure:")
+print("\n########## Memory Tree Structure:")
 memory_tree.print_tree()
 
-print("\nTidied Memory Tree Structure:")
-memory_tree.tidytree()
+print("\n########## Tidied Memory Tree Structure:")
+memory_tree.tidytree().print_tree()
 
 # Define a function to test memory retrieval with various sample queries
 def test_retrieval(memory_tree: TextMemoryTree, query: str, top_k: int = 5):
@@ -555,12 +563,23 @@ def test_retrieval(memory_tree: TextMemoryTree, query: str, top_k: int = 5):
         print(f"{i}. score: {score:.4f} | [ {node.content} ]")
 
 # Run retrieval tests
-for query in queries:
+questions = [
+    # Basic Info
+    "What is Alex Johnson's full name and birthday?",
+    # Personal Details
+    "What is Alex's occupation?",
+    # Friends
+    "Who are Alex's friends, and when are their birthdays?",
+    # Work & Goals
+    "Where does Alex work and what is their position?",
+]
+for query in questions:
     test_retrieval(memory_tree, query, top_k=6)
 
 # Initialize the personal assistant agent using the memory tree
-agent = PersonalAssistantAgent(memory_root=memory_tree.root, llm=llm, text_embedding=text_embedding)
-print(agent("Hi! Please tell me my events."))
+agent = PersonalAssistantAgent(memory_root=memory_tree.root,
+                               llm=llm, text_embedding=text_embedding)
+print(agent("Hi! Please tell me Taylor info."))
 
 # Functions for secure data storage and retrieval using RSA key pair
 def save_memory_agent(store: LLMsStore, root_node: TextContentNode):
@@ -580,12 +599,12 @@ def load_memory_agent():
     text_embedding = store.find_all('TextEmbedding3Small:*')[0]
     
     # Reconstruct memory tree from stored data
-    agent = PersonalAssistantAgent(memory_root=store.get('Memory'),
-                                    llm=llm, text_embedding=text_embedding, memory_top_k=10)
+    agent = PersonalAssistantAgent(memory_root=store.get('Memory'), llm=llm,
+                                   text_embedding=text_embedding, memory_top_k=10)
     agent.load_embeddings('./tmp/embeddings.json')
     return agent, store
 
 # Example usage of saving and loading the memory agent
 # save_memory_agent(store, agent.memory_root)
-agent, store = load_memory_agent()
-print(agent("Welcome back! What's planned for today?"))
+# agent, store = load_memory_agent()
+# print(agent("Welcome back! What's planned for today?"))
