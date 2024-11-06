@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional, List
 
 from .BasicModel import Model4Basic
 from .LLMsModel import LLMsStore, Model4LLMs
+
 descriptions = Model4LLMs.Function.param_descriptions
 @descriptions('Extract text by regx pattern',
               text='input text')
@@ -56,9 +57,12 @@ store.add_new_obj(ClassificationTemplate()).get_controller().delete()
 
 class TextFile(Model4Basic.AbstractObj):
     file_path: str
-    chunk_lines: int = Field(default=1000, gt=0, description="Number of lines per chunk, must be greater than 0")
-    overlap_lines: int = Field(default=100, ge=0, description="Number of overlapping lines between chunks, must be non-negative")
-    current_position: int = Field(default=0, ge=0, description="Current position in the file")
+    chunk_lines: int = Field(default=1000, gt=0,
+                 description="Number of lines per chunk, must be greater than 0")
+    overlap_lines: int = Field(default=100, ge=0,
+                 description="Number of overlapping lines between chunks, must be non-negative")
+    current_position: int = Field(default=0, ge=0,
+                 description="Current position in the file")
     line_count: Optional[int] = None
     _file:Any = None
     _current_chunk:Any = None

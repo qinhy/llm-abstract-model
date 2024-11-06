@@ -596,7 +596,7 @@ class Model4LLMs:
             self.description = self._description
 
         def __call__(self):
-            print('this is root class , not implement')
+            raise ValueError('this is root class , not implement')
         
         def get_description(self):
             return self.model_dump()#exclude=['arguments'])

@@ -180,7 +180,7 @@ class BasicStore(SingletonKeyValueStorage):
         return res
     
     def _get_as_obj(self,id,data_dict)->MODEL_CLASS_GROUP.AbstractObj:
-        obj = self._get_class(id)(**data_dict)
+        obj:BasicStore.MODEL_CLASS_GROUP.AbstractObj = self._get_class(id)(**data_dict)
         obj.set_id(id).init_controller(self)
         return obj
     
