@@ -1,5 +1,4 @@
 # from https://github.com/qinhy/singleton-key-value-storage.git
-import base64
 import math
 import os
 import uuid
@@ -7,7 +6,7 @@ import fnmatch
 import json
 import unittest
 
-from LLMAbstractModel.rsa import SimpleRSAChunkEncryptor
+from .RSA import SimpleRSAChunkEncryptor
 
 class AbstractStorage:
     # statics for singleton

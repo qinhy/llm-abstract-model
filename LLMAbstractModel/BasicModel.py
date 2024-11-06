@@ -1,7 +1,6 @@
 # from https://github.com/qinhy/singleton-key-value-storage.git
 from datetime import datetime
 import json
-import unittest
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field
