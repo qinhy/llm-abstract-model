@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional, List
 
 from .BasicModel import Model4Basic
 from .LLMsModel import LLMsStore, Model4LLMs
+
 descriptions = Model4LLMs.Function.param_descriptions
 @descriptions('Extract text by regx pattern',
               text='input text')
