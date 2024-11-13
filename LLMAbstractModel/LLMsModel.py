@@ -401,6 +401,7 @@ class Model4LLMs:
         api_url:str = 'http://localhost:11434'
         chat_endpoint:str = '/api/chat'
         models_endpoint:str = '/api/tags'
+        embeddings_endpoint:str = 'NULL'
 
         def get_available_models(self) -> Dict[str, Any]:
             response = self._try_obj_error(super().get_available_models, None)
