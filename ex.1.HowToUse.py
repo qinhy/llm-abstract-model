@@ -26,5 +26,5 @@ print(chatgpt4omini([
 # -> "Hello!"
 
 
-print(text_embedding('hi! What is your name?'))
+print(text_embedding('hi! What is your name?')[:10], '...')
 # -> [0.0118862, -0.0006172658, -0.008183353, 0.02926386, -0.03759078, -0.031130238, -0.02367668 ...
