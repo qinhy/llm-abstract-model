@@ -62,7 +62,7 @@ If you want to use an address searching by coordinates, please only reply with t
             
             # If the response contains coordinates, perform a reverse geocode search
             if isinstance(coord_or_query, dict) and "lon" in coord_or_query and "lat" in coord_or_query:
-                debugprint(f'Searching address with coordinates: [{coord_or_query}]')
+                debugprint(f'[french_address_search_function]: Searching address with coordinates: [{coord_or_query}]')
                 query = french_address_search_function(**coord_or_query)
                 query = f'\n## Question\n{question}\n## Information\n```\n{query}\n```\n'
             else:
@@ -79,6 +79,7 @@ class TriageAgent(Model4LLMs.Function):
     agent_extract:RegxExtractor = RegxExtractor(regx=r"```agent\s*(.*)\s*\n```")
     triage_system_prompt:str='''
 You are a professional guide who can connect the asker to the correct agent.
+Additionally, you are a skilled leader who can respond to questions using the agents' answer.
 ## Available Agents:
 - french_address_agent: Familiar with France and speaks English.
 
@@ -108,8 +109,11 @@ french_address_agent
             agent_name = self.agent_extract(response)
             debugprint(f'agent_extract : [{dict(response=response)}]')
             if 'french_address_agent' in agent_name:
+                agent_name = 'french_address_agent'
                 debugprint(f'Switching to agent: [{agent_name}]')
-                return french_address_agent(question,debug=debug)
+                answer = french_address_agent(question,debug=debug)
+                break
+        return triage_llm(f"## User Question\n{question}\n## {agent_name} Answer\n{answer}\n")
 
 
 
