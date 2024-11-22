@@ -4,7 +4,7 @@ from LLMAbstractModel.LLMsModel import Model4LLMs
 store = LLMsStore()
 
 vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
-chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id())
+llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id())
 text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
 
 # vendor = store.add_new_Xai_vendor(api_key=os.environ.get('XAI_API_KEY','null'))
