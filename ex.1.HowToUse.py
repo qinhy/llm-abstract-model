@@ -7,6 +7,9 @@ vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','nu
 chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id())
 text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
 
+# vendor = store.add_new_Xai_vendor(api_key=os.environ.get('XAI_API_KEY','null'))
+# llm = grok = store.add_new_grok(vendor_id=vendor.get_id())
+
 ## if you have ollam
 # vendor  = store.add_new_ollama_vendor()
 # gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id())
@@ -14,11 +17,11 @@ text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
 # llama32 = store.add_new_llama(vendor_id=vendor.get_id())
 
 # just asking
-print(chatgpt4omini('hi! What is your name?'))
+print(llm('hi! What is your name?'))
 # -> Hello! I’m called Assistant. How can I help you today?
 
 # push messages
-print(chatgpt4omini([
+print(llm([
     {'role':'system','content':'You are a highly skilled professional English translator.'},
     {'role':'user','content':'"こんにちは！"'}    
 ]))
