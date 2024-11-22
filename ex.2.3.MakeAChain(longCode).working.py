@@ -4,17 +4,59 @@ from LLMAbstractModel.utils import RegxExtractor, StringTemplate, TextFile
 store = LLMsStore()
 
 system_prompt = '''
-You will be provided with two parts of Python code: the "Original Python Code Snippet" and the "Previously Graceful Refactored Code."  
-Your task is to continue writing the "Previously Graceful Refactored Code" based on the "Original Python Code Snippet."
-Please review each new Python snippet and produce a new refined, graceful refactoring.
-Reply only the new refactored python code, without comments or previous code.
+Continue refining the given refactored Python code by considering further improvements in clarity, efficiency, readability, and modern Python best practices.
+
+The task is to transform additional parts of the original "Python Code Snippet" into a cleaner, more efficient version, by assimilating it into the "Previously Graceful Refactored Code."
+
+# Instructions
+- Focus on improving elegance, refactor redundant sections, and utilize Python best practices.
+- Prioritize concise, readable, and maintainable code.
+- Take advantage of Python built-in libraries to simplify complex logic where possible.
+- Avoid generating any comments or explanations.
+  
+# Output Format
+- Provide only the newly enhanced refactored Python code with no extra explanations, old code, or any inline comments. 
+- Maintain consistency with existing stylistic choices used within the "Previously Graceful Refactored Code."
+
+# Examples
+Original Python Code Snippet:
+```python
+    for i in range(1, 11):
+        result += x ** i / i
+    return result    
+def adjust_value(x):
+    if x < 0:
+        return -x + 5
+    return x
+```
+
+Previously Graceful Refactored Code:
+```python
+def complex_math(x):
+    return sum(x ** i / i for i in range(1, 11))
+```
+
+New Python Code to be Refined:
+```python
+# additional logic to handle input and special cases
+def adjust_value(x):
+    if x < 0:
+        return -x + 5
+    return x
+```
+
+New Refined Refactored Python Code:
+```python
+def adjust_value(x):
+    return -x + 5 if x < 0 else x
+```
 '''
 
 vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY',timeout=60)
-llm = store.add_new_chatgpt4o(vendor_id=vendor.get_id(),system_prompt=system_prompt)
+llm = store.add_new_chatgpt4o(vendor_id=vendor.get_id(),system_prompt=system_prompt,limit_output_tokens=2048)
 
 vendor = store.add_new_Xai_vendor(api_key=os.environ.get('XAI_API_KEY','null'),timeout=60)
-llm = grok = store.add_new_grok(vendor_id=vendor.get_id(),limit_output_tokens=2048)
+llm = grok = store.add_new_grok(vendor_id=vendor.get_id(),system_prompt=system_prompt,limit_output_tokens=2048)
 
 # Please reply refactored code in {}, and should not over {} words.
 msg_template = store.add_new_function(StringTemplate(string='''

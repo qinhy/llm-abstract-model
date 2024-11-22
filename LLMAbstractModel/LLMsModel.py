@@ -40,6 +40,13 @@ class Controller4LLMs:
                     else: return vs[0]
                     # try other vendors
                     pass
+                elif type(self.model) in [Model4LLMs.Grok ]:
+                    # try ollama vendor
+                    vs = self._store.find_all('XaiVendor:*')
+                    if len(vs)==0:raise ValueError(f'auto get endor of XaiVendor:* is not exists! Please (add and) change_vendor(...)')
+                    else: return vs[0]
+                    # try other vendors
+                    pass
                 elif type(self.model) in [Model4LLMs.Gemma2, Model4LLMs.Phi3, Model4LLMs.Llama ]:
                     # try ollama vendor
                     vs = self._store.find_all('OllamaVendor:*')
