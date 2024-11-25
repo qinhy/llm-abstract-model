@@ -171,7 +171,7 @@ class TextMemoryTree:
         return {'parent':-1,'isolate':0,'child':1}[res.strip().lower()]
 
     def tidytree(self):
-        sys = '''Please organize the following memory list and respond in the original tree structure format. If a node represents a group, add 'Group' at the end of the node name. Feel free to add new group nodes as needed.'''
+        sys = '''Please organize the following memory list and respond in the original tree structure format. If a node represents a group, add '(Group)' at the end of the node name. Feel free to add new group nodes as needed.'''
         self.llm.system_prompt=sys
         res:str = self.llm(f'```text\n{self.print_tree(is_print=False)}\n```')
         res:str = RegxExtractor(regx=r"```text\s*(.*)\s*```")(res)
@@ -249,7 +249,8 @@ class TextMemoryTree:
     def insert(self, content: str):
         new_node = self.calc_embedding(TextContentNode(content=content.strip()))
         self._insert_node(self.root, new_node)
-        self.print_tree()
+        print(f'[TextMemoryTree]: insert new content {content.strip()}')
+        # self.print_tree()
         self.root.reflesh_root()
 
     def _insert_node(self, current_node: TextContentNode, new_node: TextContentNode):
@@ -308,6 +309,7 @@ class TextMemoryTree:
         
         stack = [(TextContentNode(content=lines.pop(0)), -1)]
         root = stack[0][0]
+
 
         if not root.is_root():raise ValueError('first Node must be Root.')        
 
@@ -443,7 +445,11 @@ vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
 
 # Add the necessary components
 text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
-llm = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(), temperature=0.0)
+llm = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(), temperature=0.7)
+
+vendor = store.add_new_Xai_vendor(api_key='XAI_API_KEY')
+llm = grok = store.add_new_grok(vendor_id=vendor.get_id())
+
 
 # Create the root node and initialize the memory tree
 root = TextContentNode()

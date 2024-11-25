@@ -386,17 +386,30 @@ class Model4LLMs:
         llm_model_name:str = 'gpt-4o-mini'
         
     class ChatGPTO1(OpenAIChatGPT):
+        limit_output_tokens: Optional[int] = 2048
         llm_model_name: str = 'o1-preview'
         context_window_tokens: int = 128000
         max_output_tokens: int = 32768
+        temperature: Optional[float] = 1.0
 
+        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:            
+            payload = {
+                "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
+                "stream": self.stream,
+                "messages": messages,
+                "max_completion_tokens": self.limit_output_tokens,
+                "top_p": self.top_p,
+                "frequency_penalty": self.frequency_penalty,
+                "presence_penalty": self.presence_penalty,
+            }
+            return {k: v for k, v in payload.items() if v is not None}
+            
         def construct_messages(self,messages:Optional[List|str])->list:
-            msgs = []
-            if self.system_prompt:
-                msgs.append({"role":"user","content":self.system_prompt})
             if type(messages) is str:
-                msgs[-1]['content'] += '¥n'+messages
-            return msgs+messages
+                messages = [{"role":"user","content":messages}]
+            if self.system_prompt:
+                messages[0]["content"] = self.system_prompt+'\n'+messages[0]["content"]
+            return messages
         
     class ChatGPTO1Mini(ChatGPTO1):
         llm_model_name: str = 'o1-mini'
@@ -802,6 +815,22 @@ class LLMsStore(BasicStore):
                                 system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.ChatGPT4oMini:
         
         return self.add_new_obj(self.MODEL_CLASS_GROUP.ChatGPT4oMini(vendor_id=vendor_id,
+                                limit_output_tokens=limit_output_tokens,
+                                temperature=temperature,
+                                top_p=top_p,
+                                frequency_penalty=frequency_penalty,
+                                presence_penalty=presence_penalty,
+                                system_prompt=system_prompt,),id=id)
+    
+    def add_new_chatgpto1mini(self,vendor_id:str,
+                                limit_output_tokens:int = 2048,
+                                temperature:float = 0.7,
+                                top_p:float = 1.0,
+                                frequency_penalty:float = 0.0,
+                                presence_penalty:float = 0.0,
+                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.ChatGPTO1Mini:
+        
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.ChatGPTO1Mini(vendor_id=vendor_id,
                                 limit_output_tokens=limit_output_tokens,
                                 temperature=temperature,
                                 top_p=top_p,
