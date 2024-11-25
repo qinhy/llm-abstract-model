@@ -25,6 +25,7 @@ class MainAgent(Model4LLMs.Function):
     thoughts_extract:RegxExtractor = RegxExtractor(regx=r"<thoughts>\s*(.*)\s*</thoughts>")
     process_extract:RegxExtractor = RegxExtractor(regx=r"<process>\s*(.*)\s*</process>")
     result_extract:RegxExtractor = RegxExtractor(regx=r"<result>\s*(.*)\s*</result>")
+    solution_extract:RegxExtractor = RegxExtractor(regx=r"<solution>\s*(.*)\s*</solution>")
     system_prompt: str = '''**You will be addressing questions and tasks as a professional problem-solver. When the user provides a task or question, follow these steps:**
 
 ### Step 1: Identify Relevant Concepts
@@ -58,11 +59,12 @@ Remember to **maintain a professional, thorough, and precise approach** througho
 
 Present your selection using the following template:
 ```template
+Solution 0: process: {score:.2f}, reasoning_and_logic: {score:.2f}, clarity_and_presentation: {score:.2f}, overall_score: {score:.2f}
 Solution 1: process: {score:.2f}, reasoning_and_logic: {score:.2f}, clarity_and_presentation: {score:.2f}, overall_score: {score:.2f}
-Solution 2: process: {score:.2f}, reasoning_and_logic: {score:.2f}, clarity_and_presentation: {score:.2f}, overall_score: {score:.2f}
 
 The best solution is: {solution_number}
 Justification: (Provide a brief explanation of why this solution was selected as the best)
+Final solution: (Present final solution inside `<solution>` tags)
 ```
 
 Remember to be objective, thorough, and consistent in your evaluation. Your goal is to identify the solution that demonstrates the highest level of process, logical reasoning, and clear presentation.
@@ -120,7 +122,8 @@ Remember to be objective, thorough, and consistent in your evaluation. Your goal
         
         print(f'############# final ##############')
         print(f'## question\n{question}\n## results\n{rs}\n')
-        return main_llm(f'## question\n{question}\n## results\n{rs}\n')
+        answer = main_llm(f'## question\n{question}\n## results\n{rs}\n')
+        return answer,self.solution_extract(answer)
 
 
 @descriptions('Workflow function of eval model of Self-Iterative-Agent-System-for-Complex-Problem-Solving',
@@ -189,9 +192,11 @@ store.clean()
 store.loads(data)
 
 # Example usage
-answer = store.find('MainAgent:main_agent')(
+answer,solution = store.find('MainAgent:main_agent')(
             question='You have six horses and want to race them to see which is fastest. What is the best way to do this?',
             debug=False)
 
 
 print(f'\n\n######## Answer ########\n\n{answer}')
+print(f'\n\n######## Solution ########\n\n{solution}')
+
