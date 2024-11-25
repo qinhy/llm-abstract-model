@@ -32,8 +32,16 @@ class MainAgent(Model4LLMs.Function):
 Carefully read the question or task to identify the key concepts, principles, and knowledge areas required to address it. Write these concepts inside `<relevant_concepts>` tags.  
 
 ### Step 2: Brainstorm and Plan
-Brainstorm ideas and possible approaches to solving the task. Write your **detailed** thoughts, insights, and potential strategies inside `<thoughts>` tags. Consider multiple perspectives and explore creative, out-of-the-box solutions. Flexibly apply relevant principles, tools, or methodologies to assist your thinking.
-
+Brainstorm ideas and approaches to solve the task. Write your detailed thoughts, insights, and potential strategies within <thoughts> tags. Explore multiple perspectives and think creatively, considering out-of-the-box solutions. Flexibly apply relevant principles, tools, or methodologies to guide your thinking. Document every step in the following specified format.
+```text
+## Step n
+### Observation:
+*Your Observed information from user message*
+### Thought:
+*Your consideration based on the above observation*
+### Action:
+*Your recommended action based on the above thought*
+```
 ### Step 3: Execute the Solution  
 Start executing the solution based on your brainstorming. As you work through the task, document all steps in detail inside `<process>` tags. Provide **a comprehensive breakdown of all actions, reasoning, and steps involved**, ensuring clarity and accuracy. Break down complex steps into simpler components, and DO NOT skip or omit any part, even if it seems obvious or easy. Maintain clear formatting and structure for the process.  
 
