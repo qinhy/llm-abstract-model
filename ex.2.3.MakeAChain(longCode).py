@@ -64,7 +64,7 @@ msg_template = store.add_new_function(StringTemplate(string='''
 ```python
 {}
 ```
-##### Previously Graceful Refactored Code
+#### Previously Graceful Refactored Code
 ```python
 {}
 ```'''))
