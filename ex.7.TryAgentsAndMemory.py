@@ -449,8 +449,8 @@ vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
 text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
 llm = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(), temperature=0.7)
 
-vendor = store.add_new_Xai_vendor(api_key='XAI_API_KEY')
-llm = grok = store.add_new_grok(vendor_id=vendor.get_id())
+# vendor = store.add_new_Xai_vendor(api_key='XAI_API_KEY')
+# llm = grok = store.add_new_grok(vendor_id=vendor.get_id())
 
 # Create the root node and initialize the memory tree
 root = TextContentNode()
