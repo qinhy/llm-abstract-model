@@ -11,7 +11,7 @@ vendor = store.add_new_Xai_vendor(api_key='XAI_API_KEY',timeout=600)
 debug = True
 
 
-# https://github.com/richards199999/Self-Iterative-Agent-System-for-Complex-Problem-Solving/tree/main
+# enhance from https://github.com/richards199999/Self-Iterative-Agent-System-for-Complex-Problem-Solving/tree/main
 
 ## add Main model
 @descriptions('Workflow function of main model of Self-Iterative-Agent-System-for-Complex-Problem-Solving',
@@ -32,16 +32,17 @@ class MainAgent(Model4LLMs.Function):
 Carefully read the question or task to identify the key concepts, principles, and knowledge areas required to address it. Write these concepts inside `<relevant_concepts>` tags.  
 
 ### Step 2: Brainstorm and Plan
-Brainstorm ideas and approaches to solve the task. Write your detailed thoughts, insights, and potential strategies within <thoughts> tags. Explore multiple perspectives and think creatively, considering out-of-the-box solutions. Flexibly apply relevant principles, tools, or methodologies to guide your thinking. Document every step in the following specified format.
-```text
+Brainstorm ideas and approaches to solve the task, document every step in the following specified format. Explore multiple perspectives and think creatively, considering out-of-the-box solutions. Flexibly apply relevant principles, tools, or methodologies to guide your thinking. Write your detailed thoughts, insights, and potential strategies within <thoughts> tags.
+```format
 ## Step n
 ### Observation:
-*Your Observed information from user message*
+*Your Observed information from user message or previous steps*
 ### Thought:
 *Your consideration based on the above observation*
 ### Action:
 *Your recommended action based on the above thought*
 ```
+
 ### Step 3: Execute the Solution  
 Start executing the solution based on your brainstorming. As you work through the task, document all steps in detail inside `<process>` tags. Provide **a comprehensive breakdown of all actions, reasoning, and steps involved**, ensuring clarity and accuracy. Break down complex steps into simpler components, and DO NOT skip or omit any part, even if it seems obvious or easy. Maintain clear formatting and structure for the process.  
 
@@ -66,15 +67,16 @@ Remember to **maintain a professional, thorough, and precise approach** througho
 - Based on the scores assigned for process accuracy, reasoning and logic, and clarity and presentation, determine an overall score for each solution. The overall score should be a weighted average, with process completeness being the most important factor, followed by reasoning and logic, and then clarity and presentation.
 
 Present your selection using the following template:
-```template
-Solution 0: process: {score:.2f}, reasoning_and_logic: {score:.2f}, clarity_and_presentation: {score:.2f}, overall_score: {score:.2f}
-Solution 1: process: {score:.2f}, reasoning_and_logic: {score:.2f}, clarity_and_presentation: {score:.2f}, overall_score: {score:.2f}
+```
+## Solution 0
+process: {score:.2f}, reasoning_and_logic: {score:.2f}, clarity_and_presentation: {score:.2f}, overall_score: {score:.2f}
+## Solution 1
+process: {score:.2f}, reasoning_and_logic: {score:.2f}, clarity_and_presentation: {score:.2f}, overall_score: {score:.2f}
 
 The best solution is: {solution_number}
 Justification: (Provide a brief explanation of why this solution was selected as the best)
 Final solution: (Present final solution inside `<solution>` tags)
 ```
-
 Remember to be objective, thorough, and consistent in your evaluation. Your goal is to identify the solution that demonstrates the highest level of process, logical reasoning, and clear presentation.
 '''
 
@@ -91,6 +93,8 @@ Remember to be objective, thorough, and consistent in your evaluation. Your goal
 
         debug_print(f'Asking main_llm with: [{dict(question=question)}]')
         def get_review(answer):
+            print(f'############# thoughts ##############')
+            print(self.thoughts_extract(answer))
             return eval_agent(
                 question,
                 self.relevant_concepts_extract(answer),
@@ -100,8 +104,9 @@ Remember to be objective, thorough, and consistent in your evaluation. Your goal
                 debug=debug
             )
         
-        def thinking(question, result=None, review=None):
-            question_tmp = '## question\n{}\n' + (
+        def thinking(question, result=None, review=None):            
+            question_tmp = ('Please answer the following question base on previous result and review.\n' if result else '') + (
+                           '## question\n{}\n') + (
                            '## result\n{}\n' if result else '') + (
                            '## review\n{}\n' if review else '')
             ask = question_tmp.format(question, result, review)
@@ -200,11 +205,22 @@ store.clean()
 store.loads(data)
 
 # Example usage
-answer,solution = store.find('MainAgent:main_agent')(
-            question='You have six horses and want to race them to see which is fastest. What is the best way to do this?',
-            debug=False)
-
-
+question='You have six horses and want to race them to see which is fastest. What is the best way to do this?'
+print(f'\n\n######## Question ########\n\n{question}')
+answer,solution = store.find('MainAgent:main_agent')(question=question,debug=False)
 print(f'\n\n######## Answer ########\n\n{answer}')
 print(f'\n\n######## Solution ########\n\n{solution}')
 
+# Example usage
+question='''Please organize the following memory list and respond in the original tree structure format. If a node represents a group, add '(Group)' at the end of the node name. Feel free to add new group nodes as needed.
+
+- Root(Group)
+    - Basic Info: Name - Alex Johnson, Birthday - 1995-08-15, Phone - +1-555-1234, Email - alex.johnson@email.com, Address - 123 Maple Street, Springfield
+        - Friends: Taylor Smith (Birthday: 1994-02-20, Phone: +1-555-5678), Jordan Lee (Birthday: 1993-11-30, Phone: +1-555-9101), Morgan Brown (Birthday: 1996-05-25, Phone: +1-555-1213)
+    - Personal Details: Occupation - Software Developer, Hobbies - reading, hiking, coding, photography
+        - Work & Goals: Company - Tech Solutions Inc., Position - Front-End Developer, Work Email - alex.j@techsolutions.com, Work Phone - +1-555-4321, Goals - Learn a new programming language, Complete a marathon, Read 20 books this year
+'''
+print(f'\n\n######## Question ########\n\n{question}')
+answer,solution = store.find('MainAgent:main_agent')(question=question,debug=False)
+print(f'\n\n######## Answer ########\n\n{answer}')
+print(f'\n\n######## Solution ########\n\n{solution}')

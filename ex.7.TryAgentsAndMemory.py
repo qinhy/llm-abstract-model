@@ -170,11 +170,12 @@ class TextMemoryTree:
         res:str = self.llm(f'## src¥n{src.content}¥n## ref¥n{ref.content}')
         return {'parent':-1,'isolate':0,'child':1}[res.strip().lower()]
 
-    def tidytree(self):
-        sys = '''Please organize the following memory list and respond in the original tree structure format. If a node represents a group, add '(Group)' at the end of the node name. Feel free to add new group nodes as needed.'''
-        self.llm.system_prompt=sys
-        res:str = self.llm(f'```text\n{self.print_tree(is_print=False)}\n```')
-        res:str = RegxExtractor(regx=r"```text\s*(.*)\s*```")(res)
+    def tidytree(self,res=None):
+        if res is None:
+            sys = '''Please organize the following memory list and respond in the original tree structure format. If a node represents a group, add '(Group)' at the end of the node name. Feel free to edit, delete, move or add new nodes (or groups) as needed.'''
+            self.llm.system_prompt=sys
+            res:str = self.llm(f'```text\n{self.print_tree(is_print=False)}\n```')
+            res:str = RegxExtractor(regx=r"```text\s*(.*)\s*```")(res)
         root = self.parse_text_tree(res)
         embeddings = {}
         for node in self.traverse(self.root):
@@ -360,8 +361,8 @@ Note: When it is necessary to retain new and important information, such as pref
         return TextMemoryTree(root=self.memory_root,llm=self.llm,
                        text_embedding=self.text_embedding)
         
-    def tidy_memory(self):
-        self.memory_root = self.get_memory().tidytree().root
+    def tidy_memory(self,res=None):
+        self.memory_root = self.get_memory().tidytree(res).root
 
     def print_memory(self):
         self.get_memory().print_tree()
