@@ -20,7 +20,7 @@ class TextContentNode(BaseModel):
     _root_node: 'TextContentNode' = None
 
     def is_group(self) -> bool:
-        return "Group" in self.content
+        return self.content[-7:] == "(Group)"
 
     def is_root(self) -> bool:
         return self.content == "Root(Group)"
@@ -30,13 +30,6 @@ class TextContentNode(BaseModel):
         content = self.content
         if len(groups)>0:content += f' [{";".join(groups)}]'
         return content
-
-    def content_with_groups(self):
-        return self.content_with_parents()
-        # groups = [g.content for g in self.groups()]
-        # content = self.content
-        # if len(groups)>0:content += f' [{";".join(groups)}]'
-        # return content
 
     def reflesh_root(self):
         if self.is_root():
@@ -58,25 +51,10 @@ class TextContentNode(BaseModel):
         # # If no node found, return None
         return None
     
-    def clone(self) -> 'TextContentNode':
-        new_node = TextContentNode(
-            content=self.content,
-            embedding=self.embedding[:],
-            depth=self.depth
-        )
-        for child in self.children:
-            cloned_child = child.clone()  # Recursively clone each child
-            new_node.add(cloned_child)  # Add cloned child to the new node
-        return new_node
-    
     def dispose(self):
         p = self.get_parent()
         if p:
             p.children = [c for c in p.children if c.id != self.id]
-
-    def swap(self, other: 'TextContentNode'):
-        self.content, other.content = other.content, self.content
-        self.embedding, other.embedding = other.embedding, self.embedding
 
     def add(self, child: 'TextContentNode'):
         self.children.append(child)
@@ -105,20 +83,7 @@ class TextContentNode(BaseModel):
                 collect_children(child)
         collect_children(self)
         return descendants
-
-    def move_to(self, new_parent: 'TextContentNode'):
-        if self.get_parent():self.dispose()
-        new_parent.add(self)
-        old_depth = self.depth
-        self.depth = new_parent.depth + 1
-        for child in self.get_all_children():
-            child.depth = child.depth - old_depth + self.depth
-
-    def has_keyword(self, keyword: str) -> bool:
-        if keyword in self.content:
-            return True
-        return any(child.has_keyword(keyword) for child in self.children)
-
+    
 class TextMemoryTree:
     base_threshold: float = 0.4
     lambda_factor: float = 0.5
@@ -139,30 +104,12 @@ class TextMemoryTree:
         for child in node.children:
             yield from self.traverse(child)
 
-    def get_node(self, node_id: str) -> Optional[TextContentNode]:
-        return self.root.get_node(node_id)
-
-    def update_content(self, old_content: str, new_content: str):
-        if old_content == new_content:return
-        for n in self.find_nodes_by_content(old_content):
-            n.content = new_content
-            n.embedding = []
-
     def remove_content(self, content: str):
         for node in self.find_nodes_by_content(content):
             node.dispose()
 
     def find_nodes_by_content(self, keyword: str) -> List[TextContentNode]:
         return [node for node in self.traverse(self.root) if keyword in node.content]
-
-    def get_leaf_nodes(self) -> List[TextContentNode]:
-        return [node for node in self.traverse(self.root) if not node.children]
-
-    def reparent_node(self, node_id: str, new_parent_id: str):
-        node = self.get_node(node_id)
-        new_parent = self.get_node(new_parent_id)
-        if node and new_parent:
-            node.move_to(new_parent)
 
     def classification(self, src: TextContentNode, ref: TextContentNode):
         sys = "## Instructions:¥nGiven two pieces of content, 'ref' and 'src', identify their relationship and label it with one of the following:¥nProvide only a single word as your output: Child, Parent, or Isolate.¥n¥n## Procedure:¥n1. Classify Each Content:¥n   - Determine whether 'ref' and 'src' are a topic or an action.¥n     - *Topic*: A general subject area.¥n     - *Action*: A specific activity within a topic.¥n¥n2. Assess Connection:¥n   - Evaluate whether there is any connection between 'ref' and 'src', considering both direct and indirect links.¥n¥n3. Apply Inclusion Rule:¥n   - Remember that a topic always includes its related actions.¥n¥n4. Compare Topics (if both are topics):¥n   - Determine if one topic includes the other.¥n¥n5. Select the Appropriate Label:¥n   - Choose Child if 'src' potentially includes 'ref'.¥n   - Choose Parent if 'ref' potentially includes 'src'.¥n   - Choose Isolate if no connection exists.¥n¥n## Notes:¥n- Carefully determine whether each piece of content is a topic or an action.¥n- Consider subtle connections for accurate labeling.¥n"
@@ -179,11 +126,11 @@ class TextMemoryTree:
         root = self.parse_text_tree(res)
         embeddings = {}
         for node in self.traverse(self.root):
-            embeddings[node.content_with_groups()] = node.embedding
+            embeddings[node.content_with_parents()] = node.embedding
             node.embedding = []
         
         for node in self.traverse(root):
-            node.embedding = embeddings.get(node.content_with_groups(),[])
+            node.embedding = embeddings.get(node.content_with_parents(),[])
             
         self.root = root
         return self
@@ -199,7 +146,7 @@ class TextMemoryTree:
             if node.content in TextMemoryTree._embedding_cache_dict:
                 node.embedding = TextMemoryTree._embedding_cache_dict[node.content]
             if len(node.embedding)==0:
-                node.embedding = self.text_embedding(node.content_with_groups())
+                node.embedding = self.text_embedding(node.content_with_parents())
         return node
 
     def similarity(self, src: TextContentNode, ref: TextContentNode)->float:
@@ -380,7 +327,7 @@ Note: When it is necessary to retain new and important information, such as pref
         if len(results)==0:return res+"No memories.\n"
         for i, (node, score) in enumerate(results, start=1):
             if score < self.memory_min_score:continue
-            res += f"{i}. Score: {score:.3f} | Content: {node.content_with_groups()}\n"
+            res += f"{i}. Score: {score:.3f} | Content: {node.content_with_parents()}\n"
         return res
     
     def __call__(self, query: str, print_memory=True) -> str:
