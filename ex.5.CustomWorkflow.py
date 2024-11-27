@@ -68,7 +68,7 @@ You should reply with translations only, without any additional information.
 ```translation
 ...
 ```
-'''
+'''.strip()
 
 vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")
 llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto', system_prompt=system_prompt)
@@ -78,7 +78,8 @@ input_template = store.add_new_function(
     StringTemplate(string='''
 ```text
 {text}
-```'''))
+```
+'''.strip()))
 
 extract_result = store.add_new_function(RegxExtractor(regx=r"```translation\s*(.*)\s*\n```"))
 
