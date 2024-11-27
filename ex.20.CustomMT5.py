@@ -61,7 +61,7 @@ myprint('''account_info(json=acc,debug=debug,debug_data=dict())''')
 
 # get books info
 books_info = store.add_new_celery_request(
-    url='http://localhost:8000/books/', method='GET')
+    url='http://localhost:8000/books/', method='GET',id='AsyncCeleryWebApiFunction:books_info')
 myprint('''books_info(json=acc,debug=debug,debug_data=dict())''')
 
 # get rates
@@ -84,7 +84,7 @@ extract_json = store.add_new_function(RegxExtractor(
     regx=r"```json\s*(.*)\s*\n```", is_json=True))
 to_book_plan = store.add_new_function(MT5MakeOder())
 books_send = store.add_new_celery_request(
-    url='http://localhost:8000/books/send', method='GET')
+    url='http://localhost:8000/books/send', method='GET',id='AsyncCeleryWebApiFunction:books_send')
 myprint('''books_send(json=dict(acc=acc,book=book),debug=debug,debug_data=dict())''')
 
 # manual workflow
@@ -118,8 +118,8 @@ store.clean()
 store.loads(data)
 book_plan_workflow: Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
 
-def make_plan(acc=accs[0],symbol='USDJPY', timeframe='H4', count=30)->Model4LLMs.WorkFlow: 
-    return book_plan_workflow(
+def make_plan_workflow(workflow=book_plan_workflow, acc=accs[0],symbol='USDJPY', timeframe='H4', count=30)->Model4LLMs.WorkFlow: 
+    return workflow(
             # () ==> *args, dict ==> **kwargs,
             init_deps=[(),
                         dict(
@@ -135,19 +135,49 @@ def make_plan(acc=accs[0],symbol='USDJPY', timeframe='H4', count=30)->Model4LLMs
         )
 myprint('json.dumps(book_plan_workflow.model_dump_json_dict(), indent=2)')
 
+
+# Functions for secure data storage and retrieval using RSA key pair
+def save_secure(store: LLMsStore):
+    store.dump_RSA('./tmp/ex.20.store.rjson', './tmp/public_key.pem')
+
+def load_secure():
+    # Load stored RSA-encrypted data and initialize the agent
+    store = LLMsStore()
+    store.load_RSA('./tmp/ex.20.store.rjson', './tmp/private_key.pem')
+    return store
+
 # Monitoring loop
+store.set('monitor_pairs',{monitor_pairs:monitor_pairs})
+save_secure(store)
+store.clean()
+store = load_secure()
+
 while True:
+    llm = store.find_all('ChatGPT4o:*')[0]
+    monitor_pairs = store.get('monitor_pairs')['monitor_pairs']
+    workflow = store.find_all('WorkFlow:*')[0]
+    accs = store.find_all('MT5Account:*')
+    acc = accs[0]
+    books_send = store.find_all('AsyncCeleryWebApiFunction:books_send')
+    books_info = store.find_all('AsyncCeleryWebApiFunction:books_info')
+    def make_plan_workflow(workflow=workflow, acc=accs[0],symbol='USDJPY',
+                           timeframe='H4', count=30)->Model4LLMs.WorkFlow: 
+        return workflow(
+                init_deps=[(),dict(json=dict(account_id=acc.account_id,
+                                            password=acc.password.get(),
+                                            account_server=acc.account_server.get(),))],
+                rates_param=[(),dict(params=dict(symbol=symbol, timeframe=timeframe, count=count))])
     try:
         for currency in set(monitor_pairs) - {book['symbol'] for book in books_info()}:
-            workflow = make_plan(symbol=currency)
-            workflow_result = workflow()
+            workflow = make_plan_workflow(workflow,symbol=currency)
             print(
                 "Result:", workflow.results['final'],
             )
             with open('../llm-abstract-model-logs.txt', 'a') as log_file:
                 log_file.write(workflow.results[llm.get_id()] + '\n')
 
-            books_send(json=dict(acc=acc, book=workflow_result))
+            books_send(json=dict(acc=acc, book=workflow.results['final']))
         time.sleep(10)
     except Exception as e:
         print("Error:", e)
+
