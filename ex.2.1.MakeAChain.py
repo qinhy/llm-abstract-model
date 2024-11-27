@@ -15,6 +15,9 @@ vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")#auto check os.env
 llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',#vendor.get_id(),
                                                   system_prompt=system_prompt)
 
+# vendor = store.add_new_Xai_vendor(api_key='XAI_API_KEY')
+# llm = grok = store.add_new_grok(vendor_id=vendor.get_id(),system_prompt=system_prompt)
+
 # vendor  = store.add_new_ollama_vendor()
 # llm = llama32 = store.add_new_llama(vendor_id='auto',#vendor.get_id(),
 #                                     system_prompt=system_prompt)
@@ -88,6 +91,7 @@ print(translator('こんにちは！はじめてのチェーン作りです！')
 print('############# additional template usage')
 
 llm = store.add_new_chatgpt4omini(vendor_id='auto')
+# llm = grok = store.add_new_grok(vendor_id='auto')
 # llm = store.add_new_llama(vendor_id='auto')
 
 # we use raw json to do template
