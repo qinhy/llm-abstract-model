@@ -61,11 +61,12 @@ def init_store():
 
     # get account info
     account_info = store.add_new_celery_request(url='http://localhost:8000/accounts/info/',
-                                                method='GET',id='AsyncCeleryWebApiFunction:books_info')
+                                                method='GET',id='AsyncCeleryWebApiFunction:account_info')
     # myprint('''account_info(json=acc)''')
 
     # get books info
-    books_info = store.add_new_celery_request(url='http://localhost:8000/books/',method='GET')
+    books_info = store.add_new_celery_request(url='http://localhost:8000/books/',
+                                                method='GET',id='AsyncCeleryWebApiFunction:books_info')
     # myprint('''books_info(json=acc)''')
 
     # get rates
@@ -160,8 +161,8 @@ def start_monitoring(store=store):
     workflow = store.find_all('WorkFlow:*')[0]
     accs = store.find_all('MT5Account:*')
     acc = accs[0]
-    books_send = store.find_all('AsyncCeleryWebApiFunction:books_send')
-    books_info = store.find_all('AsyncCeleryWebApiFunction:books_info')
+    books_send = store.find('AsyncCeleryWebApiFunction:books_send')
+    books_info = store.find('AsyncCeleryWebApiFunction:books_info')
 
     workflowf = lambda acc,symbol:workflow(
         init_deps=[(),dict(json=acc)],
