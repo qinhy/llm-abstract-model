@@ -74,7 +74,7 @@ myprint('''decode_rates(
             get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30),debug=debug,debug_data=dict()))''')
 
 # Initialize LLM vendor and add to the store
-vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
+vendor = store.add_new_openai_vendor(api_key=os.environ['OPENAI_API_KEY'])
 llm = store.add_new_chatgpt4o(vendor_id='auto', system_prompt=system_prompt)
 
 llm = store.add_new_function(MockLLM()) if debug else llm
@@ -147,7 +147,7 @@ def load_secure():
     return store
 
 # Monitoring loop
-store.set('monitor_pairs',{monitor_pairs:monitor_pairs})
+store.set('monitor_pairs',{'monitor_pairs':monitor_pairs})
 save_secure(store)
 store.clean()
 store = load_secure()
