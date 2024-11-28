@@ -225,3 +225,19 @@ def is_market_open() -> bool:
     if weekday < MARKET_OPEN["day"] or (weekday == MARKET_OPEN["day"] and hour < MARKET_OPEN["hour"]):
         return False
     return True
+
+def monitor_fx_market():
+    """
+    Function to monitor the FX market. This function will only run if the market is open.
+    """
+    while True:
+        if is_market_open():
+            # Place your monitoring logic here
+            start_monitoring()
+            time.sleep(10)
+        else:
+            print("Market is closed. Monitoring function will not run.")
+            time.sleep(600)
+        
+# Start monitoring
+monitor_fx_market()
