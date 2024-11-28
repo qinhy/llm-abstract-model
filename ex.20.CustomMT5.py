@@ -1,15 +1,21 @@
 import json
 import os
 import time
+
+from datetime import datetime, timedelta
+import pytz
+import time
+
 from pydantic import Field
 from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.LLMsModel import Controller4LLMs, KeyOrEnv, Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor
 from mt5utils import MT5Account, MT5MakeOder, MockLLM, RatesReturn
+
+
 descriptions = Model4LLMs.Function.param_descriptions
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
-
 
 # Configuration settings
 os.environ["MT5ACCs"] = "[9102374,]"  # Your account ID
@@ -148,7 +154,7 @@ workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
 myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
     
 # Monitoring loop
-def start_monitoring():
+def start_monitoring(store=store):
     llm = store.find_all('ChatGPT4o:*')[0]
     monitor_pairs = store.get('monitor_pairs')['monitor_pairs']
     workflow = store.find_all('WorkFlow:*')[0]
@@ -196,20 +202,13 @@ def start_monitoring():
     except Exception as e:
         print("Error:", e)
         
-        
-        
-from datetime import datetime, timedelta
-import pytz
-import time
-
-# Define market open and close times in JST timezone
-MARKET_OPEN = {"day": 0, "hour": 5}  # Monday 5 AM JST
-MARKET_CLOSE = {"day": 5, "hour": 5}  # Saturday 5 AM JST
-
-# Timezone for FX market hours (Japan Time)
-JST = pytz.timezone("Asia/Tokyo")
-
 def is_market_open() -> bool:
+    # Define market open and close times in JST timezone
+    MARKET_OPEN = {"day": 0, "hour": 5}  # Monday 5 AM JST
+    MARKET_CLOSE = {"day": 5, "hour": 5}  # Saturday 5 AM JST
+
+    # Timezone for FX market hours (Japan Time)
+    JST = pytz.timezone("Asia/Tokyo")
     """
     Checks if the FX market is currently open.
     Returns True if open, False if closed.
@@ -227,17 +226,15 @@ def is_market_open() -> bool:
     return True
 
 def monitor_fx_market():
-    """
-    Function to monitor the FX market. This function will only run if the market is open.
-    """
+    store = load_secure()
     while True:
         if is_market_open():
             # Place your monitoring logic here
-            start_monitoring()
+            start_monitoring(store)
             time.sleep(10)
         else:
             print("Market is closed. Monitoring function will not run.")
             time.sleep(600)
         
 # Start monitoring
-monitor_fx_market()
+# monitor_fx_market()
