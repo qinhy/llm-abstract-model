@@ -719,52 +719,84 @@ class Model4LLMs:
                                 json='JSON payload')
     class AsyncCeleryWebApiFunction(Function):
         method: str = 'GET'
+        timeout: int = 60
         url: str
         headers: Dict[str, str] = {}
         task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}'
 
-        def __call__(self,params: Optional[Dict[str, Any]] = None,
-                     data: Optional[Dict[str, Any]] = None,
-                     json: Optional[Dict[str, Any]] = None,
-                     debug=False,
-                     debug_data=None) -> Dict[str, Any]:
+        def _make_request(self, url: str, params: Optional[Dict[str, Any]] = None, 
+                        data: Optional[Dict[str, Any]] = None, 
+                        json: Optional[Dict[str, Any]] = None) -> requests.Response:
+            """Helper method to send an HTTP request and handle exceptions."""
             try:
-                if debug: return debug_data
                 response = requests.request(
-                    method=self.method,url=self.url,
-                    headers=self.headers,params=params,
-                    data=data,json=json
+                    method=self.method,
+                    url=url,
+                    headers=self.headers,
+                    params=params,
+                    data=data,
+                    json=json
                 )
                 response.raise_for_status()
-                # get task id
-                for k,v in response.json().items():
-                    if 'id' in k:
-                        task_id = v
-                
-                while True:
-                    response = requests.request(
-                        method='GET',
-                        url= self.task_status_url.format(task_id=task_id),
-                        headers=self.headers,params=params,
-                        data=data,json=json
-                    )
-                    if response is None:
-                        break
-                    response.raise_for_status()
-                    if response.json() is None:
-                        break
-                    if response.json()['status'] in ['SUCCESS','FAILURE','REVOKED']:
-                        if response.json()['status'] == 'FAILURE':
-                            raise ValueError(f'{response.json()}')
-                        break
-                    time.sleep(1)
-
-                try:
-                    return response.json()
-                except Exception as e:
-                    raise ValueError(f'"text":{response.text}')
+                return response
             except requests.exceptions.RequestException as e:
-                raise ValueError(f'"error": {e} "status": {getattr(e.response, "status_code", None)}')
+                error_message = f'"error": {e}, "status": {getattr(e.response, "status_code", None)}'
+                raise ValueError(error_message)
+
+        def _extract_task_id(self, response: Dict[str, Any]) -> Any:
+            """Extract the task ID from the response JSON."""
+            for key, value in response.items():
+                if 'id' in key: # usually key == 'task_id'
+                    return value
+            raise ValueError('Task ID not found in response.')
+
+        def _poll_task_status(self, task_id: Any, params: Optional[Dict[str, Any]] = None, 
+                            data: Optional[Dict[str, Any]] = None, 
+                            json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+            """Poll the task status until completion or timeout."""
+            start_time = time.time()
+            while True:
+                if time.time() - start_time > self.timeout:
+                    raise TimeoutError("Task polling timed out.")
+
+                response = self._make_request(
+                    url=self.task_status_url.format(task_id=task_id),
+                    params=params,
+                    data=data,
+                    json=json
+                )
+
+                response_data = response.json()
+                if not response_data:
+                    break
+
+                status = response_data.get('status')
+                if status in ['SUCCESS', 'FAILURE', 'REVOKED']:
+                    if status == 'FAILURE':
+                        raise ValueError(f"Task failed: {response_data}")
+                    return response_data
+
+                time.sleep(1)
+
+        def __call__(self, params: Optional[Dict[str, Any]] = None,
+                    data: Optional[Dict[str, Any]] = None,
+                    json: Optional[Dict[str, Any]] = None,
+                    debug: bool = False,
+                    debug_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+            """Main callable method to execute the task and poll its status."""
+            if debug:
+                return debug_data
+
+            # Initial task submission
+            response = self._make_request(self.url, params=params, data=data, json=json)
+            response_data = response.json()
+            
+            # Extract task ID
+            task_id = self._extract_task_id(response_data)
+
+            # Poll task status
+            return self._poll_task_status(task_id, params=params, data=data, json=json)
+
             
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   
