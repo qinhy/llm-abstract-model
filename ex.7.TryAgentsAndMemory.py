@@ -357,7 +357,7 @@ def save_memory_agent(store: LLMsStore, root_node: TextContentNode):
     memory_tree = TextMemoryTree(root_node)
     memory_tree.dump_all_embeddings('./tmp/embeddings.json')
     store.set('Memory', root_node.model_dump())
-    store.dump_RSA('./tmp/store.rjson', './tmp/public_key.pem')
+    store.dump_RSA('./tmp/store.rjson', './tmp/public_key.pem',True)
 
 def load_memory_agent():
     # Load stored RSA-encrypted data and initialize the agent
