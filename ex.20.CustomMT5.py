@@ -138,7 +138,7 @@ def init_store():
 
 # Functions for secure data storage and retrieval using RSA key pair
 def save_secure(store: LLMsStore):
-    store.dump_RSA('./tmp/ex.20.store.rjson', './tmp/public_key.pem')
+    store.dump_RSA('./tmp/ex.20.store.rjson', './tmp/public_key.pem', True)
 
 def load_secure():
     # Load stored RSA-encrypted data and initialize the agent
