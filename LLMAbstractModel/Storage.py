@@ -6,7 +6,7 @@ import fnmatch
 import json
 import unittest
 
-from .rsa import SimpleRSAChunkEncryptor
+from .rsa import SimpleRSAChunkEncryptor,PEMFileReader
 
 class AbstractStorage:
     # statics for singleton
@@ -53,15 +53,15 @@ class AbstractStorageController:
     def load(self,path):
         with open(path, "r") as tf: self.loads(tf.read())
 
-    def dump_RSA(self,path,public_key_path):
+    def dump_RSA(self,path,public_key_path,compress=False):
         data = self.dumps()        
-        public_key = SimpleRSAChunkEncryptor.load_public_key_from_pkcs8(public_key_path)
+        public_key = PEMFileReader(public_key_path).load_public_pkcs8_key()
         encryptor = SimpleRSAChunkEncryptor(public_key, None)
-        with open(path, "w") as tf: tf.write(encryptor.encrypt_string(data))
+        with open(path, "w") as tf: tf.write(encryptor.encrypt_string(data,compress))
         return data
 
     def load_RSA(self,path,private_key_path):
-        private_key = SimpleRSAChunkEncryptor.load_private_key_from_pkcs8(private_key_path)
+        private_key = PEMFileReader(private_key_path).load_private_pkcs8_key()
         encryptor = SimpleRSAChunkEncryptor(None, private_key)
         with open(path, "r") as tf: self.loads(encryptor.decrypt_string(tf.read()))
 
