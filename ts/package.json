@@ -1,0 +1,9 @@
+{
+    "type": "module",
+    "devDependencies": {
+        "ts-node": "^10.9.2"
+    },
+    "dependencies": {
+        "base64-js": "^1.5.1"
+    }
+}

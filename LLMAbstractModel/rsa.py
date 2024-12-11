@@ -1,6 +1,5 @@
 # from https://github.com/qinhy/singleton-key-value-storage.git
 import base64
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import zlib
 
 class PEMFileReader:    
