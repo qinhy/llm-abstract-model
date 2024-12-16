@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as zlib from 'zlib';
 
 
-class PEMFileReader {
+export class PEMFileReader {
     private filePath: string;
     private keyBytes: Uint8Array;
 
@@ -99,15 +99,17 @@ class PEMFileReader {
         // Skip version INTEGER
         [, index] = this.parseAsn1DerInteger(rsaKeyData, index);
 
-        const [n, nextIndex2] = this.parseAsn1DerInteger(rsaKeyData, index);
-        const [e] = this.parseAsn1DerInteger(rsaKeyData, nextIndex2);
-        const [d] = this.parseAsn1DerInteger(rsaKeyData, nextIndex2);
+        var n: BigInt;
+        var e: BigInt;
+        [n, index] = this.parseAsn1DerInteger(rsaKeyData, index);
+        [e, index] = this.parseAsn1DerInteger(rsaKeyData, index);
+        const [d] = this.parseAsn1DerInteger(rsaKeyData, index);
 
         return [d, n];
     }
 }
 
-class SimpleRSAChunkEncryptor {
+export class SimpleRSAChunkEncryptor {
     private publicKey?: [BigInt, BigInt];
     private privateKey?: [BigInt, BigInt];
     private chunkSize?: number;
@@ -133,17 +135,28 @@ class SimpleRSAChunkEncryptor {
         return Buffer.from(encryptedChunkInt.toString(16), 'hex');
     }
 
+    powermod(base: BigInt, exp: BigInt | number, p: BigInt) {
+        var result = 1n;
+        while (exp !== 0n) {
+          if (exp % 2n === 1n) result = result * base % p;
+          base = base * base % p;
+          exp >>= 1n;
+        }
+        return result;
+    }
+
     private decryptChunk(encryptedChunk: Uint8Array): Uint8Array {
+
         if (!this.privateKey) {
             throw new Error('Private key is required for decryption.');
         }
         const [d, n] = this.privateKey;
         const encryptedChunkInt = BigInt('0x' + Buffer.from(encryptedChunk).toString('hex'));
-        const decryptedChunkInt = encryptedChunkInt ** d % n;
+        const decryptedChunkInt = this.powermod(encryptedChunkInt,d,n);//encryptedChunkInt ** d % n;
         return Buffer.from(decryptedChunkInt.toString(16), 'hex');
     }
 
-    public encryptString(plaintext: string, compress: boolean = false): string {
+    public encryptString(plaintext: string, compress: boolean = true): string {
         if (!this.chunkSize) {
             throw new Error('Public key required for encryption.');
         }
@@ -200,47 +213,12 @@ function ex3() {
     console.log(`Original Plaintext: [${plaintext}]`);
 
     // Encrypt the plaintext
-    // const encryptedText = encryptor.encryptString(plaintext);
-    // console.log(`\nEncrypted (Base64 encoded): [${encryptedText}]`);
+    const encryptedText = encryptor.encryptString(plaintext);
+    console.log(`\nEncrypted (Base64 encoded): [${encryptedText}]`);
 
     // // Decrypt the encrypted text
-    // const decryptedText = encryptor.decryptString(encryptedText);
-    // console.log(`\nDecrypted Text: [${decryptedText}]`);
+    const decryptedText = encryptor.decryptString(encryptedText);
+    console.log(`\nDecrypted Text: [${decryptedText}]`);
 }
 
-ex3()
-
-// const previousMaxSafe = BigInt(Number.MAX_SAFE_INTEGER);
-// // 9007199254740991n
-
-// const maxPlusOne = previousMaxSafe + 1n;
-// // 9007199254740992n
-
-// const theFuture = previousMaxSafe + 2n;
-// // 9007199254740993n, this works now!
-
-// const multi = previousMaxSafe * 2n;
-// // 18014398509481982n
-
-// const subtr = multi - 10n;
-// // 18014398509481972n
-
-// const mod = multi % 10n;
-// // 2n
-
-// const bigN = 2n ** 54n;
-// // 18014398509481984n
-
-// bigN * -1n;
-// // -18014398509481984n
-// const y = BigInt("90071992547409919007199254740991900719925474099190071992547409919007199254740991900719925474099190071992547409919007199254740991900719925474099190071992547409919007199254740991900719925474099190071992547409919007199254740991");
-// function powermod(base, exp, p) {
-//     var result = 1n;
-//     while (exp !== 0n) {
-//       if (exp % 2n === 1n) result = result * base % p;
-//       base = base * base % p;
-//       exp >>= 1n;
-//     }
-//     return result;
-//   }
-// const tt = powermod(y,subtr,bigN);
+// ex3()

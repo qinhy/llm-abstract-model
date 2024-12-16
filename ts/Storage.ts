@@ -1,4 +1,5 @@
 // import * as fs from 'fs';
+import {PEMFileReader,SimpleRSAChunkEncryptor} from './RSA';
 
 function uuidv4(prefix = '') {
     return prefix + 'xxxx-xxxx-xxxx-xxxx-xxxx'.replace(/x/g, function () {
@@ -93,13 +94,18 @@ abstract class AbstractStorageController {
     // }
 
     // Placeholder methods for RSA encryption and decryption
-    // dumpRSA(path: string, publicKeyPath: string, compress: boolean = false): string {
-    //     throw new Error('Not implemented');
-    // }
+    dumpRSAs(publicKeyPath: string, compress: boolean = false): string {        
+        const publicKey = new PEMFileReader(publicKeyPath).loadPublicPkcs8Key();
+        const encryptor = new SimpleRSAChunkEncryptor(publicKey, null);
+        return encryptor.encryptString(this.dumps(),compress);
+    }
 
-    // loadRSA(path: string, privateKeyPath: string): void {
-    //     throw new Error('Not implemented');
-    // }
+    loadRSAs(content: string, privateKeyPath: string): void {        
+        const privateKey = new PEMFileReader(privateKeyPath).loadPrivatePkcs8Key();
+        const encryptor = new SimpleRSAChunkEncryptor(null, privateKey);
+        const decryptedText = encryptor.decryptString(content);
+        this.loads(decryptedText);
+    }
 }
 
 class TsDictStorage extends AbstractStorage {
@@ -511,6 +517,13 @@ class SingletonKeyValueStorage {
         return this.tryLoadWithErrorHandling(() => this.conn?.dumps()) || '';
     }
 
+    dumpRSAs(publicKeyPath: string, compress: boolean = false): string {
+        return this.tryLoadWithErrorHandling(() => this.conn?.dumpRSAs(publicKeyPath,compress)) || '';
+    }
+
+    loadRSAs(content: string, privateKeyPath: string): void {
+        return this.tryLoadWithErrorHandling(() => this.conn?.loadRSAs(content,privateKeyPath)) || '';
+    }
     // dump(jsonPath: string): string {
     //     return this.tryLoadWithErrorHandling(() => this.conn?.dump(jsonPath)) || '';
     // }
@@ -659,6 +672,9 @@ class Tests {
 
         this.store.set('abeta', { info: 'second' });
         this.store.set('gamma', { info: 'third' });
+
+        // console.log(this.store.dumpRSAs('../tmp/public_key.pem'));
+        
         // this.store.revertOperationsUntil(version);
 
         // console.assert(
@@ -669,4 +685,4 @@ class Tests {
 }
 
 // Running tests
-new Tests().testAll();
+// new Tests().testAll();
