@@ -160,5 +160,3 @@ cython_debug/
 ex.6.CustomMT5.private.py
 tmp/private_key.pem
 ts/node_modules/
-tauri-app/package-lock.json
-tauri-app/yarn.lock
