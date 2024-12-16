@@ -117,7 +117,8 @@
                     <div v-if="fileContent">
                         <Textarea v-model="fileContent" disabled class="w-full"></Textarea>
                         <Button label="Encrypt" @click="()=>encryptRSA(fileContent)"></Button>
-                        <Button label="Decrypt"></Button>
+                        <Button label="Decrypt" @click="()=>decryptRSA(fileContent)"></Button>
+                        <Textarea v-model="filedecode" disabled class="w-full"></Textarea>
                     </div>
                 </div>
             </TabPanel>
@@ -410,6 +411,7 @@ export default {
 
 
         const fileContent = ref("");
+        const filedecode = ref("");
         const onFileSelect = (event) => {
             const file = event.files[0];
             const reader = new FileReader();
@@ -420,14 +422,22 @@ export default {
         };
         const encryptRSA = (publicKeyString)=>{
             const publicKey = new PEMFileReader(publicKeyString).loadPublicPkcs8Key();
-            const encryptor = new SimpleRSAChunkEncryptor(publicKey, null);
-            storage_str.value = encryptor.encryptString(storage.dumps());
+            const cryptor = new SimpleRSAChunkEncryptor(publicKey, null);
+            filedecode.value = cryptor.encryptString(storage.dumps());
         }
+        const decryptRSA = (privateKeyString)=>{
+            const privateKey = new PEMFileReader(privateKeyString).loadPrivatePkcs8Key();
+            console.log(privateKey);            
+            const cryptor = new SimpleRSAChunkEncryptor(null, privateKey);
+            filedecode.value = cryptor.decryptString(filedecode.value);
+        }
+
+        
         return {
             storage, storage_str, selected_chat, markdown_config, image_on,
             user_message, ai_message,
             sendmsg, showInfo, history_repush, openaibody, get_config, command_darkmode,
-            onFileSelect,fileContent,encryptRSA
+            onFileSelect,fileContent,filedecode,encryptRSA,decryptRSA,
         };
     },
 };
