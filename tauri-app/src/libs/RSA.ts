@@ -1,6 +1,6 @@
-import * as fs from 'fs';
-import * as zlib from 'zlib';
-
+// import * as fs from 'fs';
+import { Buffer } from 'buffer';
+import pako from 'pako';
 
 export class PEMFileReader {
     private filePath: string;
@@ -8,11 +8,14 @@ export class PEMFileReader {
 
     constructor(filePath: string) {
         this.filePath = filePath;
-        this.keyBytes = this.readPemFile();
+        this.keyBytes = this.readPemFile(filePath);
     }
 
-    private readPemFile(): Uint8Array {
-        const content = fs.readFileSync(this.filePath, 'utf-8');
+    private readPemFile(path:string): Uint8Array {
+        var content = path;
+        // if(fs){
+        //     content = fs.readFileSync(this.filePath, 'utf-8');
+        // }
         const lines = content.split('\n');
         const keyData = lines
             .filter(line => !line.includes('BEGIN') && !line.includes('END'))
@@ -160,9 +163,11 @@ export class SimpleRSAChunkEncryptor {
         if (!this.chunkSize) {
             throw new Error('Public key required for encryption.');
         }
+
         // Compress the plaintext if requested
         const data = compress
-            ? zlib.deflateSync(Buffer.from(plaintext, 'utf-8'))
+            // ? zlib.deflateSync(Buffer.from(plaintext, 'utf-8'))
+            ? Buffer.from(pako.deflate(Uint8Array.from(Buffer.from(plaintext, 'utf-8'))))
             : Buffer.from(plaintext, 'utf-8');
         
         // Split the data into chunks
@@ -190,7 +195,8 @@ export class SimpleRSAChunkEncryptor {
         const decryptedChunks = decodedChunks.map(chunk => this.decryptChunk(chunk));
         const data = Buffer.concat(decryptedChunks);
         try {
-            return zlib.inflateSync(data).toString('utf-8');
+            // return zlib.inflateSync(data).toString('utf-8');
+            return pako.inflate(Uint8Array.from(data), { to: 'string' });
         } catch {
             return data.toString('utf-8');
         }

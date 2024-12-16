@@ -18,11 +18,10 @@
   <script>
   import { ref } from "vue";
   import FileUpload from "primevue/fileupload";
-  import Textarea from "primevue/textarea";
   
   export default {
     components: {
-      FileUpload,Textarea
+      FileUpload
     },
     setup() {
       const fileContent = ref("");
