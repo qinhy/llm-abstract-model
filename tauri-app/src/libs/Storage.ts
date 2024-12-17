@@ -1,5 +1,5 @@
 // import * as fs from 'fs';
-import {PEMFileReader,SimpleRSAChunkEncryptor} from './RSA';
+import { PEMFileReader, SimpleRSAChunkEncryptor } from './RSA';
 
 function uuidv4(prefix = '') {
     return prefix + 'xxxx-xxxx-xxxx-xxxx-xxxx'.replace(/x/g, function () {
@@ -76,6 +76,8 @@ abstract class AbstractStorageController {
 
     loads(jsonString: string = '{}'): void {
         const data = JSON.parse(jsonString);
+        // console.log(data);
+
         Object.entries(data).forEach(([key, value]) => {
             const val = value ? value : {}
             this.set(key, val);
@@ -94,16 +96,20 @@ abstract class AbstractStorageController {
     // }
 
     // Placeholder methods for RSA encryption and decryption
-    dumpRSAs(publicKeyPath: string, compress: boolean = false): string {        
+    dumpRSAs(publicKeyPath: string, compress: boolean = true): string {
         const publicKey = new PEMFileReader(publicKeyPath).loadPublicPkcs8Key();
-        const encryptor = new SimpleRSAChunkEncryptor(publicKey, null);
-        return encryptor.encryptString(this.dumps(),compress);
+        const cryptor = new SimpleRSAChunkEncryptor(publicKey, null);
+        return cryptor.encryptString(this.dumps(), compress);
     }
 
-    loadRSAs(content: string, privateKeyPath: string): void {        
+    loadRSAs(content: string, privateKeyPath: string): void {   
+        console.log(content,privateKeyPath);
         const privateKey = new PEMFileReader(privateKeyPath).loadPrivatePkcs8Key();
-        const encryptor = new SimpleRSAChunkEncryptor(null, privateKey);
-        const decryptedText = encryptor.decryptString(content);
+        console.log(privateKey);
+        const cryptor = new SimpleRSAChunkEncryptor(null, privateKey);
+        const decryptedText = cryptor.decryptString(content);
+        console.log(decryptedText);
+        
         this.loads(decryptedText);
     }
 }
@@ -127,7 +133,7 @@ class TsDictStorageController extends AbstractStorageController {
         return key in this.store;
     }
 
-    set(key: string, value: Record<string, any>): void {         
+    set(key: string, value: Record<string, any>): void {
         this.store[key] = value;
     }
 
@@ -364,7 +370,7 @@ export class SingletonKeyValueStorage {
         }
 
         eventNames.forEach((event) => {
-            if (slave[event]) {                
+            if (slave[event]) {
                 this.setEvent(event, slave[event].bind(slave), slave.uuid);
             } else {
                 this.logMessage(`No method "${event}" in ${slave}. Skipping it.`);
@@ -517,12 +523,13 @@ export class SingletonKeyValueStorage {
         return this.tryLoadWithErrorHandling(() => this.conn?.dumps()) || '';
     }
 
-    dumpRSAs(publicKeyPath: string, compress: boolean = false): string {
-        return this.tryLoadWithErrorHandling(() => this.conn?.dumpRSAs(publicKeyPath,compress)) || '';
+    dumpRSAs(publicKeyPath: string, compress: boolean = true): string {
+        return this.tryLoadWithErrorHandling(() => this.conn?.dumpRSAs(publicKeyPath, compress)) || '';
     }
 
-    loadRSAs(content: string, privateKeyPath: string): void {
-        return this.tryLoadWithErrorHandling(() => this.conn?.loadRSAs(content,privateKeyPath)) || '';
+    loadRSAs(content: string, privateKeyPath: string): void {        
+        // console.log(content,privateKeyPath);
+        return this.tryLoadWithErrorHandling(() => this.conn?.loadRSAs(content, privateKeyPath)) || '';
     }
     // dump(jsonPath: string): string {
     //     return this.tryLoadWithErrorHandling(() => this.conn?.dump(jsonPath)) || '';
@@ -585,7 +592,7 @@ class Tests {
         this.testVersion();
         this.testSlaves();
         this.store.clean();
-        console.log('All tests end.');        
+        console.log('All tests end.');
     }
 
     private testSetAndGet(): void {
@@ -674,7 +681,7 @@ class Tests {
         this.store.set('gamma', { info: 'third' });
 
         // console.log(this.store.dumpRSAs('../tmp/public_key.pem'));
-        
+
         // this.store.revertOperationsUntil(version);
 
         // console.assert(

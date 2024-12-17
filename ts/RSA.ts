@@ -109,6 +109,7 @@ export class PEMFileReader {
     }
 }
 
+
 export class SimpleRSAChunkEncryptor {
     private publicKey?: [BigInt, BigInt];
     private privateKey?: [BigInt, BigInt];
@@ -125,57 +126,98 @@ export class SimpleRSAChunkEncryptor {
         }
     }
 
+    powermod(base: BigInt, exp: BigInt | number, p: BigInt): BigInt {
+        let e = typeof exp === 'number' ? BigInt(exp) : exp;
+        let result = 1n;
+        let b = base % p; // optional initial reduction
+    
+        while (e !== 0n) {
+            if ((e & 1n) === 1n) {
+                result = (result * b) % p;
+            }
+            b = (b * b) % p;
+            e >>= 1n;
+        }
+        return result;
+    }
+    
+    private _chunk2Int(chunk: Uint8Array): BigInt {
+        const chunkHex = Buffer.from(chunk).toString('hex');
+        const paddedHex = chunkHex.padStart(chunk.length * 2, '0');  // Ensure proper byte length
+        const chunkInt = BigInt('0x' + paddedHex);
+        return chunkInt
+    }
+
+    private _Int2chunk(dataInt: BigInt, n: BigInt): Uint8Array {
+        const encryptedHex = dataInt.toString(16).padStart((n.toString(16).length), '0');
+        return Buffer.from(encryptedHex, 'hex');
+    }
+    
+    private encryptChunkInt(chunk: Uint8Array): BigInt {
+        if (!this.publicKey) {
+            throw new Error('Public key is required for encryption.');
+        }
+        const [e, n] = this.publicKey;
+        // const chunkInt = BigInt('0x' + Buffer.from(chunk).toString('hex'));
+       const chunkInt = this._chunk2Int(chunk);
+
+        return this.powermod(chunkInt, e, n);//chunkInt ** e % n;;
+    }
+
     private encryptChunk(chunk: Uint8Array): Uint8Array {
         if (!this.publicKey) {
             throw new Error('Public key is required for encryption.');
         }
         const [e, n] = this.publicKey;
-        const chunkInt = BigInt('0x' + Buffer.from(chunk).toString('hex'));
-        const encryptedChunkInt = chunkInt ** e % n;
-        return Buffer.from(encryptedChunkInt.toString(16), 'hex');
-    }
+        // const chunkInt = BigInt('0x' + Buffer.from(chunk).toString('hex'));        
+       const chunkInt = this._chunk2Int(chunk);
 
-    powermod(base: BigInt, exp: BigInt | number, p: BigInt) {
-        var result = 1n;
-        while (exp !== 0n) {
-          if (exp % 2n === 1n) result = result * base % p;
-          base = base * base % p;
-          exp >>= 1n;
-        }
-        return result;
+        const encryptedChunkInt = this.powermod(chunkInt, e, n);//chunkInt ** e % n;
+        // return Buffer.from(encryptedChunkInt.toString(16), 'hex');
+        return this._Int2chunk(encryptedChunkInt,n)
     }
 
     private decryptChunk(encryptedChunk: Uint8Array): Uint8Array {
-
         if (!this.privateKey) {
             throw new Error('Private key is required for decryption.');
         }
         const [d, n] = this.privateKey;
-        const encryptedChunkInt = BigInt('0x' + Buffer.from(encryptedChunk).toString('hex'));
-        const decryptedChunkInt = this.powermod(encryptedChunkInt,d,n);//encryptedChunkInt ** d % n;
-        return Buffer.from(decryptedChunkInt.toString(16), 'hex');
+        // const encryptedChunkInt = BigInt('0x' + Buffer.from(encryptedChunk).toString('hex'));
+        
+       const encryptedChunkInt = this._chunk2Int(encryptedChunk);
+
+        const decryptedChunkInt = this.powermod(encryptedChunkInt, d, n);//encryptedChunkInt ** d % n;
+        // return Buffer.from(decryptedChunkInt.toString(16), 'hex');
+        return this._Int2chunk(decryptedChunkInt,n)
     }
 
     public encryptString(plaintext: string, compress: boolean = true): string {
         if (!this.chunkSize) {
             throw new Error('Public key required for encryption.');
         }
+        const plainencoder = new TextEncoder();
+
         // Compress the plaintext if requested
         const data = compress
             ? zlib.deflateSync(Buffer.from(plaintext, 'utf-8'))
-            : Buffer.from(plaintext, 'utf-8');
-        
+            // ? Buffer.from(pako.deflate(Uint8Array.from(Buffer.from(plaintext, 'utf-8'))))
+            : plainencoder.encode(plaintext);
         // Split the data into chunks
         const chunks = Array.from({ length: Math.ceil(data.length / this.chunkSize) }, (_, i) =>
-            data.slice(i * this.chunkSize, (i + 1) * this.chunkSize)
+            data.subarray(i * this.chunkSize, (i + 1) * this.chunkSize)
         );
-    
         // Encrypt each chunk
+        const encryptedIntChunks = chunks.map(chunk => this.encryptChunkInt(chunk));
+
         const encryptedChunks = chunks.map(chunk => this.encryptChunk(chunk));
-    
         // Encode each encrypted chunk to Base64
         const encodedChunks = encryptedChunks.map(chunk => Buffer.from(chunk).toString('base64'));
-    
+
+        for (let index = 0; index < encodedChunks.length; index++) {            
+            console.log(encryptedIntChunks[index]);
+            console.log(encodedChunks[index]);
+        }
+        
         // Join the encoded chunks with a separator
         return encodedChunks.join('|');
     }
@@ -189,14 +231,24 @@ export class SimpleRSAChunkEncryptor {
         const decodedChunks = encryptedChunks.map(chunk => Buffer.from(chunk, 'base64'));
         const decryptedChunks = decodedChunks.map(chunk => this.decryptChunk(chunk));
         const data = Buffer.concat(decryptedChunks);
+        const plaindecoder = new TextDecoder('utf-8', { fatal: true });
+        console.log(data);
+        
         try {
-            return zlib.inflateSync(data).toString('utf-8');
-        } catch {
-            return data.toString('utf-8');
+            console.log(plaindecoder.decode(data));
+            return plaindecoder.decode(data);
+        } catch (e) {
+            console.log(e);
+            try {
+                // console.log(pako.inflate(Uint8Array.from(data), { to: 'string' }));
+                // return pako.inflate(Uint8Array.from(data), { to: 'string' });
+                return zlib.inflateSync(data).toString('utf-8');
+            } catch (e) {
+                console.log(e);                
+            }
         }
     }
 }
-
 function ex3() {
     const publicKeyPath = '../tmp/public_key.pem';
     const privateKeyPath = '../tmp/private_key.pem';
@@ -209,11 +261,12 @@ function ex3() {
     const encryptor = new SimpleRSAChunkEncryptor(publicKey, privateKey);
 
     // Encrypt and decrypt a sample string
-    const plaintext = "Hello, RSA encryption with .pem support!";
+    var plaintext = "Hello, RSA encryption with .pem support!";
+    plaintext = `{"Config:Global:apikey":{"name":"apikey","val":"sk-","what":"API Key","type":"string"},"Chat:eec3-410c-5d8c-b1d4-47e9":{"title":"Hello!","msg_uuids":["Message:8818-e815-01b2-5256-a8bd","Message:69ef-6a16-a73c-4746-7fa9"],"timestamp":"2024-12-17T04:18:24.502Z","uuid":"Chat:eec3-410c-5d8c-b1d4-47e9"},"Message:8818-e815-01b2-5256-a8bd":{"role":"user","content":"hi","timestamp":"2024-12-17T04:18:24.502Z","uuid":"Message:8818-e815-01b2-5256-a8bd","chat":"Chat:eec3-410c-5d8c-b1d4-47e9"},"Message:69ef-6a16-a73c-4746-7fa9":{"role":"assistant","content":"I'm ready to assist you. What do you need help with?","timestamp":"2024-12-17T04:18:24.502Z","uuid":"Message:69ef-6a16-a73c-4746-7fa9","chat":"Chat:eec3-410c-5d8c-b1d4-47e9"},"Config:Chat:eec3-410c-5d8c-b1d4-47e9:sysp":{"name":"sysp","val":"You are a helpful assistant.","what":"System Prompt","type":"string"},"Config:Chat:eec3-410c-5d8c-b1d4-47e9:modelname":{"name":"modelname","val":"gpt-4o-mini","what":"Model Name","type":"string"},"Config:Chat:eec3-410c-5d8c-b1d4-47e9:sendlast":{"name":"sendlast","val":4,"what":"Send last messages","type":"number"},"Config:Chat:eec3-410c-5d8c-b1d4-47e9:url":{"name":"url","val":"https://api.openai.com/v1/chat/completions","what":"API URL","type":"string"},"Config:Global:darkmode":{"name":"darkmode","val":true,"what":"Darkmode","type":"boolean"},"Config:Global:functions":{"name":"functions","val":{},"what":"Functions","type":"object"}}`;
     console.log(`Original Plaintext: [${plaintext}]`);
 
     // Encrypt the plaintext
-    const encryptedText = encryptor.encryptString(plaintext);
+    const encryptedText = encryptor.encryptString(plaintext,true);
     console.log(`\nEncrypted (Base64 encoded): [${encryptedText}]`);
 
     // // Decrypt the encrypted text
@@ -221,4 +274,6 @@ function ex3() {
     console.log(`\nDecrypted Text: [${decryptedText}]`);
 }
 
-// ex3()
+
+// npx tsx RSA.ts
+ex3()

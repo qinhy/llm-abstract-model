@@ -5,7 +5,7 @@
     </p>
     <Tabs value="Home" scrollable>
         <TabList>
-            <Tab v-for="i in ['Home', 'Chat', 'Config', 'Help', 'RSA encrypt']" :value="i">{{ i }}</Tab>
+            <Tab v-for="i in ['Home', 'Chat', 'Config', 'Help', 'RSA crypt']" :value="i">{{ i }}</Tab>
         </TabList>
         <TabPanels>
             <TabPanel value="Home">
@@ -43,7 +43,7 @@
                                 <i class="pi pi-replay hover:text-blue-500 hover:scale-110 transition duration-200"
                                     @click="history_repush(msg)"></i>
                                 <i class="pi pi-trash pi pi-replay hover:text-blue-500 hover:scale-110 transition duration-200"
-                                    @click="() => storage.del_msg(msg.uuid)"></i>
+                                    @click="() => { user_message.content = ' '; storage.del_msg(msg.uuid); user_message.content = '' }"></i>
                                 <span class="italic text-xs">{{ msg.timestamp }}</span>
                             </div>
                             <hr>
@@ -110,20 +110,30 @@
                 <div><Textarea v-model="storage_str" rows="5" cols="35" /></div>
             </TabPanel>
 
-            <TabPanel value="RSA encrypt">
+            <TabPanel value="RSA crypt">
                 <div>
-                    <FileUpload mode="basic" name="demo" accept=".pem" choose-label="Open Key"
-                        @select="onFileSelect" />
-                    <div v-if="fileContent">
-                        <Textarea v-model="fileContent" disabled class="w-full"></Textarea>
-                        <Button label="Encrypt" @click="()=>encryptRSA(fileContent)"></Button>
-                        <Button label="Decrypt" @click="()=>decryptRSA(fileContent)"></Button>
-                        <Textarea v-model="filedecode" disabled class="w-full"></Textarea>
+                    <FileUpload mode="basic" name="demo" accept=".pem" choose-label="Open Key" @select="onFileSelect" />
+                    <div>
+                        <Textarea v-if="fileContent" v-model="fileContent" disabled class="w-full"></Textarea>
+                        <Button v-if="fileContent.includes('PUBLIC')" label="Encrypt"
+                            @click="() => encryptRSA(fileContent)"></Button>
+                        <Button v-if="fileContent.includes('PRIVATE')" label="Decrypt"
+                            @click="() => decryptRSA(fileContent)"></Button>
+
+                        <div v-if="fileContent.includes('PUBLIC')" class="card">
+                            <span>{{ storage.dumps() }}</span>
+                        </div>
+                        <Textarea v-if="filedecode && fileContent.includes('PRIVATE')" v-model="filedecode" disabled
+                            class="w-full"></Textarea>
                     </div>
                 </div>
             </TabPanel>
         </TabPanels>
     </Tabs>
+
+    <Dialog v-model:visible="isloading" modal :closable="false" header="Loading" class="w-half center-dialog">
+        <i class="ml-4 pi pi-spinner pi-spin" style="font-size: 2rem"></i>
+    </Dialog>
 
 </template>
 
@@ -132,7 +142,7 @@
 import { ref, computed } from "vue";
 import { SingletonKeyValueStorage } from "../libs/Storage";
 import { useToast } from 'primevue/usetoast';
-import {PEMFileReader,SimpleRSAChunkEncryptor} from '../libs/RSA';
+import { PEMFileReader, SimpleRSAChunkEncryptor } from '../libs/RSA';
 
 export default {
     components: {
@@ -187,6 +197,7 @@ export default {
                 storage.set(uuid, { role: role, content: content, timestamp: get_now(), uuid: uuid, chat: chat_uuid, is_img: true });
             };
             storage.del_msg = (msg_uuid) => {
+                console.log(msg_uuid);
                 const msg = storage.get_msg(msg_uuid);
                 const chat = storage.get_chat(msg.chat);
                 chat.msg_uuids = chat.msg_uuids.filter(m_uuid => m_uuid != msg_uuid);
@@ -259,7 +270,7 @@ export default {
         const get_config = (name) => storage.get_chat_config(selected_chat.get()?.uuid, name)?.val;
         const get_functions = () => {
             const g_functions = storage.get_chat_config('Global', 'functions').val
-            return Object.entries(g_functions).map(e => e[0]);
+            return [];//Object.entries(g_functions).map(e => e[0]);
             // get_config('functions');
             // res = new Function('return {log:console.log,alert:alert}')();
         }
@@ -290,8 +301,11 @@ export default {
 
         const openaibody = (sysp = null) => {
             const body = { model: get_config('modelname'), stream: true }
-            body.functions = get_functions();
-            body.function_call = "auto";
+            if (get_functions().length > 0) {
+                body.functions = get_functions();
+                body.function_call = "auto";
+            }
+
             body.messages = [{ role: 'system', content: get_config('sysp') },
             ...storage.get_chat_msgs(selected_chat.get()?.uuid)?.msgs];
             if (!sysp) sysp = body.messages[0];
@@ -311,70 +325,70 @@ export default {
                 'Authorization': `Bearer ${storage.get_chat_config('Global', 'apikey').val}`
             }
         };
-        const openaichat = (target_message = null, sysp = null, at_end = null) => {
+        const openaichat = async (target_message = null, sysp = null, at_end = null) => {
             if (!target_message) target_message = ai_message;
             const decoder = new TextDecoder('utf-8');
-            return fetch(get_config('url'), {
-                headers: headers(), method: 'POST', body: openaibody(sysp)
-            })
-                .then(response => {
-                    if (!response.ok) { // Checks if the status code is outside of the 2xx range
-                        switch (response.status) {
-                            case 400: throw new Error('Bad Request: The server could not understand the request.');
-                            case 401: throw new Error('Unauthorized: Please check your credentials.');
-                            case 403: throw new Error('Forbidden: You do not have permission to access this resource.');
-                            case 404: throw new Error('Not Found: The requested resource could not be found.');
-                            case 429: throw new Error('Too Many Requests: You have reached the rate limit.');
-                            case 500: throw new Error('Internal Server Error: The server encountered an unexpected condition.');
-                            case 503: throw new Error('Service Unavailable: The server is currently unable to handle the request.');
-                            default: throw new Error(`An error occurred: ${response.statusText}`);
-                        }
+            try {
+                const response = await fetch(get_config('url'), {
+                    headers: headers(), method: 'POST', body: openaibody(sysp)
+                });
+
+                if (!response.ok) { // Checks if the status code is outside of the 2xx range
+                    switch (response.status) {
+                        case 400: throw new Error('Bad Request: The server could not understand the request.');
+                        case 401: throw new Error('Unauthorized: Please check your credentials.');
+                        case 403: throw new Error('Forbidden: You do not have permission to access this resource.');
+                        case 404: throw new Error('Not Found: The requested resource could not be found.');
+                        case 429: throw new Error('Too Many Requests: You have reached the rate limit.');
+                        case 500: throw new Error('Internal Server Error: The server encountered an unexpected condition.');
+                        case 503: throw new Error('Service Unavailable: The server is currently unable to handle the request.');
+                        default: throw new Error(`An error occurred: ${response.statusText}`);
                     }
-                    return response.body.getReader();
-                })
-                .then(reader => {
-                    target_message.get().content = '';
-                    const stream = new ReadableStream({
-                        start(controller) {
-                            function push() {
-                                // Read from the stream
-                                reader.read().then(({ done, value }) => {
-                                    // When no more data needs to be consumed, close the stream
-                                    if (done) {
-                                        controller.close();
+                }
+                const reader = response.body.getReader();
+                target_message.get().content = '';
+                const stream = new ReadableStream({
+                    start(controller) {
+                        function push() {
+                            // Read from the stream
+                            reader.read().then(({ done, value }) => {
+                                // When no more data needs to be consumed, close the stream
+                                if (done) {
+                                    controller.close();
+                                    return;
+                                }
+                                const text = decoder.decode(value);
+                                const lines = text.split(/\n+/);
+                                for (const line of lines) {
+                                    const json_text = line.replace(/^data:\s*/, '');
+                                    if (json_text === '[DONE]') {
+                                        if (at_end) at_end();
+                                        else if (target_message.get().content.length > 0) {
+                                            storage.add_msg(selected_chat.get().uuid, target_message.get());
+                                            target_message.get().content = '';
+                                        }
                                         return;
                                     }
-                                    const text = decoder.decode(value);
-                                    const lines = text.split(/\n+/);
-                                    for (const line of lines) {
-                                        const json_text = line.replace(/^data:\s*/, '');
-                                        if (json_text === '[DONE]') {
-                                            if (at_end) at_end();
-                                            else if (target_message.get().content.length > 0) {
-                                                storage.add_msg(selected_chat.get().uuid, target_message.get());
-                                                target_message.get().content = '';
-                                            }
-                                            return;
-                                        }
-                                        if (json_text.length == 0) continue;
-                                        const data = JSON.parse(json_text);
-                                        const content = data.choices[0].delta.content;
-                                        if (content) target_message.get().content += content;
-                                    }
-                                    // Enqueue the next data chunk into our target stream
-                                    controller.enqueue(value);
-                                    push();
-                                }).catch(e => {
-                                    showError(`${e.message}`);
-                                    controller.error(e);
-                                });
-                            }
-                            push();
+                                    if (json_text.length == 0) continue;
+                                    const data = JSON.parse(json_text);
+                                    const content = data.choices[0].delta.content;
+                                    if (content) target_message.get().content += content;
+                                }
+                                // Enqueue the next data chunk into our target stream
+                                controller.enqueue(value);
+                                push();
+                            }).catch(e => {
+                                showError(`${e.message}`);
+                                controller.error(e);
+                            });
                         }
-                    });
-                    return new Response(stream, { headers: { "Content-Type": "text/plain" } }).text();
-                })
-                .catch(e => showError(`Failed to fetch: ${e.message}`));
+                        push();
+                    }
+                });
+                return await new Response(stream, { headers: { "Content-Type": "text/plain" } }).text();
+            } catch (e_2) {
+                return showError(`Failed to fetch: ${e_2.message}`);
+            }
         }
 
         const mk_title = () => {
@@ -409,35 +423,61 @@ export default {
         });
         const image_on = ref(false);
 
+        const isloading = ref(false);
 
         const fileContent = ref("");
         const filedecode = ref("");
+
+        if (!fileContent.value && localStorage.getItem('single-file-vue-chat-encrypt')) {
+            filedecode.value = localStorage.getItem('single-file-vue-chat-encrypt');
+        }
+
         const onFileSelect = (event) => {
             const file = event.files[0];
             const reader = new FileReader();
             reader.onload = () => {
-            fileContent.value = reader.result;
+                fileContent.value = reader.result;
+                if (fileContent.value.includes('PUBLIC')) {
+                    filedecode.value = storage.dumps();
+                }
+                if (fileContent.value.includes('PRIVATE')) {
+                    filedecode.value = localStorage.getItem('single-file-vue-chat-encrypt');
+                }
             };
             reader.readAsText(file);
         };
-        const encryptRSA = (publicKeyString)=>{
-            const publicKey = new PEMFileReader(publicKeyString).loadPublicPkcs8Key();
-            const cryptor = new SimpleRSAChunkEncryptor(publicKey, null);
-            filedecode.value = cryptor.encryptString(storage.dumps());
+        const encryptRSA = (publicKeyString) => {
+            isloading.value = true;
+            setTimeout(() => {
+                if (!publicKeyString) publicKeyString = localStorage.getItem('single-file-vue-chat-publickey');
+                filedecode.value = storage.dumpRSAs(publicKeyString, false);
+                localStorage.setItem('single-file-vue-chat-publickey', publicKeyString);
+                localStorage.setItem('single-file-vue-chat-encrypt', filedecode.value);
+                localStorage.setItem('single-file-vue-chat-raw',storage.dumps());
+                isloading.value = false;
+            }, 100);
         }
-        const decryptRSA = (privateKeyString)=>{
-            const privateKey = new PEMFileReader(privateKeyString).loadPrivatePkcs8Key();
-            console.log(privateKey);            
-            const cryptor = new SimpleRSAChunkEncryptor(null, privateKey);
-            filedecode.value = cryptor.decryptString(filedecode.value);
+        const decryptRSA = (privateKeyString) => {
+            isloading.value = true;
+            setTimeout(() => {
+                if (localStorage.getItem('single-file-vue-chat-encrypt')) {
+                    filedecode.value = localStorage.getItem('single-file-vue-chat-encrypt');
+                }
+                storage.clean();
+                storage.loadRSAs(filedecode.value, privateKeyString);
+                filedecode.value = storage.dumps();
+                fileContent.value = localStorage.getItem('single-file-vue-chat-publickey');
+                isloading.value = false;
+            }, 100);
         }
 
-        
+
         return {
+            isloading,
             storage, storage_str, selected_chat, markdown_config, image_on,
             user_message, ai_message,
             sendmsg, showInfo, history_repush, openaibody, get_config, command_darkmode,
-            onFileSelect,fileContent,filedecode,encryptRSA,decryptRSA,
+            onFileSelect, fileContent, filedecode, encryptRSA, decryptRSA,
         };
     },
 };
