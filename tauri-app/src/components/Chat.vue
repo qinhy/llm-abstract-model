@@ -36,8 +36,10 @@
                                     <p class="font-bold">{{ msg.role }} :</p><img
                                         :src="`data:image/jpeg;base64,${msg.content}`">
                                 </div>
-                                <div v-else v-html="markdown_config.render(`**${msg.role}** : ${msg.content}`)">
-                                </div>
+                                <MdPreview v-else :modelValue="`**${msg.role}** : ${msg.content}`" :theme="darkmode?'dark':''" />
+                                <!-- <div v-else v-html="markdown_config.render(`**${msg.role}** : ${msg.content}`)">                                    
+                                
+                                </div> -->
                             </div>
                             <div class="flex justify-end">
                                 <i class="pi pi-replay hover:text-blue-500 hover:scale-110 transition duration-200"
@@ -73,20 +75,22 @@
             </TabPanel>
 
             <TabPanel value="Config">
-                <div class="card"
-                    v-for="config in [...storage.get_chat_configs('Global'), ...storage.get_chat_configs(selected_chat.uuid)]">
-                    <label :for="config.name"> {{ config.what }}</label>
-                    <div v-if="config.type == 'boolean'">
-                        <ToggleSwitch :inputId="config.name" v-model="config.val" @click="command_darkmode" />
-                    </div>
+                <div v-for="configs in [[...storage.get_chat_configs('Global')],[...storage.get_chat_configs(selected_chat.uuid)]]">
+                    <div class="card"
+                        v-for="config in configs">
+                        <label :for="config.name"> {{ config.what }}</label>
+                        <div v-if="config.type == 'boolean'">
+                            <ToggleSwitch :inputId="config.name" v-model="config.val" @click="command_darkmode" />
+                        </div>
 
-                    <div v-else-if="config.type == 'string'">
-                        <InputText :id="config.name" v-model="config.val" />
+                        <div v-else-if="config.type == 'string'">
+                            <InputText v-model="config.val" />
+                        </div>
+                        <div v-else-if="config.type == 'number'">
+                            <InputNumber v-model="config.val" mode="decimal" showButtons :min="0" :max="100" />
+                        </div>
                     </div>
-                    <div v-else-if="config.type == 'number'">
-                        <InputNumber :id="config.name" v-model="config.val" mode="decimal" showButtons :min="0"
-                            :max="100" />
-                    </div>
+                    <hr>
                 </div>
             </TabPanel>
 
@@ -94,8 +98,10 @@
                 <hr>
                 <p class="font-bold">You Configs</p>
                 <div class="card">
-                    <p
-                        v-for="conf in [...storage.get_chat_configs('Global'), ...storage.get_chat_configs(selected_chat.uuid)]">
+                    <p v-for="conf in [...storage.get_chat_configs('Global')]">
+                        {{ conf }}</p>
+                        <hr>
+                    <p v-for="conf in [...storage.get_chat_configs(selected_chat.uuid)]">
                         {{ conf }}</p>
                 </div>
                 <hr>
@@ -106,8 +112,8 @@
                 <hr>
                 <hr>
 
-                <p class="font-bold">Back data in JSON, for restore or backup</p>
-                <div><Textarea v-model="storage_str" rows="5" cols="35" /></div>
+                <!-- <p class="font-bold">Back data in JSON, for restore or backup</p>
+                <div><Textarea v-model="storage_str" rows="5" cols="35" /></div> -->
             </TabPanel>
 
             <TabPanel value="RSA crypt">
@@ -240,7 +246,11 @@ export default {
         selected_chat.get = () => selected_chat.value;
 
         storage.set_chat_config('Global', 'darkmode', true, 'Darkmode');
-        const command_darkmode = () => document.getElementsByTagName('html')[0].classList.toggle('app-dark');
+        const darkmode = ref(false);
+        const command_darkmode = () => {
+            document.getElementsByTagName('html')[0].classList.toggle('app-dark');
+            darkmode.value = !darkmode.value;
+        };
         command_darkmode();
 
         class GreetUser {
@@ -453,7 +463,6 @@ export default {
                 filedecode.value = storage.dumpRSAs(publicKeyString, true);
                 localStorage.setItem('single-file-vue-chat-publickey', publicKeyString);
                 localStorage.setItem('single-file-vue-chat-encrypt', filedecode.value);
-                localStorage.setItem('single-file-vue-chat-raw',storage.dumps());
                 isloading.value = false;
             }, 100);
         }
@@ -476,7 +485,7 @@ export default {
             isloading,
             storage, storage_str, selected_chat, markdown_config, image_on,
             user_message, ai_message,
-            sendmsg, showInfo, history_repush, openaibody, get_config, command_darkmode,
+            sendmsg, showInfo, history_repush, openaibody, get_config, command_darkmode, darkmode,
             onFileSelect, fileContent, filedecode, encryptRSA, decryptRSA,
         };
     },

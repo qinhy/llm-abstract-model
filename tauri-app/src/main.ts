@@ -1,9 +1,8 @@
-
-import * as JSZIP from './libs/jszip/jszip.js';
-import * as JSZipUtils from './libs/jszip/jszip-utils.js';
+// import * as JSZIP from './libs/jszip/jszip.js';
+// import * as JSZipUtils from './libs/jszip/jszip-utils.js';
 
 import { createI18n } from 'vue-i18n'
-import { messages } from "./i18n.js";
+import { messages } from "./i18n";
 
 // import Router from './router'
 
@@ -28,7 +27,7 @@ import './assets/style.css';
 // import "./style.css";
 import "./flags.css";
 // import "primevue/resources/themes/lara-dark-green/theme.css";
-import Aura from '@primevue/themes/aura';
+// import Aura from '@primevue/themes/aura';
 import Lara from '@primevue/themes/lara';
 import "primeicons/primeicons.css";
 
@@ -36,7 +35,7 @@ import { createApp } from "vue";
 import App from "./App.vue";
 
 import PrimeVue from "primevue/config";
-import AppState from './plugins/appState.js';
+import AppState from './plugins/appState';
 // import Noir from './presets/Noir.js';
 import ThemeSwitcher from './components/ThemeSwitcher.vue';
 import AutoComplete from 'primevue/autocomplete';
@@ -160,6 +159,8 @@ import TreeSelect from 'primevue/treeselect';
 import TreeTable from 'primevue/treetable';
 import VirtualScroller from 'primevue/virtualscroller';
 
+import { MdPreview } from 'md-editor-v3';
+import 'md-editor-v3/lib/style.css'; // Import the styles
 
 const app = createApp(App);
 
@@ -178,7 +179,7 @@ app.use(ConfirmationService);
 app.use(ToastService);
 app.use(DialogService);
 app.use(AppState);
-
+app.component('MdPreview', MdPreview); // Register as a global component
 app.use(i18n)
 // app.use(Router);
 

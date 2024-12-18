@@ -40,24 +40,29 @@ abstract class AbstractStorageController {
     }
 
     exists(key: string): boolean {
+        key
         console.error(`[${this.constructor.name}]: not implemented`);
         return false;
     }
 
     set(key: string, value: Record<string, any>): void {
+        key;value;
         console.error(`[${this.constructor.name}]: not implemented`);
     }
 
     get(key: string): Record<string, any> | null {
+        key;
         console.error(`[${this.constructor.name}]: not implemented`);
         return null;
     }
 
     delete(key: string): void {
+        key;
         console.error(`[${this.constructor.name}]: not implemented`);
     }
 
     keys(pattern: string = '*'): string[] {
+        pattern;
         console.error(`[${this.constructor.name}]: not implemented`);
         return [];
     }
@@ -560,136 +565,136 @@ export class SingletonKeyValueStorage {
     }
 }
 
-class Tests {
-    private store: SingletonKeyValueStorage;
+// class Tests {
+//     private store: SingletonKeyValueStorage;
 
-    constructor() {
-        this.store = new SingletonKeyValueStorage();
-    }
+//     constructor() {
+//         this.store = new SingletonKeyValueStorage();
+//     }
 
-    testAll(num: number = 1): void {
-        // this.testJs(num);
-        this.testLocalStorage(num);
-    }
+//     testAll(num: number = 1): void {
+//         // this.testJs(num);
+//         this.testLocalStorage(num);
+//     }
 
-    private testJs(num: number = 1): void {
-        this.store.tsBackend();
-        for (let i = 0; i < num; i++) this.testAllCases();
-    }
+//     private testJs(num: number = 1): void {
+//         this.store.tsBackend();
+//         for (let i = 0; i < num; i++) this.testAllCases();
+//     }
 
-    private testLocalStorage(num: number = 1): void {
-        this.store.tempTsBackend();
-        for (let i = 0; i < num; i++) this.testAllCases();
-    }
+//     private testLocalStorage(num: number = 1): void {
+//         this.store.tempTsBackend();
+//         for (let i = 0; i < num; i++) this.testAllCases();
+//     }
 
-    private testAllCases(): void {
-        this.testSetAndGet();
-        this.testExists();
-        this.testDelete();
-        this.testKeys();
-        this.testGetNonexistent();
-        this.testDumpAndLoad();
-        this.testVersion();
-        this.testSlaves();
-        this.store.clean();
-        console.log('All tests end.');
-    }
+//     private testAllCases(): void {
+//         this.testSetAndGet();
+//         this.testExists();
+//         this.testDelete();
+//         this.testKeys();
+//         this.testGetNonexistent();
+//         this.testDumpAndLoad();
+//         this.testVersion();
+//         this.testSlaves();
+//         this.store.clean();
+//         console.log('All tests end.');
+//     }
 
-    private testSetAndGet(): void {
-        this.store.set('test1', { data: 123 });
-        console.assert(
-            JSON.stringify(this.store.get('test1')) === JSON.stringify({ data: 123 }),
-            "The retrieved value should match the set value."
-        );
-    }
+//     private testSetAndGet(): void {
+//         this.store.set('test1', { data: 123 });
+//         console.assert(
+//             JSON.stringify(this.store.get('test1')) === JSON.stringify({ data: 123 }),
+//             "The retrieved value should match the set value."
+//         );
+//     }
 
-    private testExists(): void {
-        this.store.set('test2', { data: 456 });
-        console.assert(this.store.exists('test2') === true, "Key should exist after being set.");
-    }
+//     private testExists(): void {
+//         this.store.set('test2', { data: 456 });
+//         console.assert(this.store.exists('test2') === true, "Key should exist after being set.");
+//     }
 
-    private testDelete(): void {
-        this.store.set('test3', { data: 789 });
-        this.store.delete('test3');
-        console.assert(this.store.exists('test3') === false, "Key should not exist after being deleted.");
-    }
+//     private testDelete(): void {
+//         this.store.set('test3', { data: 789 });
+//         this.store.delete('test3');
+//         console.assert(this.store.exists('test3') === false, "Key should not exist after being deleted.");
+//     }
 
-    private testKeys(): void {
-        this.store.set('alpha', { info: 'first' });
-        this.store.set('abeta', { info: 'second' });
-        this.store.set('gamma', { info: 'third' });
-        const expectedKeys = ['alpha', 'abeta'];
-        console.assert(
-            JSON.stringify(this.store.keys('a*').sort()) === JSON.stringify(expectedKeys.sort()),
-            "Should return the correct keys matching the pattern."
-        );
-    }
+//     private testKeys(): void {
+//         this.store.set('alpha', { info: 'first' });
+//         this.store.set('abeta', { info: 'second' });
+//         this.store.set('gamma', { info: 'third' });
+//         const expectedKeys = ['alpha', 'abeta'];
+//         console.assert(
+//             JSON.stringify(this.store.keys('a*').sort()) === JSON.stringify(expectedKeys.sort()),
+//             "Should return the correct keys matching the pattern."
+//         );
+//     }
 
-    private testGetNonexistent(): void {
-        console.assert(this.store.get('nonexistent') === null, "Getting a non-existent key should return null.");
-    }
+//     private testGetNonexistent(): void {
+//         console.assert(this.store.get('nonexistent') === null, "Getting a non-existent key should return null.");
+//     }
 
-    private testDumpAndLoad(): void {
-        const raw = {
-            "test1": { "data": 123 }
-        };
+//     private testDumpAndLoad(): void {
+//         const raw = {
+//             "test1": { "data": 123 }
+//         };
 
-        this.store.clean();
-        console.assert(this.store.dumps() === '{}', "Should return the correct keys and values.");
+//         this.store.clean();
+//         console.assert(this.store.dumps() === '{}', "Should return the correct keys and values.");
 
-        this.store.clean();
-        this.store.loads(JSON.stringify(raw));
-        console.assert(
-            JSON.stringify(JSON.parse(this.store.dumps())) === JSON.stringify(raw),
-            "Should return the correct keys and values."
-        );
-    }
+//         this.store.clean();
+//         this.store.loads(JSON.stringify(raw));
+//         console.assert(
+//             JSON.stringify(JSON.parse(this.store.dumps())) === JSON.stringify(raw),
+//             "Should return the correct keys and values."
+//         );
+//     }
 
-    private testSlaves(): void {
-        this.store.clean();
-        this.store.loads(JSON.stringify({
-            "alpha": { "info": "first" },
-            "abeta": { "info": "second" },
-            "gamma": { "info": "third" }
-        }));
+//     private testSlaves(): void {
+//         this.store.clean();
+//         this.store.loads(JSON.stringify({
+//             "alpha": { "info": "first" },
+//             "abeta": { "info": "second" },
+//             "gamma": { "info": "third" }
+//         }));
 
-        if (this.store.conn?.constructor.name === 'SingletonTsDictStorageController') return;
+//         if (this.store.conn?.constructor.name === 'SingletonTsDictStorageController') return;
 
-        const store2 = new SingletonKeyValueStorage();
-        store2.tempTsBackend();
+//         const store2 = new SingletonKeyValueStorage();
+//         store2.tempTsBackend();
 
-        this.store.addSlave(store2);
-        this.store.set('alpha', { info: 'first' });
-        this.store.set('abeta', { info: 'second' });
-        this.store.set('gamma', { info: 'third' });
-        this.store.delete('abeta');
+//         this.store.addSlave(store2);
+//         this.store.set('alpha', { info: 'first' });
+//         this.store.set('abeta', { info: 'second' });
+//         this.store.set('gamma', { info: 'third' });
+//         this.store.delete('abeta');
 
-        console.assert(
-            JSON.stringify(JSON.parse(this.store.dumps()).gamma) === JSON.stringify(JSON.parse(store2.dumps()).gamma),
-            "Should return the correct keys and values."
-        );
-    }
+//         console.assert(
+//             JSON.stringify(JSON.parse(this.store.dumps()).gamma) === JSON.stringify(JSON.parse(store2.dumps()).gamma),
+//             "Should return the correct keys and values."
+//         );
+//     }
 
-    private testVersion(): void {
-        this.store.versionControl = true;
-        this.store.clean();
-        this.store.set('alpha', { info: 'first' });
-        const data = this.store.dumps();
-        const version = this.store.getCurrentVersion();
+//     private testVersion(): void {
+//         this.store.versionControl = true;
+//         this.store.clean();
+//         this.store.set('alpha', { info: 'first' });
+//         const data = this.store.dumps();
+//         const version = this.store.getCurrentVersion();
 
-        this.store.set('abeta', { info: 'second' });
-        this.store.set('gamma', { info: 'third' });
+//         this.store.set('abeta', { info: 'second' });
+//         this.store.set('gamma', { info: 'third' });
 
-        // console.log(this.store.dumpRSAs('../tmp/public_key.pem'));
+//         // console.log(this.store.dumpRSAs('../tmp/public_key.pem'));
 
-        // this.store.revertOperationsUntil(version);
+//         // this.store.revertOperationsUntil(version);
 
-        // console.assert(
-        //     JSON.stringify(JSON.parse(this.store.dumps())) === JSON.stringify(JSON.parse(data)),
-        //     "Should return the same keys and values."
-        // );
-    }
-}
+//         // console.assert(
+//         //     JSON.stringify(JSON.parse(this.store.dumps())) === JSON.stringify(JSON.parse(data)),
+//         //     "Should return the same keys and values."
+//         // );
+//     }
+// }
 
 // Running tests
 // new Tests().testAll();
