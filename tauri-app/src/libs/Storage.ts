@@ -103,12 +103,12 @@ abstract class AbstractStorageController {
     }
 
     loadRSAs(content: string, privateKeyPath: string): void {   
-        console.log(content,privateKeyPath);
+        // console.log(content,privateKeyPath);
         const privateKey = new PEMFileReader(privateKeyPath).loadPrivatePkcs8Key();
-        console.log(privateKey);
+        // console.log(privateKey);
         const cryptor = new SimpleRSAChunkEncryptor(null, privateKey);
         const decryptedText = cryptor.decryptString(content);
-        console.log(decryptedText);
+        // console.log(decryptedText);
         
         this.loads(decryptedText);
     }

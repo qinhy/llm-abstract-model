@@ -450,7 +450,7 @@ export default {
             isloading.value = true;
             setTimeout(() => {
                 if (!publicKeyString) publicKeyString = localStorage.getItem('single-file-vue-chat-publickey');
-                filedecode.value = storage.dumpRSAs(publicKeyString, false);
+                filedecode.value = storage.dumpRSAs(publicKeyString, true);
                 localStorage.setItem('single-file-vue-chat-publickey', publicKeyString);
                 localStorage.setItem('single-file-vue-chat-encrypt', filedecode.value);
                 localStorage.setItem('single-file-vue-chat-raw',storage.dumps());
