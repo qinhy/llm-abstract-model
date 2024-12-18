@@ -130,7 +130,7 @@ export class SimpleRSAChunkEncryptor {
         let e = typeof exp === 'number' ? BigInt(exp) : exp;
         let result = 1n;
         let b = base % p; // optional initial reduction
-    
+
         while (e !== 0n) {
             if ((e & 1n) === 1n) {
                 result = (result * b) % p;
@@ -140,7 +140,7 @@ export class SimpleRSAChunkEncryptor {
         }
         return result;
     }
-    
+
     private _chunk2Int(chunk: Uint8Array): BigInt {
         const chunkHex = Buffer.from(chunk).toString('hex');
         const paddedHex = chunkHex.padStart(chunk.length * 2, '0');  // Ensure proper byte length
@@ -148,47 +148,33 @@ export class SimpleRSAChunkEncryptor {
         return chunkInt
     }
 
-    private _Int2chunk(dataInt: BigInt, n: BigInt): Uint8Array {
-        const encryptedHex = dataInt.toString(16).padStart((n.toString(16).length), '0');
+    private _Int2chunk(dataInt: BigInt, n: BigInt = null): Uint8Array {
+        var encryptedHex = dataInt.toString(16);
+        if (n) {
+            encryptedHex = encryptedHex.padStart((n.toString(16).length), '0');
+        }
         return Buffer.from(encryptedHex, 'hex');
     }
-    
+
     private encryptChunkInt(chunk: Uint8Array): BigInt {
         if (!this.publicKey) {
             throw new Error('Public key is required for encryption.');
         }
         const [e, n] = this.publicKey;
         // const chunkInt = BigInt('0x' + Buffer.from(chunk).toString('hex'));
-       const chunkInt = this._chunk2Int(chunk);
-
+        const chunkInt = this._chunk2Int(chunk);
+        // return Buffer.from(encryptedChunkInt.toString(16), 'hex');
         return this.powermod(chunkInt, e, n);//chunkInt ** e % n;;
     }
 
-    private encryptChunk(chunk: Uint8Array): Uint8Array {
-        if (!this.publicKey) {
-            throw new Error('Public key is required for encryption.');
-        }
-        const [e, n] = this.publicKey;
-        // const chunkInt = BigInt('0x' + Buffer.from(chunk).toString('hex'));        
-       const chunkInt = this._chunk2Int(chunk);
-
-        const encryptedChunkInt = this.powermod(chunkInt, e, n);//chunkInt ** e % n;
-        // return Buffer.from(encryptedChunkInt.toString(16), 'hex');
-        return this._Int2chunk(encryptedChunkInt,n)
-    }
-
-    private decryptChunk(encryptedChunk: Uint8Array): Uint8Array {
+    private decryptChunkInt(encryptedChunk: Uint8Array): BigInt {
         if (!this.privateKey) {
             throw new Error('Private key is required for decryption.');
         }
         const [d, n] = this.privateKey;
-        // const encryptedChunkInt = BigInt('0x' + Buffer.from(encryptedChunk).toString('hex'));
-        
-       const encryptedChunkInt = this._chunk2Int(encryptedChunk);
-
-        const decryptedChunkInt = this.powermod(encryptedChunkInt, d, n);//encryptedChunkInt ** d % n;
-        // return Buffer.from(decryptedChunkInt.toString(16), 'hex');
-        return this._Int2chunk(decryptedChunkInt,n)
+        // const encryptedChunkInt = BigInt('0x' + Buffer.from(encryptedChunk).toString('hex'));        
+        const encryptedChunkInt = this._chunk2Int(encryptedChunk);
+        return this.powermod(encryptedChunkInt, d, n);//encryptedChunkInt ** d % n;
     }
 
     public encryptString(plaintext: string, compress: boolean = true): string {
@@ -196,7 +182,6 @@ export class SimpleRSAChunkEncryptor {
             throw new Error('Public key required for encryption.');
         }
         const plainencoder = new TextEncoder();
-
         // Compress the plaintext if requested
         const data = compress
             ? zlib.deflateSync(Buffer.from(plaintext, 'utf-8'))
@@ -206,47 +191,45 @@ export class SimpleRSAChunkEncryptor {
         const chunks = Array.from({ length: Math.ceil(data.length / this.chunkSize) }, (_, i) =>
             data.subarray(i * this.chunkSize, (i + 1) * this.chunkSize)
         );
-        // Encrypt each chunk
-        const encryptedIntChunks = chunks.map(chunk => this.encryptChunkInt(chunk));
-
-        const encryptedChunks = chunks.map(chunk => this.encryptChunk(chunk));
+        const [e, n] = this.publicKey;
+        const encryptedChunkInts = chunks.map(chunk => this.encryptChunkInt(chunk));
         // Encode each encrypted chunk to Base64
-        const encodedChunks = encryptedChunks.map(chunk => Buffer.from(chunk).toString('base64'));
-
-        for (let index = 0; index < encodedChunks.length; index++) {            
-            console.log(encryptedIntChunks[index]);
-            console.log(encodedChunks[index]);
-        }
-        
+        const encodedChunks = encryptedChunkInts.map(chunk =>
+            Buffer.from(this._Int2chunk(chunk, n)).toString('base64'));
         // Join the encoded chunks with a separator
         return encodedChunks.join('|');
     }
-    
 
     public decryptString(encryptedData: string): string {
         if (!this.privateKey) {
             throw new Error('Private key required for decryption.');
         }
+        const [d, n] = this.privateKey;
         const encryptedChunks = encryptedData.split('|');
         const decodedChunks = encryptedChunks.map(chunk => Buffer.from(chunk, 'base64'));
-        const decryptedChunks = decodedChunks.map(chunk => this.decryptChunk(chunk));
-        const data = Buffer.concat(decryptedChunks);
+        const decryptedChunkInts = decodedChunks.map(chunk => this.decryptChunkInt(chunk));
+        var data = Buffer.concat(decryptedChunkInts.map(i => this._Int2chunk(i, n)));
         const plaindecoder = new TextDecoder('utf-8', { fatal: true });
-        console.log(data);
-        
-        try {
-            console.log(plaindecoder.decode(data));
-            return plaindecoder.decode(data);
-        } catch (e) {
-            console.log(e);
+        const tryDecoding = (decryptedChunkInts: BigInt[], n: BigInt) => {
+            const data = Buffer.concat(decryptedChunkInts.map(i => this._Int2chunk(i, n)));
             try {
-                // console.log(pako.inflate(Uint8Array.from(data), { to: 'string' }));
-                // return pako.inflate(Uint8Array.from(data), { to: 'string' });
-                return zlib.inflateSync(data).toString('utf-8');
+                return plaindecoder.decode(data);
             } catch (e) {
-                console.log(e);                
+                try {
+                    return zlib.inflateSync(data).toString('utf-8');
+                } catch (e) {
+                    return null; // Return null if both decoding attempts fail
+                }
             }
-        }
+        };
+        // First attempt with 'n' parameter
+        let result = tryDecoding(decryptedChunkInts, n);
+        if (result !== null) return result;
+        // Second attempt with 'null' parameter
+        result = tryDecoding(decryptedChunkInts, null);
+        if (result !== null) return result;
+        // Raise an error if all decoding attempts fail
+        throw new Error("Failed to decode data after all attempts.");
     }
 }
 function ex3() {
@@ -256,7 +239,7 @@ function ex3() {
     // Load keys from .pem files
     const publicKey = new PEMFileReader(publicKeyPath).loadPublicPkcs8Key();
     const privateKey = new PEMFileReader(privateKeyPath).loadPrivatePkcs8Key();
-    
+
     // Instantiate the encryptor with the loaded keys
     const encryptor = new SimpleRSAChunkEncryptor(publicKey, privateKey);
 
@@ -266,7 +249,7 @@ function ex3() {
     console.log(`Original Plaintext: [${plaintext}]`);
 
     // Encrypt the plaintext
-    const encryptedText = encryptor.encryptString(plaintext,true);
+    const encryptedText = encryptor.encryptString(plaintext, false);
     console.log(`\nEncrypted (Base64 encoded): [${encryptedText}]`);
 
     // // Decrypt the encrypted text
@@ -276,4 +259,4 @@ function ex3() {
 
 
 // npx tsx RSA.ts
-ex3()
+// ex3()
