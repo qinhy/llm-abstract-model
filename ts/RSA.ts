@@ -119,10 +119,8 @@ export class SimpleRSAChunkEncryptor {
     constructor(publicKey?: [BigInt, BigInt], privateKey?: [BigInt, BigInt]) {
         this.publicKey = publicKey;
         this.privateKey = privateKey;
-        if (publicKey) {
-            const [e, n] = this.publicKey;
-            this.chunkSize = Math.floor(n.toString(2).length / 8);
-            const [e, n] = this.publicKey;
+        if (this.publicKey) {
+            const [, n] = this.publicKey;
             this.chunkSize = Math.floor(n.toString(2).length / 8);
             if (this.chunkSize <= 0) {
                 throw new Error('The modulus "n" is too small. Please use a larger key size.');
@@ -141,28 +139,16 @@ export class SimpleRSAChunkEncryptor {
             }
             b = (b * b) % p;
             e >>= 1n;
-    powermod(base: BigInt, exp: BigInt | number, p: BigInt): BigInt {
-        let e = typeof exp === 'number' ? BigInt(exp) : exp;
-        let result = 1n;
-        let b = base % p; // optional initial reduction
-
-        while (e !== 0n) {
-            if ((e & 1n) === 1n) {
-                result = (result * b) % p;
-            }
-            b = (b * b) % p;
-            e >>= 1n;
         }
         return result;
     }
+
     public encryptString(plaintext: string, compress: boolean = true): string {
         // Ensure the chunk size is defined
         // Ensure the chunk size is defined
         if (!this.chunkSize) {
             throw new Error('Public key required for encryption.');
         }        
-        const plainEncoder = new TextEncoder();
-    
         const plainEncoder = new TextEncoder();
     
         // Step 1: Step 1: Compress the plaintext if requested, otherwise encode it as-is, otherwise encode it as-is
@@ -203,27 +189,7 @@ export class SimpleRSAChunkEncryptor {
         }        
         const [d, n] = this.privateKey; // Destructure private key components once
     
-        const [d, n] = this.privateKey; // Destructure private key components once
-    
         const encryptedChunks = encryptedData.split('|');
-    
-        // Step 1: Decode Base64 chunks to Buffers
-        const decryptedChunks = encryptedChunks
-                .map(chunk => Buffer.from(chunk, 'base64'))
-                // Step 2: Convert Buffers to hex strings
-                .map(buffer => buffer.toString('hex'))
-                // Step 3: Convert hex strings to BigInts
-                .map(hex => BigInt('0x' + hex))
-                // Step 4: Decrypt BigInts using the private key
-                .map(chunkInt => this.powermod(chunkInt, d, n))
-                // Step 5: Convert decrypted BigInts to hex strings
-                .map(chunkInt => chunkInt.toString(16))            
-                // Step 6: Verify and slice hex strings, then convert to Buffers
-                .map(hex => (hex.at(0) === '1' ? hex.slice(1) : 
-                        (() => { throw new Error('decryptChunkHex must start with 0x1!'); })()))
-                .map(slicedHex => Buffer.from(slicedHex, 'hex'));
-    
-        // Step 7: Concatenate Buffers
     
         // Step 1: Decode Base64 chunks to Buffers
         const decryptedChunks = encryptedChunks
@@ -278,10 +244,10 @@ function ex3() {
     console.log(`Original Plaintext: [${plaintext}]`);
 
     // Encrypt the plaintext
-    const encryptedText = encryptor.encryptString(plaintext, true, true);
+    const encryptedText = encryptor.encryptString(plaintext, true);
     console.log(`\nEncrypted (Base64 encoded): [${encryptedText}]`);
 
-    // // Decrypt the encrypted text
+    // Decrypt the encrypted text
     const decryptedText = encryptor.decryptString(encryptedText);
     console.log(`\nDecrypted Text: [${decryptedText}]`);
 }
@@ -289,5 +255,4 @@ function ex3() {
 
 
 // npx tsx RSA.ts
-// npx tsx RSA.ts
-ex3()
+// ex3()
