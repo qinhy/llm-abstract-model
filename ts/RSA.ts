@@ -110,6 +110,7 @@ export class PEMFileReader {
 }
 
 
+
 export class SimpleRSAChunkEncryptor {
     private publicKey?: [BigInt, BigInt];
     private privateKey?: [BigInt, BigInt];
@@ -119,6 +120,8 @@ export class SimpleRSAChunkEncryptor {
         this.publicKey = publicKey;
         this.privateKey = privateKey;
         if (publicKey) {
+            const [e, n] = this.publicKey;
+            this.chunkSize = Math.floor(n.toString(2).length / 8);
             const [e, n] = this.publicKey;
             this.chunkSize = Math.floor(n.toString(2).length / 8);
             if (this.chunkSize <= 0) {
@@ -138,17 +141,31 @@ export class SimpleRSAChunkEncryptor {
             }
             b = (b * b) % p;
             e >>= 1n;
+    powermod(base: BigInt, exp: BigInt | number, p: BigInt): BigInt {
+        let e = typeof exp === 'number' ? BigInt(exp) : exp;
+        let result = 1n;
+        let b = base % p; // optional initial reduction
+
+        while (e !== 0n) {
+            if ((e & 1n) === 1n) {
+                result = (result * b) % p;
+            }
+            b = (b * b) % p;
+            e >>= 1n;
         }
         return result;
     }
     public encryptString(plaintext: string, compress: boolean = true): string {
         // Ensure the chunk size is defined
+        // Ensure the chunk size is defined
         if (!this.chunkSize) {
             throw new Error('Public key required for encryption.');
-        }    
+        }        
         const plainEncoder = new TextEncoder();
     
-        // Step 1: Compress the plaintext if requested, otherwise encode it as-is
+        const plainEncoder = new TextEncoder();
+    
+        // Step 1: Step 1: Compress the plaintext if requested, otherwise encode it as-is, otherwise encode it as-is
         const data = compress
             ? zlib.deflateSync(Buffer.from(plaintext, 'utf-8'))
             : plainEncoder.encode(plaintext);
@@ -177,14 +194,36 @@ export class SimpleRSAChunkEncryptor {
     
         // Step 4: Join all the encrypted Base64-encoded chunks with a separator
         return encryptedChunks.join('|');
+        // Step 4: Join all the encrypted Base64-encoded chunks with a separator
+        return encryptedChunks.join('|');
     }
     public decryptString(encryptedData: string): string {
         if (!this.privateKey) {
             throw new Error('Private key required for decryption.');
-        }    
+        }        
+        const [d, n] = this.privateKey; // Destructure private key components once
+    
         const [d, n] = this.privateKey; // Destructure private key components once
     
         const encryptedChunks = encryptedData.split('|');
+    
+        // Step 1: Decode Base64 chunks to Buffers
+        const decryptedChunks = encryptedChunks
+                .map(chunk => Buffer.from(chunk, 'base64'))
+                // Step 2: Convert Buffers to hex strings
+                .map(buffer => buffer.toString('hex'))
+                // Step 3: Convert hex strings to BigInts
+                .map(hex => BigInt('0x' + hex))
+                // Step 4: Decrypt BigInts using the private key
+                .map(chunkInt => this.powermod(chunkInt, d, n))
+                // Step 5: Convert decrypted BigInts to hex strings
+                .map(chunkInt => chunkInt.toString(16))            
+                // Step 6: Verify and slice hex strings, then convert to Buffers
+                .map(hex => (hex.at(0) === '1' ? hex.slice(1) : 
+                        (() => { throw new Error('decryptChunkHex must start with 0x1!'); })()))
+                .map(slicedHex => Buffer.from(slicedHex, 'hex'));
+    
+        // Step 7: Concatenate Buffers
     
         // Step 1: Decode Base64 chunks to Buffers
         const decryptedChunks = encryptedChunks
@@ -216,8 +255,9 @@ export class SimpleRSAChunkEncryptor {
                 throw new Error('Failed to decode data after all attempts.');
             }
         }
-    }    
+    }        
 }
+
 
 
 function ex3() {
@@ -228,15 +268,17 @@ function ex3() {
     const publicKey = new PEMFileReader(publicKeyPath).loadPublicPkcs8Key();
     const privateKey = new PEMFileReader(privateKeyPath).loadPrivatePkcs8Key();
 
+
     // Instantiate the encryptor with the loaded keys
     const encryptor = new SimpleRSAChunkEncryptor(publicKey, privateKey);
 
     // Encrypt and decrypt a sample string
     var plaintext = "Hello, RSA encryption with .pem support!";
+    var plaintext = "Hello, RSA encryption with .pem support!";
     console.log(`Original Plaintext: [${plaintext}]`);
 
     // Encrypt the plaintext
-    const encryptedText = encryptor.encryptString(plaintext, true);
+    const encryptedText = encryptor.encryptString(plaintext, true, true);
     console.log(`\nEncrypted (Base64 encoded): [${encryptedText}]`);
 
     // // Decrypt the encrypted text
@@ -245,5 +287,7 @@ function ex3() {
 }
 
 
+
+// npx tsx RSA.ts
 // npx tsx RSA.ts
 ex3()
