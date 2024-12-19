@@ -147,6 +147,8 @@
 <script>
 import { ref, computed } from "vue";
 import { SingletonKeyValueStorage } from "../libs/Storage";
+import { LLMsStore } from "../libs/LLMsModel";
+
 import { useToast } from 'primevue/usetoast';
 import { PEMFileReader, SimpleRSAChunkEncryptor } from '../libs/RSA';
 
@@ -155,6 +157,7 @@ export default {
     },
     setup() {
         const toast = useToast();
+        const llmstore = new LLMsStore();
         const storage = new SingletonKeyValueStorage();
         storage.tempTsBackend();
         {

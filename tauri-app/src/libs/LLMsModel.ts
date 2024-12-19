@@ -3,11 +3,6 @@ import axios, { AxiosResponse } from "axios";
 // import { TopologicalSorter } from "graphlib";
 import { Controller4Basic, Model4Basic, BasicStore } from "./BasicModel";
 
-interface LLMsStore {
-    find(id: string): any;
-    find_all(pattern: string): any[];
-}
-
 export namespace Controller4LLMs {
     export class AbstractObjController extends Controller4Basic.AbstractObjController { };
 
