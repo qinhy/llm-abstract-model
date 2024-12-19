@@ -2,12 +2,6 @@
 import axios, { AxiosResponse } from "axios";
 // import { TopologicalSorter } from "graphlib";
 import { Controller4Basic, Model4Basic, BasicStore } from "./BasicModel";
-
-interface LLMsStore {
-    find(id: string): any;
-    find_all(pattern: string): any[];
-}
-
 export namespace Controller4LLMs {
     export class AbstractObjController extends Controller4Basic.AbstractObjController { };
 
@@ -183,7 +177,7 @@ export namespace Controller4LLMs {
     };
 }
 
-class KeyOrEnv {
+export class KeyOrEnv {
     val: string
     constructor(val: string) {
         this.val = val;
@@ -201,7 +195,7 @@ export namespace Model4LLMs {
                 (c) => (c as any).name === class_type
             );
             if (!res) {
-                console.log(`No such class of ${class_type} use AbstractObjController`);
+                // console.log(`No such class of ${class_type} use AbstractObjController`);
                 return Controller4LLMs.AbstractObjController;
             }
             return res;
@@ -651,7 +645,7 @@ export namespace Model4LLMs {
         normalize_embeddings: boolean = true;
         max_input_length: number = 8192;
 
-        async generateEmbedding(inputText: string): Promise<number[]> {
+        async call(inputText: string): Promise<number[]> {
             // Check for cached result
             if (this.cache_embeddings && this.cache && inputText in this.cache) {
                 return this.cache[inputText];
@@ -838,40 +832,40 @@ export namespace Model4LLMs {
 
 }
 
-class LLMsStore extends BasicStore {
+export class LLMsStore extends BasicStore {
     MODEL_CLASS_GROUP = Model4LLMs;
-
 
     private _get_class(id: string): typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup {
         const class_type = id.split(':')[0];
-        const classes: Record<string, any> = {
-            'AbstractObj': Model4Basic.AbstractObj,
-            'AbstractGroup': Model4Basic.AbstractGroup,
-            "AbstractVendor": Model4LLMs.AbstractVendor,
-            "AbstractLLM": Model4LLMs.AbstractLLM,
-            "OpenAIVendor": Model4LLMs.OpenAIVendor,
-            "OpenAIChatGPT": Model4LLMs.OpenAIChatGPT,
-            "ChatGPT4o": Model4LLMs.ChatGPT4o,
-            "ChatGPT4oMini": Model4LLMs.ChatGPT4oMini,
-            "ChatGPTO1": Model4LLMs.ChatGPTO1,
-            "ChatGPTO1Mini": Model4LLMs.ChatGPTO1Mini,
-            "XaiVendor": Model4LLMs.XaiVendor,
-            "Grok": Model4LLMs.Grok,
-            "OllamaVendor": Model4LLMs.OllamaVendor,
-            "Gemma2": Model4LLMs.Gemma2,
-            "Phi3": Model4LLMs.Phi3,
-            "Llama": Model4LLMs.Llama,
-            "AbstractEmbedding": Model4LLMs.AbstractEmbedding,
-            "TextEmbedding3Small": Model4LLMs.TextEmbedding3Small,
-            "Function": Model4LLMs.Function,
-            "WorkFlow": Model4LLMs.WorkFlow,
-            // "RequestsFunction":Model4LLMs.RequestsFunction,            
-        };
+        const classes: Record<string, any> = {};
+        // Dynamically add all classes from Model4LLMs
+        Object.keys(this.MODEL_CLASS_GROUP).forEach((key) => {
+            classes[key] = this.MODEL_CLASS_GROUP[key];
+        });
         const res = classes[class_type];
         if (!res) throw new Error(`No such class of ${class_type}`);
         return res;
     }
 
+    private _get_as_obj(id: string, data_dict: Record<string, any>): Model4Basic.AbstractObj {
+        const ClassConstructor = this._get_class(id);
+        const obj = new ClassConstructor();
+        Object.assign(obj,data_dict);
+        obj.set_id(id).init_controller(this);
+        return obj;
+    }
+    
+    private _add_new_obj(obj: Model4Basic.AbstractObj, id: string | null = null): Model4Basic.AbstractObj {
+        if(!this.MODEL_CLASS_GROUP.hasOwnProperty(obj.constructor.name)){
+            var tmp = {};
+            tmp[obj.constructor.name] = obj.constructor;
+            Object.assign(this.MODEL_CLASS_GROUP,tmp);
+        }
+        id = id === null ? obj.gen_new_id() : id;
+        const data = obj.model_dump_json_dict();
+        this.set(id, data);
+        return this._get_as_obj(id, data);
+    }
 
     addNewOpenAIVendor(apiKey: string, apiUrl: string = "https://api.openai.com", timeout: number = 30): Model4LLMs.OpenAIVendor {
         return this.add_new_obj(new this.MODEL_CLASS_GROUP.OpenAIVendor({ api_url: apiUrl, api_key: new KeyOrEnv(apiKey), timeout }));
@@ -1098,5 +1092,5 @@ class Tests {
 }
 
 // To run tests
-const tests = new Tests();
-tests.testAll(1).catch(console.error);
+// const tests = new Tests();
+// tests.testAll(1).catch(console.error);
