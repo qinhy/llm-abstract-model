@@ -282,7 +282,7 @@ class LocalVersionController {
     }
 }
 
-class SingletonKeyValueStorage {
+export class SingletonKeyValueStorage {
     versionControl: boolean;
     conn: TsDictStorageController | null;
     private eventDispatcher: EventDispatcherController = new EventDispatcherController(new TsDictStorage());
