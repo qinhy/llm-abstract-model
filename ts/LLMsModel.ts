@@ -1004,12 +1004,14 @@ export class LLMsStore extends BasicStore {
         return this.find_all("*Vendor:*") as Model4LLMs.AbstractVendor[];
     }
 
-    static chainDumps(cl: Model4Basic.AbstractObj[]): string {
-        const result = cl.reduce((acc: Record<string, any>, obj) => {
-            acc[obj.get_id()] = JSON.parse(obj.model_dump_json_dict());
-            return acc;
-        }, {});
-        return JSON.stringify(result);
+    static chainDumps(cl: any[]): string {
+        const acc: Record<string, any> = {};
+        for (let index = 0; index < cl.length; index++) {
+            const obj = cl[index];
+            console.log(obj);            
+            acc[obj.get_id()] = obj.model_dump_json_dict();
+        }
+        return JSON.stringify(acc);
     }
 
     chainLoads(clJson: string): Model4Basic.AbstractObj[] {

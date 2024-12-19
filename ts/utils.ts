@@ -2,26 +2,29 @@ import { Model4LLMs } from "./LLMsModel";
 
 // RegxExtractor class
 export class RegxExtractor extends Model4LLMs.AbstractObj {
-  regx!: RegExp;
+  regx!: string;
   isJson: boolean = false;
 
-  constructor(regx: RegExp, isJson: boolean = false) {
+  constructor(regx: string, isJson: boolean = false) {
     super();
     this.regx = regx;
     this.isJson = isJson;
   }
 
+  public async acall(text: Promise<string>): Promise<string> {
+    return this.extract(await text);
+  }
   public call(text: string): string {
     return this.extract(text);
   }
 
   private extract(text: string): string {
-    const matches = text.match(this.regx) || [];
-    if (!this.tryBinaryError(() => matches[0])) {
+    const matches = text.match(new RegExp(this.regx)) || [];
+    if (!this.tryBinaryError(() => matches[1])) {
       this.logError(new Error(`Cannot match ${this.regx} in text: ${text}`));
       return text;
     }
-    return this.isJson ? JSON.parse(matches[0]) : matches[0];
+    return this.isJson ? JSON.parse(matches[1]) : matches[1];
   }
 
   private tryBinaryError(fn: () => any): boolean {

@@ -39,8 +39,8 @@ console.log(
 );
 
 // Add a regex extractor
-const getResult = store.add_new_obj(
-  new RegxExtractor(/```translation\s*(.*?)\s*```/)
+const getResult:RegxExtractor = store.add_new_obj(
+  new RegxExtractor('```translation\\s*(.*?)\\s*```')
 );
 
 // Chain process
@@ -76,15 +76,15 @@ console.log('Test chain up:', sayABC(''));
 
 // Translation chain
 const translatorChain = [translateTemplate, llm, getResult];
-const translator = compose(...translatorChain);
+const translator = compose(...[translateTemplate.call.bind(translateTemplate), llm.call.bind(llm),getResult.acall.bind(getResult)]);
 
-console.log(translator('こんにちは！はじめてのチェーン作りです！'));
+console.log(await translator(['こんにちは！はじめてのチェーン作りです！']));
 // -> Hello! This is my first time making a chain!
 
-console.log(translator('常識とは、18歳までに身に付けた偏見のコレクションである。'));
+console.log(await translator(['常識とは、18歳までに身に付けた偏見のコレクションである。']));
 // -> Common sense is a collection of prejudices acquired by the age of 18.
 
-console.log(translator('为政以德，譬如北辰，居其所而众星共之。'));
+console.log(await translator(['为政以德，譬如北辰，居其所而众星共之。']));
 // -> Governing with virtue is like the North Star, which remains in its place while all the other stars revolve around it.
 
 console.log('############# Save/Load chain JSON');
@@ -93,9 +93,11 @@ console.log(chainDump);
 
 const loadedChain = store.chainLoads(chainDump);
 console.log(loadedChain);
-const loadedTranslator = compose(...loadedChain);
 
-console.log(loadedTranslator('こんにちは！はじめてのチェーン作りです！'));
+const [tran, ll, ge] = loadedChain;
+const loadedTranslator = compose(...[tran.call.bind(tran),ll.call.bind(ll),ge.acall.bind(ge)]);
+
+console.log(await loadedTranslator(['こんにちは！はじめてのチェーン作りです！']));
 // -> Hello! It's my first time making a chain!
 
 console.log('############# Additional template usage');
@@ -104,7 +106,7 @@ console.log('############# Additional template usage');
 const newLLM = store.addNewChatGPT4oMini('auto');
 
 // Use raw JSON template
-const jsonTemplate = store.addNewFunction(
+const jsonTemplate = store.add_new_obj(
   new StringTemplate(`[
     {"role":"system","content":"You are an expert in translation text.I will provide text. Please translate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n\\\`\\\`\\\`translation\\n...\\n\\\`\\\`\\\`"},
     {"role":"user","content":"\\nPlease translate the text into {}.\\n\\\`\\\`\\\`text\\n{}\\n\\\`\\\`\\\`"}
@@ -130,7 +132,7 @@ console.log(await newLLM.call(message));
 // -> ```
 
 const advancedTranslatorChain = [jsonTemplate, JSON.parse, newLLM, getResult];
-const advancedTranslator = compose(...advancedTranslatorChain);
+const advancedTranslator = compose(...[jsonTemplate.call.bind(jsonTemplate), JSON.parse, newLLM.call.bind(newLLM), getResult.call.bind(getResult)]);
 
 console.log(
   advancedTranslator('to Chinese', 'こんにちは！はじめてのチェーン作りです！')
