@@ -28,12 +28,12 @@ const textEmbedding = store.add_new_obj(new Model4LLMs.TextEmbedding3Small());
 // const llama32 = store.addNewLlama(ollamaVendor.get_id());
 
 // Use the chat model
-console.log(await chatgpt4omini.call('hi! What is your name and where are you from?'));
+console.log(await chatgpt4omini.acall('hi! What is your name and where are you from?'));
 // -> Hello! I’m called Assistant. How can I help you today?
 
 // Send multiple messages to the chat model
 console.log(
-    await chatgpt4omini.call([
+    await chatgpt4omini.acall([
         { role: 'system', content: 'You are a highly skilled professional English translator.' },
         { role: 'user', content: '"こんにちは！"' }
     ])

@@ -26,7 +26,7 @@ console.log(translateTemplate.call(['こんにちは！はじめてのチェー�
 // -> ...
 
 console.log(
-  await llm.call(
+  await llm.acall(
     translateTemplate.call(['こんにちは！はじめてのチェーン作りです！'])
   )
 );
@@ -46,7 +46,7 @@ const getResult:RegxExtractor = store.add_new_obj(
 // Chain process
 console.log(
   getResult.call(
-    await llm.call(
+    await llm.acall(
       translateTemplate.call(['こんにちは！はじめてのチェーン作りです！'])
     )
   )
@@ -58,7 +58,7 @@ console.log('############# Make the chain more graceful and simple');
 // Compose function to chain multiple functions
 function compose(...funcs: Function[]): Function {
   return (...args: any[]) =>
-    funcs.reduce((acc, func) => (Array.isArray(acc) ? func(...acc) : func(acc)), args);
+    funcs.reduce((acc, func) => ( func(acc) ), args);
 }
 
 function sayA(x: string): string {
@@ -76,15 +76,15 @@ console.log('Test chain up:', sayABC(''));
 
 // Translation chain
 const translatorChain = [translateTemplate, llm, getResult];
-const translator = compose(...[translateTemplate.call.bind(translateTemplate), llm.call.bind(llm),getResult.acall.bind(getResult)]);
+const translator = compose(...[translateTemplate.call.bind(translateTemplate), llm.acall.bind(llm),getResult.acall.bind(getResult)]);
 
-console.log(await translator(['こんにちは！はじめてのチェーン作りです！']));
+console.log(await translator('こんにちは！はじめてのチェーン作りです！'));
 // -> Hello! This is my first time making a chain!
 
-console.log(await translator(['常識とは、18歳までに身に付けた偏見のコレクションである。']));
+console.log(await translator('常識とは、18歳までに身に付けた偏見のコレクションである。'));
 // -> Common sense is a collection of prejudices acquired by the age of 18.
 
-console.log(await translator(['为政以德，譬如北辰，居其所而众星共之。']));
+console.log(await translator('为政以德，譬如北辰，居其所而众星共之。'));
 // -> Governing with virtue is like the North Star, which remains in its place while all the other stars revolve around it.
 
 console.log('############# Save/Load chain JSON');
@@ -95,9 +95,9 @@ const loadedChain = store.chainLoads(chainDump);
 console.log(loadedChain);
 
 const [tran, ll, ge] = loadedChain;
-const loadedTranslator = compose(...[tran.call.bind(tran),ll.call.bind(ll),ge.acall.bind(ge)]);
+const loadedTranslator = compose(...[tran.call.bind(tran),ll.acall.bind(ll),ge.acall.bind(ge)]);
 
-console.log(await loadedTranslator(['こんにちは！はじめてのチェーン作りです！']));
+console.log(await loadedTranslator('こんにちは！はじめてのチェーン作りです！'));
 // -> Hello! It's my first time making a chain!
 
 console.log('############# Additional template usage');
@@ -108,8 +108,8 @@ const newLLM = store.addNewChatGPT4oMini('auto');
 // Use raw JSON template
 const jsonTemplate = store.add_new_obj(
   new StringTemplate(`[
-    {"role":"system","content":"You are an expert in translation text.I will provide text. Please translate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n\\\`\\\`\\\`translation\\n...\\n\\\`\\\`\\\`"},
-    {"role":"user","content":"\\nPlease translate the text into {}.\\n\\\`\\\`\\\`text\\n{}\\n\\\`\\\`\\\`"}
+    {"role":"system","content":"You are an expert in translation text.I will provide text. Please translate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n\`\`\`translation\\n...\\n\`\`\`"},
+    {"role":"user","content":"Please translate the text into {}.\\n\`\`\`text\\n{}\\n\`\`\`"}
 ]`)
 );
 
@@ -126,19 +126,19 @@ const message = JSON.parse(
 );
 console.log(message);
 
-console.log(await newLLM.call(message));
+console.log(await newLLM.acall(message));
 // -> ```translation
 // -> Hello! This is my first time making a chain!
 // -> ```
 
 const advancedTranslatorChain = [jsonTemplate, JSON.parse, newLLM, getResult];
-const advancedTranslator = compose(...[jsonTemplate.call.bind(jsonTemplate), JSON.parse, newLLM.call.bind(newLLM), getResult.call.bind(getResult)]);
+const advancedTranslator = compose(...[jsonTemplate.call.bind(jsonTemplate), JSON.parse, newLLM.acall.bind(newLLM), getResult.acall.bind(getResult)]);
 
 console.log(
-  advancedTranslator('to Chinese', 'こんにちは！はじめてのチェーン作りです！')
+  await advancedTranslator(['to Chinese', 'こんにちは！はじめてのチェーン作りです！'])
 );
 // -> 你好！这是第一次制作链条！
 console.log(
-  advancedTranslator('to Japanese', 'Hello! This is my first time making a chain!')
+  await advancedTranslator(['to Japanese', 'Hello! This is my first time making a chain!'])
 );
 // -> こんにちは！これは私の初めてのチェーン作りです！

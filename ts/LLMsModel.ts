@@ -110,82 +110,115 @@ export namespace Controller4LLMs {
             this._store = store;
         }
 
+        private _topologicalSort(graph: { [key: string]: string[] }): string[] {
+            const inDegree: { [key: string]: number } = {};
+            const zeroInDegree: string[] = [];
+            const result: string[] = [];
+        
+            // Initialize in-degree for each node
+            for (const node in graph) {
+                if (!inDegree[node]) inDegree[node] = 0;
+                for (const neighbor of graph[node]) {
+                    if (!inDegree[neighbor]) inDegree[neighbor] = 0;
+                    inDegree[neighbor]++;
+                }
+            }
+        
+            // Find all nodes with zero in-degree
+            for (const node in inDegree) {
+                if (inDegree[node] === 0) zeroInDegree.push(node);
+            }
+        
+            // Process nodes with zero in-degree
+            while (zeroInDegree.length > 0) {
+                const node = zeroInDegree.pop()!;
+                result.push(node);
+        
+                for (const neighbor of graph[node] || []) {
+                    inDegree[neighbor]--;
+                    if (inDegree[neighbor] === 0) zeroInDegree.push(neighbor);
+                }
+            }
+        
+            // Check for cycles (if all nodes are not processed)
+            // if (result.length !== Object.keys(graph).length) {
+            //     throw new Error("Graph has at least one cycle");
+            // }
+
+            return result;
+        }
         private _readTask(taskId: string): any {
             return this.storage().find(taskId);
         }
 
-        run(kwargs: Record<string, any> = {}): any {
-            return;
-            // const tasks: Record<string, string[]> = this.model.tasks;
-            // const sorter = new TopologicalSorter(tasks);
+        async _arun(): Promise<any> {
+            const tasks: Record<string, string[]> = this.model.tasks;
 
-            // if (this.model.results["final"]) {
-            //     this.model.results = {};
-            // }
+            if (this.model.results["final"]) {
+                if(this.model.results["input"]){
+                    this.model.results = {input:this.model.results["input"]};
+                }
+                else{
+                    this.model.results = {}
+                }
+            }
 
-            // this.model.results = {
-            //     ...this.model.results,
-            //     ...kwargs,
-            // };
+            let result = null;
+                
+            for (const taskId of this._topologicalSort(tasks).reverse()) {
+                if (this.model.results[taskId]) {
+                    continue;
+                }
 
-            // let result = null;
+                const dependencyResults = tasks[taskId].map((dep) => this.model.results[dep]);
+                const allArgs = this._extractArgsKwargs(dependencyResults);
 
-            // for (const taskId of sorter.static_order()) {
-            //     if (this.model.results[taskId]) {
-            //         continue;
-            //     }
+                try {
+                    
+                    const obj = this._readTask(taskId);
+                    if(obj['acall']){
+                        result = await obj.acall(...allArgs);
+                    }else{
+                        result = obj.call(...allArgs);
+                    }
+                    
+                    this.model.results[taskId] = result;
+                } catch (e) {
+                    throw new Error(`[WorkFlow]: Error at ${taskId}: ${e}`);
+                }
+            }
 
-            //     const dependencyResults = tasks[taskId].map((dep) => this.model.results[dep]);
-            //     const [allArgs, allKwargs] = this._extractArgsKwargs(dependencyResults);
+            if (result !== null) {
+                this.model.results["final"] = result;
+            }
 
-            //     try {
-            //         result = this._readTask(taskId)(...allArgs, allKwargs);
-            //         this.model.results[taskId] = result;
-            //     } catch (e) {
-            //         throw new Error(`[WorkFlow]: Error at ${taskId}: ${e}`);
-            //     }
-            // }
-
-            // if (result !== null) {
-            //     this.model.results["final"] = result;
-            // }
-
-            // this.update({ results: this.model.results });
-            // return result;
+            this.update({ results: this.model.results });
+            return result;
         }
 
-        private _extractArgsKwargs(dependencyResults: any[]): [any[], Record<string, any>] {
+        private _extractArgsKwargs(dependencyResults: any[]): any[] {
             const allArgs: any[] = [];
-            const allKwargs: Record<string, any> = {};
-
             for (const argsKwargs of dependencyResults) {
-                if (Array.isArray(argsKwargs) && argsKwargs.length === 2 && typeof argsKwargs[1] === "object") {
-                    const [args, kwargs] = argsKwargs;
-                    if (Array.isArray(args)) {
-                        allArgs.push(...args);
-                    } else {
-                        allArgs.push(args);
-                    }
-                    Object.assign(allKwargs, kwargs);
+                if (Array.isArray(argsKwargs)) {
+                    allArgs.push(...argsKwargs);
                 } else {
                     allArgs.push(argsKwargs);
                 }
             }
-
-            return [allArgs, allKwargs];
+            return allArgs;
         }
     };
 }
 
-export class KeyOrEnv {
-    val: string
-    constructor(val: string) {
-        this.val = val;
-    }
-    get() {
-        return this.val
-    };
-}
+// export class KeyOrEnv {
+//     val: string
+//     constructor(val: string) {
+//         this.val = val;
+//     }
+//     get() {
+//         return this.val
+//     };
+// }
 
 export namespace Model4LLMs {
     export class AbstractObj extends Model4Basic.AbstractObj {
@@ -210,7 +243,7 @@ export namespace Model4LLMs {
     export class AbstractVendor extends AbstractObj {
         vendor_name: string; // e.g., 'OpenAI'
         api_url: string; // e.g., 'https://api.openai.com/v1/'
-        api_key?: KeyOrEnv; // API key for authentication, if required
+        api_key?: string; // API key for authentication, if required
         timeout: number = 30; // Default timeout for API requests in seconds
 
         chat_endpoint?: string; // e.g., '/v1/chat/completions'
@@ -229,7 +262,7 @@ export namespace Model4LLMs {
         }
 
         getApiKey(): string {
-            return this.api_key?.get() ?? "";
+            return this.api_key ?? "";
         }
 
         async getAvailableModels(): Promise<any> {
@@ -372,14 +405,16 @@ export namespace Model4LLMs {
             if (typeof messages === "string") {
                 messages = [{ role: "user", content: messages }];
             }
+            
             return msgs.concat(messages);
         }
 
-        async call(messages: string | Record<string, any>[], autoStr: boolean = true): Promise<string> {
+        async acall(messages: string | Record<string, any>[], autoStr: boolean = true): Promise<string> {
             if (typeof messages !== "string" && !Array.isArray(messages) && autoStr) {
                 messages = String(messages);
             }
             const payload = this.constructPayload(this.constructMessages(messages));
+            
             const vendor = this.getVendor();
             const response = await vendor.chatRequest(payload);
             return vendor.chatResult(response);
@@ -723,7 +758,7 @@ export namespace Model4LLMs {
 
         private _extractSignature(): void {
             this.name = this.constructor.name;
-            const sig = Reflect.getMetadata("design:paramtypes", this.__call__) || [];
+            // const sig = Reflect.getMetadata("design:paramtypes", this.__call__) || [];
 
             const typeMap: Record<any, string> = {
                 Number: "number",
@@ -734,14 +769,14 @@ export namespace Model4LLMs {
             };
 
             this.required = [];
-            for (const [name, type] of Object.entries(sig)) {
-                const paramType = typeMap[type as any] || "object";
-                this._properties[name] = {
-                    type: paramType,
-                    description: this._parametersDescription[name] || "",
-                };
-                if (!type) this.required.push(name);
-            }
+            // for (const [name, type] of Object.entries(sig)) {
+            //     const paramType = typeMap[type as any] || "object";
+            //     this._properties[name] = {
+            //         type: paramType,
+            //         description: this._parametersDescription[name] || "",
+            //     };
+            //     if (!type) this.required.push(name);
+            // }
 
             this.parameters.properties = this._properties;
             this.description = this._description;
@@ -760,21 +795,27 @@ export namespace Model4LLMs {
         tasks: Record<string, string[]> = {}; // Map of task dependencies
         results: Record<string, any> = {};
 
-        __call__(...args: any[]): any {
-            if ("__input__" in this.tasks) {
-                delete this.tasks["__input__"];
-            }
+        constructor(data?: any) {
+            super(data);            
+            this.tasks = data?.tasks || {};
+            this.results = data?.results || {};
+        }
 
-            if (args.length !== 0) {
+        async acall(args: any[]): Promise<any> {
+            if (Array.isArray(args) && args.length !== 0) {
                 const firstTaskId = Object.keys(this.tasks).pop()!;
                 const firstTaskDeps = this.tasks[firstTaskId] || [];
-                if (!firstTaskDeps.includes("__input__")) {
-                    this.tasks[firstTaskId].push("__input__");
+                if (!firstTaskDeps.includes("input")) {
+                    this.tasks[firstTaskId].push("input");
                 }
-                this.results["__input__"] = [args, {}];
+                this.results["input"] = [args];
+            }else{
+                this.results = {
+                    ...this.results,
+                    ...args
+                }
             }
-
-            return this.getController().run(this.results);
+            return await this.getController()._arun();
         }
 
         getResult(taskId: string): any {
@@ -800,12 +841,12 @@ export namespace Model4LLMs {
     //         json: "JSON payload",
     //     }
     // )
-    class RequestsFunction extends Function {
+    export class RequestsFunction extends Function {
         method: string = "GET";
         url!: string;
         headers: Record<string, string> = {};
 
-        async __call__(
+        async acall(
             params: Record<string, any> = {},
             data: Record<string, any> = {},
             json: Record<string, any> = {},
@@ -868,25 +909,25 @@ export class LLMsStore extends BasicStore {
     }
 
     addNewOpenAIVendor(apiKey: string, apiUrl: string = "https://api.openai.com", timeout: number = 30): Model4LLMs.OpenAIVendor {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.OpenAIVendor({ api_url: apiUrl, api_key: new KeyOrEnv(apiKey), timeout }));
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.OpenAIVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
     }
 
     addNewXaiVendor(apiKey: string, apiUrl: string = "https://api.x.ai", timeout: number = 30): Model4LLMs.XaiVendor {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.XaiVendor({ api_url: apiUrl, api_key: new KeyOrEnv(apiKey), timeout }));
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.XaiVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
     }
 
     addNewOllamaVendor(apiUrl: string = "http://localhost:11434", timeout: number = 30): Model4LLMs.OllamaVendor {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.OllamaVendor({ api_url: apiUrl, api_key: new KeyOrEnv(""), timeout }));
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.OllamaVendor({ api_url: apiUrl, api_key: "", timeout }));
     }
 
     addNewChatGPT4o(
         vendorId: string,
+        systemPrompt: string | null = null,
         limitOutputTokens: number = 1024,
         temperature: number = 0.7,
         topP: number = 1.0,
         frequencyPenalty: number = 0.0,
         presencePenalty: number = 0.0,
-        systemPrompt: string | null = null,
         id?: string
     ): Model4LLMs.ChatGPT4o {
         return this.add_new_obj(
@@ -905,12 +946,12 @@ export class LLMsStore extends BasicStore {
 
     addNewChatGPT4oMini(
         vendorId: string,
+        systemPrompt: string | null = null,
         limitOutputTokens: number = 1024,
         temperature: number = 0.7,
         topP: number = 1.0,
         frequencyPenalty: number = 0.0,
         presencePenalty: number = 0.0,
-        systemPrompt: string | null = null,
         id?: string
     ): Model4LLMs.ChatGPT4oMini {
         return this.add_new_obj(
@@ -929,12 +970,12 @@ export class LLMsStore extends BasicStore {
 
     addNewGrok(
         vendorId: string,
+        systemPrompt: string | null = null,
         limitOutputTokens: number = 1024,
         temperature: number = 0.7,
         topP: number = 1.0,
         frequencyPenalty: number = 0.0,
         presencePenalty: number = 0.0,
-        systemPrompt: string | null = null,
         id?: string
     ): Model4LLMs.Grok {
         return this.add_new_obj(
@@ -987,11 +1028,11 @@ export class LLMsStore extends BasicStore {
     addNewWorkFlow(tasks: Record<string, string[]> | string[], metadata: Record<string, any> = {}, id?: string): Model4LLMs.WorkFlow {
         if (Array.isArray(tasks)) {
             tasks.reverse();
-            const dependencies = tasks.slice(1).map(() => []);
+            const dependencies = tasks.map((v,i) => (tasks[i+1]?[tasks[i+1]]:[]));
             tasks = tasks.reduce((acc: Record<string, string[]>, task, index) => {
                 acc[task] = dependencies[index] || [];
                 return acc;
-            }, {});
+            }, {});            
         }
         return this.add_new_obj(new this.MODEL_CLASS_GROUP.WorkFlow({ tasks, metadata }), id);
     }
@@ -1008,7 +1049,6 @@ export class LLMsStore extends BasicStore {
         const acc: Record<string, any> = {};
         for (let index = 0; index < cl.length; index++) {
             const obj = cl[index];
-            console.log(obj);            
             acc[obj.get_id()] = obj.model_dump_json_dict();
         }
         return JSON.stringify(acc);
@@ -1081,14 +1121,14 @@ class Tests {
     async testOllama2(): Promise<void> {
         const vendor = this.store.find_all("OllamaVendor:*")[0];
         const gemma = this.store.addNewGemma2(vendor.get_id());
-        const response = await gemma.call("What is your name?");
+        const response = await gemma.acall("What is your name?");
         console.log(response);
     }
 
     async testOllama3(): Promise<void> {
         const vendor = this.store.find_all("OllamaVendor:*")[0];
         const llama = this.store.addNewLlama(vendor.get_id());
-        const response = await llama.call("What is your name?");
+        const response = await llama.acall("What is your name?");
         console.log(response);
     }
 }
