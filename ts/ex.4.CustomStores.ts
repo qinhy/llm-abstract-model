@@ -20,7 +20,7 @@ chatGPT4oMini.system_prompt = systemPrompt;
 
 // Add custom function
 class FibonacciFunction extends Model4LLMs.AbstractObj {
-    __call__(n: number): number {
+    call(n: number): number {
         function fibonacci(n: number): number {
             if (n <= 1) return n;
             return fibonacci(n - 1) + fibonacci(n - 2);

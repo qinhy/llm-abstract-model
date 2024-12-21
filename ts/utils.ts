@@ -11,20 +11,27 @@ export class RegxExtractor extends Model4LLMs.AbstractObj {
     this.isJson = isJson;
   }
 
-  public async acall(text: Promise<string>): Promise<string> {
-    return this.extract(await text);
+  public async acall(text: Promise<string>, logError:boolean=true): Promise<string> {
+    return this.extract(await text,logError);
   }
-  public call(text: string): string {
-    return this.extract(text);
+  public call(text: string, logError:boolean=true): string {
+    return this.extract(text,logError);
   }
 
-  private extract(text: string): string {
+  private extract(text: string, logError:boolean=true): string {
     const matches = text.match(new RegExp(this.regx)) || [];
     if (!this.tryBinaryError(() => matches[1])) {
-      this.logError(new Error(`Cannot match ${this.regx} in text: ${text}`));
+      if(logError)this.logError(new Error(`Cannot match ${this.regx} in text: ${text}`));
       return text;
     }
-    return this.isJson ? JSON.parse(matches[1]) : matches[1];
+    if(this.isJson){
+      if (!this.tryBinaryError(() => JSON.parse(matches[1]))) {
+        if(logError)this.logError(new Error(`Cannot parse as json!`));
+        return text;
+      }
+      return JSON.parse(matches[1]);
+    }
+    return matches[1];
   }
 
   private tryBinaryError(fn: () => any): boolean {
