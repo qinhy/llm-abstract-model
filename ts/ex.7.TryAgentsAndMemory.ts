@@ -1,3 +1,384 @@
+import fs from 'fs';
+import { Model4LLMs } from "./LLMsModel";
+
+function uuidv4(prefix = '') {
+    return prefix + 'xxxx-xxxx-xxxx-xxxx-xxxx'.replace(/x/g, function () {
+        return Math.floor(Math.random() * 16).toString(16);
+    });
+}
+
+class TextContentNode {
+    id: string;
+    content: string;
+    embedding: number[];
+    parent_id: string;
+    children: TextContentNode[];
+    depth: number;
+    private rootNode: TextContentNode | null;
+
+    constructor(
+        content = "Root(Group)",
+        id = null,
+        embedding = [],
+        parent_id = "NULL",
+        children = [],
+        depth = 0,
+    ) {
+        this.id = id || `Node:${uuidv4()}`;
+        this.content = content;
+        this.embedding = embedding;
+        this.parent_id = parent_id;
+        this.children = children;
+        this.depth = depth;
+        this.rootNode = null;
+    }
+
+    isGroup(): boolean {
+        return this.content.endsWith("(Group)");
+    }
+
+    isRoot(): boolean {
+        return this.content === "Root(Group)";
+    }
+
+    contentWithParents(): string {
+        const groups = this.parents().map((g) => g.content);
+        let content = this.content;
+        if (groups.length > 0) {
+            content += ` [${groups.join(";")}]`;
+        }
+        return content;
+    }
+
+    refreshRoot(): void {
+        if (this.isRoot()) {
+            for (const child of this.traverse(this)) {
+                if (!child.isRoot()) {
+                    child.rootNode = this;
+                }
+            }
+        }
+    }
+
+    *traverse(node: TextContentNode): Generator<TextContentNode> {
+        yield node;
+        for (const child of node.children) {
+            yield* this.traverse(child);
+        }
+    }
+
+    getNode(nodeId: string): TextContentNode | null {
+        const root = this.isRoot() ? this : this.rootNode;
+        if (!root) return null;
+
+        for (const child of root.traverse(root)) {
+            if (child.id === nodeId) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    dispose(): void {
+        const parent = this.getParent();
+        if (parent) {
+            parent.children = parent.children.filter((child) => child.id !== this.id);
+        }
+    }
+
+    add(child: TextContentNode): void {
+        this.children.push(child);
+        child.parent_id = this.id;
+        child.depth = this.depth + 1;
+    }
+
+    getParent(): TextContentNode | null {
+        return this.parent_id ? this.getNode(this.parent_id) : null;
+    }
+
+    parents(): TextContentNode[] {
+        const path: TextContentNode[] = [];
+        let current: TextContentNode | null = this;
+
+        while (current && !current.isRoot()) {
+            path.push(current);
+            current = current.getParent();
+        }
+
+        return path.reverse().slice(0, -1);
+    }
+
+    groups(): TextContentNode[] {
+        return this.parents().filter((node) => node.isGroup());
+    }
+
+    getAllChildren(): TextContentNode[] {
+        const descendants: TextContentNode[] = [];
+
+        const collectChildren = (node: TextContentNode) => {
+            descendants.push(node);
+            for (const child of node.children) {
+                collectChildren(child);
+            }
+        };
+
+        collectChildren(this);
+        return descendants;
+    }
+}
+
+class TextMemoryTree {
+    baseThreshold: number = 0.4;
+    lambdaFactor: number = 0.5;
+    private static embeddingCacheDict: Record<string, any> = {};
+
+    root: TextContentNode;
+    llm: Model4LLMs.AbstractLLM | null;
+    textEmbedding: any; // Replace with the actual type of your embedding model
+
+    constructor(root: TextContentNode | null = null, llm: Model4LLMs.AbstractLLM | null = null, textEmbedding: any = null) {
+        this.llm = llm;
+        this.textEmbedding = textEmbedding;
+
+        if (root && !(root instanceof TextContentNode)) {
+            root = new TextContentNode(root);
+        }
+
+        this.root = root || new TextContentNode( "Root(Group)" );
+        this.root.refreshRoot();
+
+        for (const node of this.traverse(this.root)) {
+            TextMemoryTree.embeddingCacheDict[node.content] = node.embedding;
+        }
+    }
+
+    *traverse(node: TextContentNode): Generator<TextContentNode> {
+        yield node;
+        for (const child of node.children) {
+            yield* this.traverse(child);
+        }
+    }
+
+    removeContent(content: string): void {
+        for (const node of this.findNodesByContent(content)) {
+            node.dispose();
+        }
+    }
+
+    findNodesByContent(keyword: string): TextContentNode[] {
+        return [...this.traverse(this.root)].filter((node) => node.content.includes(keyword));
+    }
+
+    classification(src: TextContentNode, ref: TextContentNode): number {
+        const sys = `
+## Instructions:
+Given two pieces of content, 'ref' and 'src', identify their relationship and label it with one of the following:
+Provide only a single word as your output: Child, Parent, or Isolate.
+
+## Procedure:
+1. Classify Each Content:
+   - Determine whether 'ref' and 'src' are a topic or an action.
+     - *Topic*: A general subject area.
+     - *Action*: A specific activity within a topic.
+
+2. Assess Connection:
+   - Evaluate whether there is any connection between 'ref' and 'src', considering both direct and indirect links.
+
+3. Apply Inclusion Rule:
+   - Remember that a topic always includes its related actions.
+
+4. Compare Topics (if both are topics):
+   - Determine if one topic includes the other.
+
+5. Select the Appropriate Label:
+   - Choose Child if 'src' potentially includes 'ref'.
+   - Choose Parent if 'ref' potentially includes 'src'.
+   - Choose Isolate if no connection exists.
+
+## Notes:
+- Carefully determine whether each piece of content is a topic or an action.
+- Consider subtle connections for accurate labeling.
+`;
+        if (this.llm) {
+            this.llm.system_prompt = sys;
+            const res = this.llm(`## src\n${src.content}\n## ref\n${ref.content}`);
+            return { parent: -1, isolate: 0, child: 1 }[res.trim().toLowerCase()] || 0;
+        }
+        return 0;
+    }
+
+    tidyTree(res: string | null = null): this {
+        if (!res) {
+            const sys = `
+Please organize the following memory list and respond in the original tree structure format. 
+If a node represents a group, add '(Group)' at the end of the node name. Feel free to edit, delete, 
+move or add new nodes (or groups) as needed.`;
+
+            if (this.llm) {
+                this.llm.system_prompt = sys;
+                res = this.llm(`\`\`\`text\n${this.printTree(false)}\n\`\`\``);
+                const match = /```text\s*(.*)\s*```/s.exec(res);
+                if (match) res = match[1];
+            }
+        }
+
+        const newRoot = this.parseTextTree(res || "");
+        const embeddings: Record<string, any> = {};
+
+        for (const node of this.traverse(this.root)) {
+            embeddings[node.contentWithParents()] = node.embedding;
+            node.embedding = [];
+        }
+
+        for (const node of this.traverse(newRoot)) {
+            node.embedding = embeddings[node.contentWithParents()] || [];
+        }
+
+        this.root = newRoot;
+        return this;
+    }
+
+    getThreshold(depth: number): number {
+        return this.baseThreshold * Math.exp(this.lambdaFactor * depth);
+    }
+
+    calcEmbedding(node: TextContentNode): TextContentNode {
+        if (node.embedding.length > 0) return node;
+
+        if (node.isGroup()) {
+            node.embedding = Array(this.textEmbedding.embedding_dim).fill(0);
+        } else {
+            if (node.content in TextMemoryTree.embeddingCacheDict) {
+                node.embedding = TextMemoryTree.embeddingCacheDict[node.content];
+            }
+            if (node.embedding.length === 0) {
+                node.embedding = this.textEmbedding(node.contentWithParents());
+            }
+        }
+        return node;
+    }
+
+    similarity(src: TextContentNode, ref: TextContentNode): number {
+        const emb1 = this.calcEmbedding(ref).embedding;
+        const emb2 = this.calcEmbedding(src).embedding;
+
+        const norm1 = Math.sqrt(emb1.reduce((sum, x) => sum + x ** 2, 0));
+        const norm2 = Math.sqrt(emb2.reduce((sum, x) => sum + x ** 2, 0));
+
+        if (norm1 === 0 || norm2 === 0) return 0;
+
+        const dotProduct = emb1.reduce((sum, x, i) => sum + x * emb2[i], 0);
+        return dotProduct / (norm1 * norm2);
+    }
+
+    extractAllEmbeddings(): Record<string, any> {
+        const embeddings: Record<string, any> = {};
+        for (const node of this.traverse(this.root)) {
+            embeddings[node.id] = node.embedding;
+            node.embedding = [];
+        }
+        return embeddings;
+    }
+
+    dumpAllEmbeddings(path = "embeddings.json"): void {
+        const embeddings = this.extractAllEmbeddings();
+        fs.writeFileSync(path, JSON.stringify(embeddings, null, 2));
+    }
+
+    putAllEmbeddings(embeddings: Record<string, any>): void {
+        for (const node of this.traverse(this.root)) {
+            node.embedding = embeddings[node.id] || [];
+        }
+    }
+
+    loadAllEmbeddings(path = "embeddings.json"): this {
+        const embeddings = JSON.parse(fs.readFileSync(path, "utf8"));
+        this.putAllEmbeddings(embeddings);
+        return this;
+    }
+
+    retrieve(query: string, topK = 3): [TextContentNode, number][] {
+        const results: [TextContentNode, number][] = [];
+        const queryNode = this.calcEmbedding(new TextContentNode(query));
+
+        for (const node of this.traverse(this.root)) {
+            if (node.isRoot()) continue;
+            const sim = this.similarity(node, queryNode);
+            results.push([node, sim]);
+        }
+
+        return results.sort((a, b) => b[1] - a[1]).slice(0, topK);
+    }
+
+    insert(content: string): void {
+        const newNode = this.calcEmbedding(new TextContentNode(content.trim()));
+        this._insertNode(this.root, newNode);
+        console.log(`[TextMemoryTree]: insert new content [${content.trim()}]`);
+        this.root.refreshRoot();
+    }
+
+    private _insertNode(currentNode: TextContentNode, newNode: TextContentNode): void {
+        let bestSimilarity = -1;
+        let bestChild: TextContentNode | null = null;
+
+        for (const child of currentNode.children) {
+            const sim = this.similarity(child, newNode);
+            if (sim > bestSimilarity) {
+                bestSimilarity = sim;
+                bestChild = child;
+            }
+        }
+
+        if (bestChild && bestSimilarity >= this.getThreshold(currentNode.depth)) {
+            this._insertNode(bestChild, newNode);
+        } else {
+            currentNode.add(newNode);
+        }
+    }
+
+    parseTextTree(text: string): TextContentNode {
+        const lines = text.split("\n").filter((line) => line.trim());
+        const stack: [TextContentNode, number][] = [];
+
+        const root = new TextContentNode(lines.shift()?.trim() || "");
+        if (!root.isRoot()) throw new Error("First node must be Root.");
+
+        stack.push([root, -1]);
+
+        for (const line of lines) {
+            const stripped = line.trimStart();
+            const indent = line.length - stripped.length;
+            const content = stripped.trim();
+            const level = Math.floor(indent / 4);
+
+            while (stack.length && stack[stack.length - 1][1] >= level) {
+                stack.pop();
+            }
+
+            const parent = stack[stack.length - 1][0];
+            const item = new TextContentNode(content);
+            parent.add(item);
+            stack.push([item, level]);
+        }
+
+        root.refreshRoot();
+        return root;
+    }
+
+    printTree(node: TextContentNode | null = null, level = 0, isPrint = true): string {
+        let result = "";
+        node = node || this.root;
+
+        result += " ".repeat(level * 4) + `- ${node.content.trim()}\n`;
+        for (const child of node.children) {
+            result += this.printTree(child, level + 1, false);
+        }
+
+        if (node === this.root && isPrint) console.log(result.trim());
+        return result.trim();
+    }
+}
+
 // import datetime
 // import json
 // import math
