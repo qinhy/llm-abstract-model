@@ -382,12 +382,12 @@ def load_memory_agent():
 
 # main usage form here
 # Sample queries reflecting various personal scenarios
-queries = [
-    "Basic Info: Name - Alex Johnson, Birthday - 1995-08-15, Phone - +1-555-1234, Email - alex.johnson@email.com, Address - 123 Maple Street, Springfield",
-    "Personal Details: Occupation - Software Developer, Hobbies - reading, hiking, coding, photography",
-    "Friends: Taylor Smith (Birthday: 1994-02-20, Phone: +1-555-5678), Jordan Lee (Birthday: 1993-11-30, Phone: +1-555-9101), Morgan Brown (Birthday: 1996-05-25, Phone: +1-555-1213)",
-    "Work & Goals: Company - Tech Solutions Inc., Position - Front-End Developer, Work Email - alex.j@techsolutions.com, Work Phone - +1-555-4321, Goals - Learn a new programming language, Complete a marathon, Read 20 books this year"
-]
+# queries = [
+#     "Basic Info: Name - Alex Johnson, Birthday - 1995-08-15, Phone - +1-555-1234, Email - alex.johnson@email.com, Address - 123 Maple Street, Springfield",
+#     "Personal Details: Occupation - Software Developer, Hobbies - reading, hiking, coding, photography",
+#     "Friends: Taylor Smith (Birthday: 1994-02-20, Phone: +1-555-5678), Jordan Lee (Birthday: 1993-11-30, Phone: +1-555-9101), Morgan Brown (Birthday: 1996-05-25, Phone: +1-555-1213)",
+#     "Work & Goals: Company - Tech Solutions Inc., Position - Front-End Developer, Work Email - alex.j@techsolutions.com, Work Phone - +1-555-4321, Goals - Learn a new programming language, Complete a marathon, Read 20 books this year"
+# ]
 
 # Initialize the LLM Store and vendor
 store = LLMsStore()
@@ -401,41 +401,41 @@ llm = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(), temperature=0.7)
 # llm = grok = store.add_new_grok(vendor_id=vendor.get_id())
 
 # Create the root node and initialize the memory tree
-root = TextContentNode()
-memory_tree = TextMemoryTree(root, llm=llm, text_embedding=text_embedding)
+# root = TextContentNode()
+# memory_tree = TextMemoryTree(root, llm=llm, text_embedding=text_embedding)
 
-# Insert complex sample data into the memory tree
-for memory in queries: memory_tree.insert(memory)
+# # Insert complex sample data into the memory tree
+# for memory in queries: memory_tree.insert(memory)
 
-# Print the tree structure to visualize the organization
-print("\n########## Memory Tree Structure:")
-memory_tree.print_tree()
+# # Print the tree structure to visualize the organization
+# print("\n########## Memory Tree Structure:")
+# memory_tree.print_tree()
 
-print("\n########## Tidied Memory Tree Structure:")
-memory_tree.tidytree().print_tree()
+# print("\n########## Tidied Memory Tree Structure:")
+# memory_tree.tidytree().print_tree()
 
-# Define a function to test memory retrieval with various sample queries
-def test_retrieval(memory_tree: TextMemoryTree, query: str, top_k: int = 5):
-    print(f"\nTop {top_k} matches for query: '{query}'")
-    results = memory_tree.retrieve(query, top_k)
-    for i, (node, score) in enumerate(results, start=1):
-        print(f"{i}. score: {score:.4f} | [ {node.content} ]")
+# # Define a function to test memory retrieval with various sample queries
+# def test_retrieval(memory_tree: TextMemoryTree, query: str, top_k: int = 5):
+#     print(f"\nTop {top_k} matches for query: '{query}'")
+#     results = memory_tree.retrieve(query, top_k)
+#     for i, (node, score) in enumerate(results, start=1):
+#         print(f"{i}. score: {score:.4f} | [ {node.content} ]")
 
-# Run retrieval tests
-questions = [
-    # Basic Info
-    "What is Alex Johnson's full name and birthday?",
-    # Personal Details
-    "What is Alex's occupation?",
-    # Friends
-    "Who are Alex's friends, and when are their birthdays?",
-    # Work & Goals
-    "Where does Alex work and what is their position?",
-]
-for query in questions:
-    test_retrieval(memory_tree, query, top_k=6)
+# # Run retrieval tests
+# questions = [
+#     # Basic Info
+#     "What is Alex Johnson's full name and birthday?",
+#     # Personal Details
+#     "What is Alex's occupation?",
+#     # Friends
+#     "Who are Alex's friends, and when are their birthdays?",
+#     # Work & Goals
+#     "Where does Alex work and what is their position?",
+# ]
+# for query in questions:
+#     test_retrieval(memory_tree, query, top_k=6)
 
-# Initialize the personal assistant agent using the memory tree
-agent = PersonalAssistantAgent(memory_root=memory_tree.root,
-                               llm=llm, text_embedding=text_embedding)
-print(agent("Hi! Please tell me Taylor info."))
+# # Initialize the personal assistant agent using the memory tree
+# agent = PersonalAssistantAgent(memory_root=memory_tree.root,
+#                                llm=llm, text_embedding=text_embedding)
+# print(agent("Hi! Please tell me Taylor info."))
