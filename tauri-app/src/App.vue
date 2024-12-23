@@ -1,16 +1,43 @@
 <template>
-    <Chat></Chat>
+
+  <div>
+    <Button icon="pi pi-bars" @click="visible = true" class="absolute bottom-0 left-0" />
+    <Drawer v-model:visible="visible" header="Components">
+      <div class="card flex justify-center">
+        <div class="flex flex-wrap gap-4">
+          <div class="flex items-center gap-2">
+            <RadioButton v-model="ingredient" inputId="ingredient1" name="Chat" value="Chat" />
+            <label for="ingredient1">Chat</label>
+          </div>
+          <div class="flex items-center gap-2">
+            <RadioButton v-model="ingredient" inputId="ingredient2" name="FileUpload" value="FileUpload" />
+            <label for="ingredient2">FileUpload</label>
+          </div>
+        </div>
+      </div>
+    </Drawer>
+
+    <Chat v-if="ingredient == 'Chat'"></Chat>
+    <FileUpload v-if="ingredient == 'FileUpload'"></FileUpload>
+
+  </div>
 </template>
 <script lang="ts">
 import FileUpload from "./components/FileUpload.vue";
 import Chat from "./components/Chat.vue";
+import { ref } from "vue";
 // import { ref } from "vue";
 export default {
   components: {
-    FileUpload,Chat
+    FileUpload, Chat
   },
   props: [],
   setup() {
+    const visible = ref(false);
+    const ingredient = ref('Chat');
+    return {
+      visible, ingredient
+    }
   }
 }
 </script>
