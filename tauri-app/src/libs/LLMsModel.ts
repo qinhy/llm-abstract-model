@@ -300,14 +300,69 @@ export namespace Model4LLMs {
             const url = this._buildUrl(this.chat_endpoint || "");
             const headers = this._buildHeaders();
             try {
-                const response: AxiosResponse = await axios.post(url, JSON.stringify(payload), { headers, timeout: this.timeout * 1000 });
+                const response: AxiosResponse = await axios.post(
+                    url, JSON.stringify(payload),{ headers, timeout: this.timeout * 1000 });
                 return response.data;
             } catch (error: any) {
                 return { error: error.response ? error.response.data : error.toString() };
             }
         }
 
+        async *chatStreamRequest(payload: Record<string, any> = {}) {
+            const url = this._buildUrl(this.chat_endpoint || "");
+            const headers = this._buildHeaders();  
+            try {
+                payload.stream = true;
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(this.timeout * 1000),
+                });
+        
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+        
+                const reader = response.body?.getReader();
+                if (!reader) {
+                    throw new Error("Failed to obtain reader from the response body");
+                }
+        
+                const decoder = new TextDecoder();
+                let done = false;
+        
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+        
+                    if (value) {
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk
+                            .toString()
+                            .split('\n')
+                            .filter((line: string) => line.trim() !== '');
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = line.slice(6); // Remove 'data: ' prefix
+                                if (data === '[DONE]') return; // End of stream
+                                yield this.chatStreamResult(data);
+                            }
+                        }
+                    }
+                }
+            } catch (error: any) {
+                console.error('Error in streaming:', error.message || error);
+            }
+        }
+        
+
         chatResult(response: any): string {
+            return response;
+        }
+
+        chatStreamResult(response: any): string {
             return response;
         }
 
@@ -419,6 +474,17 @@ export namespace Model4LLMs {
             return vendor.chatResult(response);
         }
 
+        async *scall(messages: string | Record<string, any>[], autoStr: boolean = true) {
+            if (typeof messages !== "string" && !Array.isArray(messages) && autoStr) {
+                messages = String(messages);
+            }
+            const payload = this.constructPayload(this.constructMessages(messages));
+            const vendor = this.getVendor();
+            for await (const chunk of vendor.chatStreamRequest(payload)) {
+                if(chunk)yield chunk;
+            }
+        }
+
         private _controller: Controller4LLMs.AbstractLLMController = null;
 
         getController(): Controller4LLMs.AbstractLLMController {
@@ -460,6 +526,16 @@ export namespace Model4LLMs {
             } catch (error) {
                 console.error(`Error in chatResult: ${error}`);
                 throw new Error(`Failed to extract chat result.`);
+            }
+        }
+
+        chatStreamResult(response: any) {
+            const json = JSON.parse(response);
+            if (json.choices && json.choices.length > 0) {
+                const delta = json.choices[0].delta || {};
+                if (delta.content) {
+                    return delta.content;
+                }
             }
         }
 
