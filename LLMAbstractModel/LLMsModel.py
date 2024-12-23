@@ -147,11 +147,11 @@ class Controller4LLMs:
                     all_args.append(args_kwargs)
             return all_args, all_kwargs
         
-class KeyOrEnv(BaseModel):
-    key:str
+# class KeyOrEnv(BaseModel):
+#     key:str
 
-    def get(self):
-        return os.getenv(self.key,self.key)
+#     def get(self):
+#         return os.getenv(self.key,self.key)
     
 class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
@@ -160,7 +160,7 @@ class Model4LLMs:
     class AbstractVendor(AbstractObj):
         vendor_name: str  # e.g., 'OpenAI'
         api_url: str  # e.g., 'https://api.openai.com/v1/'
-        api_key: KeyOrEnv = None # API key for authentication, if required
+        api_key: str = None # API key for authentication, if required
         timeout: int = 30  # Default timeout for API requests in seconds
         
         chat_endpoint:str = None # e.g., '/v1/chat/completions'
@@ -173,7 +173,7 @@ class Model4LLMs:
             return llm_model_name       
         
         def get_api_key(self)->str:
-            return self.api_key.get()
+            return self.api_key#.get()
             # return os.getenv(self.api_key,self.api_key)
 
         def get_available_models(self) -> Dict[str, Any]:
@@ -779,16 +779,16 @@ class LLMsStore(BasicStore):
     def add_new_openai_vendor(self,api_key: str,
                               api_url: str='https://api.openai.com',
                               timeout: int=30) -> MODEL_CLASS_GROUP.OpenAIVendor:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.OpenAIVendor(api_url=api_url,api_key=KeyOrEnv(key=api_key),timeout=timeout))
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.OpenAIVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
     def add_new_Xai_vendor(self,api_key: str,
                               api_url: str='https://api.x.ai',
                               timeout: int=30) -> MODEL_CLASS_GROUP.XaiVendor:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.XaiVendor(api_url=api_url,api_key=KeyOrEnv(key=api_key),timeout=timeout))
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.XaiVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
     def add_new_ollama_vendor(self,api_url: str='http://localhost:11434',
                               timeout: int=30) -> MODEL_CLASS_GROUP.OllamaVendor:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.OllamaVendor(api_url=api_url,api_key=KeyOrEnv(key=''),timeout=timeout))
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.OllamaVendor(api_url=api_url,api_key='',timeout=timeout))
     
     def add_new_chatgpt4o(self,vendor_id:str,
                                 limit_output_tokens:int = 1024,
@@ -927,7 +927,7 @@ class Tests(unittest.TestCase):
         self.test_openai_3()
 
     def test_openai_1(self):
-        v = self.store.add_new_openai_vendor(api_key=KeyOrEnv(key='OPENAI_API_KEY'))
+        v = self.store.add_new_openai_vendor(os.environ['OPENAI_API_KEY'])
         print(v.get_available_models())
 
     def test_openai_2(self):

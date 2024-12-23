@@ -646,8 +646,8 @@ export namespace Model4LLMs {
         embedding_context?: string; // Optional context or description to customize embedding generation
         additional_features?: string[]; // Additional features for embeddings, e.g., "entity", "syntax"
 
-        __call__(inputText: string): number[] {
-            return this.generateEmbedding(inputText);
+        async acall(inputText: string): Promise<number[]> {
+            return await this.generateEmbedding(inputText);
         }
 
         async getVendor(): Promise<any> {
@@ -680,7 +680,7 @@ export namespace Model4LLMs {
         normalize_embeddings: boolean = true;
         max_input_length: number = 8192;
 
-        async call(inputText: string): Promise<number[]> {
+        async acall(inputText: string): Promise<number[]> {
             // Check for cached result
             if (this.cache_embeddings && this.cache && inputText in this.cache) {
                 return this.cache[inputText];
