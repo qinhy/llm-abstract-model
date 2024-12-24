@@ -114,7 +114,6 @@ export namespace Controller4LLMs {
             const inDegree: { [key: string]: number } = {};
             const zeroInDegree: string[] = [];
             const result: string[] = [];
-        
             // Initialize in-degree for each node
             for (const node in graph) {
                 if (!inDegree[node]) inDegree[node] = 0;
@@ -123,23 +122,19 @@ export namespace Controller4LLMs {
                     inDegree[neighbor]++;
                 }
             }
-        
             // Find all nodes with zero in-degree
             for (const node in inDegree) {
                 if (inDegree[node] === 0) zeroInDegree.push(node);
             }
-        
             // Process nodes with zero in-degree
             while (zeroInDegree.length > 0) {
                 const node = zeroInDegree.pop()!;
                 result.push(node);
-        
                 for (const neighbor of graph[node] || []) {
                     inDegree[neighbor]--;
                     if (inDegree[neighbor] === 0) zeroInDegree.push(neighbor);
                 }
             }
-        
             // Check for cycles (if all nodes are not processed)
             // if (result.length !== Object.keys(graph).length) {
             //     throw new Error("Graph has at least one cycle");
@@ -155,16 +150,16 @@ export namespace Controller4LLMs {
             const tasks: Record<string, string[]> = this.model.tasks;
 
             if (this.model.results["final"]) {
-                if(this.model.results["input"]){
-                    this.model.results = {input:this.model.results["input"]};
+                if (this.model.results["input"]) {
+                    this.model.results = { input: this.model.results["input"] };
                 }
-                else{
+                else {
                     this.model.results = {}
                 }
             }
 
             let result = null;
-                
+
             for (const taskId of this._topologicalSort(tasks).reverse()) {
                 if (this.model.results[taskId]) {
                     continue;
@@ -174,14 +169,14 @@ export namespace Controller4LLMs {
                 const allArgs = this._extractArgsKwargs(dependencyResults);
 
                 try {
-                    
+
                     const obj = this._readTask(taskId);
-                    if(obj['acall']){
+                    if (obj['acall']) {
                         result = await obj.acall(...allArgs);
-                    }else{
+                    } else {
                         result = obj.call(...allArgs);
                     }
-                    
+
                     this.model.results[taskId] = result;
                 } catch (e) {
                     throw new Error(`[WorkFlow]: Error at ${taskId}: ${e}`);
@@ -306,7 +301,61 @@ export namespace Model4LLMs {
             }
         }
 
+        async *chatStreamRequest(payload: Record<string, any> = {}) {
+            const url = this._buildUrl(this.chat_endpoint || "");
+            const headers = this._buildHeaders();
+            try {
+                payload.stream = true;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(this.timeout * 1000),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body?.getReader();
+                if (!reader) {
+                    throw new Error("Failed to obtain reader from the response body");
+                }
+
+                const decoder = new TextDecoder();
+                let done = false;
+
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+
+                    if (value) {
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk
+                            .toString()
+                            .split('\n')
+                            .filter((line: string) => line.trim() !== '');
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = line.slice(6); // Remove 'data: ' prefix
+                                if (data === '[DONE]') return; // End of stream
+                                yield this.chatStreamResult(data);
+                            }
+                        }
+                    }
+                }
+            } catch (error: any) {
+                console.error('Error in streaming:', error.message || error);
+            }
+        }
+
+
         chatResult(response: any): string {
+            return response;
+        }
+
+        chatStreamResult(response: any): string {
             return response;
         }
 
@@ -405,7 +454,6 @@ export namespace Model4LLMs {
             if (typeof messages === "string") {
                 messages = [{ role: "user", content: messages }];
             }
-            
             return msgs.concat(messages);
         }
 
@@ -414,10 +462,22 @@ export namespace Model4LLMs {
                 messages = String(messages);
             }
             const payload = this.constructPayload(this.constructMessages(messages));
-            
+
             const vendor = this.getVendor();
             const response = await vendor.chatRequest(payload);
             return vendor.chatResult(response);
+        }
+
+        async *scall(messages: string | Record<string, any>[], autoStr: boolean = true) {
+            if (typeof messages !== "string" && !Array.isArray(messages) && autoStr) {
+                messages = String(messages);
+            }
+            const payload = this.constructPayload(this.constructMessages(messages));
+            
+            const vendor = this.getVendor();
+            for await (const chunk of vendor.chatStreamRequest(payload)) {
+                if (chunk) yield chunk;
+            }
         }
 
         private _controller: Controller4LLMs.AbstractLLMController = null;
@@ -461,6 +521,16 @@ export namespace Model4LLMs {
             } catch (error) {
                 console.error(`Error in chatResult: ${error}`);
                 throw new Error(`Failed to extract chat result.`);
+            }
+        }
+
+        chatStreamResult(response: any) {
+            const json = JSON.parse(response);
+            if (json.choices && json.choices.length > 0) {
+                const delta = json.choices[0].delta || {};
+                if (delta.content) {
+                    return delta.content;
+                }
             }
         }
 
@@ -796,7 +866,7 @@ export namespace Model4LLMs {
         results: Record<string, any> = {};
 
         constructor(data?: any) {
-            super(data);            
+            super(data);
             this.tasks = data?.tasks || {};
             this.results = data?.results || {};
         }
@@ -809,7 +879,7 @@ export namespace Model4LLMs {
                     this.tasks[firstTaskId].push("input");
                 }
                 this.results["input"] = [args];
-            }else{
+            } else {
                 this.results = {
                     ...this.results,
                     ...args
@@ -891,16 +961,16 @@ export class LLMsStore extends BasicStore {
     private _get_as_obj(id: string, data_dict: Record<string, any>): Model4Basic.AbstractObj {
         const ClassConstructor = this._get_class(id);
         const obj = new ClassConstructor();
-        Object.assign(obj,data_dict);
+        Object.assign(obj, data_dict);
         obj.set_id(id).init_controller(this);
         return obj;
     }
-    
+
     private _add_new_obj(obj: Model4Basic.AbstractObj, id: string | null = null): Model4Basic.AbstractObj {
-        if(!this.MODEL_CLASS_GROUP.hasOwnProperty(obj.constructor.name)){
+        if (!this.MODEL_CLASS_GROUP.hasOwnProperty(obj.constructor.name)) {
             var tmp = {};
             tmp[obj.constructor.name] = obj.constructor;
-            Object.assign(this.MODEL_CLASS_GROUP,tmp);
+            Object.assign(this.MODEL_CLASS_GROUP, tmp);
         }
         id = id === null ? obj.gen_new_id() : id;
         const data = obj.model_dump_json_dict();
@@ -1028,7 +1098,7 @@ export class LLMsStore extends BasicStore {
     addNewWorkFlow(tasks: Record<string, string[]> | string[], metadata: Record<string, any> = {}, id?: string): Model4LLMs.WorkFlow {
         if (Array.isArray(tasks)) {
             tasks.reverse();
-            const dependencies = tasks.map((v,i) => (tasks[i+1]?[tasks[i+1]]:[]));
+            const dependencies = tasks.map((v, i) => (tasks[i + 1] ? [tasks[i + 1]] : []));
             tasks = tasks.reduce((acc: Record<string, string[]>, task, index) => {
                 acc[task] = dependencies[index] || [];
                 return acc;
