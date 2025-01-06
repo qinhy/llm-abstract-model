@@ -1,23 +1,41 @@
 <template>
-  <div style="width: 100vw; height: 60vh">
+  <div style="width: 100vw; height: 50vh">
     <Button label="Run" icon="pi pi-play" @click="runGraph" />
     <BaklavaEditor :view-model="baklava" />
     <div v-if="config_obj_id" class="vendor-section bg-white shadow-lg p-6 rounded-lg mb-8">
 
-      <div v-if="config_obj_id.split(':')[0]=='StringTemplate'">{{ config_obj_id }}</div>
+      <div v-if="config_obj_id.split(':')[0]=='StringTemplate'">
+        
+      <div class="mb-4">
+        <label for="StringTemplate" class="block text-gray-600 text-sm font-medium mb-2">String Template:</label>
+        <InputText id="StringTemplate" v-model="stringTemplate" placeholder="Enter text for OpenAI API Key..."
+          class="p-inputtext w-full border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200" />
+      </div>
+      </div>
 
-      <div v-if="config_obj_id.split(':')[0]=='RegxExtractor'">{{ config_obj_id }}</div>
+      <div v-if="config_obj_id.split(':')[0]=='RegxExtractor'">
+        
+        <div class="mb-4">
+          <label for="RegxExtractor" class="block text-gray-600 text-sm font-medium mb-2">Regx Extractor:</label>
+          <InputText id="RegxExtractor" v-model="regxExtractor" placeholder="Enter text for OpenAI API Key..."
+            class="p-inputtext w-full border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200" />
+        </div>
+      </div>
 
       <div v-if="config_obj_id.split(':')[0]=='ChatGPT4oMini'">        
-        <!-- <h2 class="text-xl font-semibold text-gray-700 mb-4">Vendor Configuration</h2> -->
+        <p class="text-sm text-gray-600">
+          <strong>Vendor ID:</strong> {{ vendorId }}
+        </p>
         <div class="mb-4">
           <label for="apiKey" class="block text-gray-600 text-sm font-medium mb-2">OpenAI API Key:</label>
           <InputText id="apiKey" v-model="openaiApiKey" placeholder="Enter text for OpenAI API Key..."
             class="p-inputtext w-full border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200" />
         </div>
-        <p class="text-sm text-gray-600">
-          <strong>Vendor ID:</strong> {{ vendorId }}
-        </p>
+        <div class="mb-4">
+          <label for="SystemPrompt" class="block text-gray-600 text-sm font-medium mb-2">System Prompt:</label>
+          <Textarea id="SystemPrompt" v-model="systemPrompt" placeholder="Enter text for System Prompt ..."
+            class="p-inputtext w-full border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200" />
+        </div>
       </div>
     </div>
     <div style="margin-top: 1px;">
@@ -103,6 +121,23 @@ export default {
       set: (val) => { store.find_all('OpenAIVendor:*')[0].get_controller().update({ api_key: val }) },
     })
 
+    const systemPrompt = computed({
+      get: () => { return store.find(config_obj_id.value).system_prompt },
+      set: (val) => { store.find(config_obj_id.value).get_controller().update({ system_prompt: val }) },
+    })
+
+    const stringTemplate = computed({
+      get: () => { return store.find(config_obj_id.value).string },
+      set: (val) => { store.find(config_obj_id.value).get_controller().update({ string: val }) },
+    })
+
+    const regxExtractor = computed({
+      get: () => { return store.find(config_obj_id.value).regx },
+      set: (val) => { store.find(config_obj_id.value).get_controller().update({ regx: val }) },
+    })
+
+    
+
     if (localStorage.getItem('MakeAChain')) { load(); }
     else {
       const vendor = store.addNewOpenAIVendor('null');
@@ -149,7 +184,7 @@ export default {
     });
 
 
-    return { baklava, runGraph, openaiApiKey, vendorId, config_obj_id };
+    return { baklava, runGraph, openaiApiKey, systemPrompt, stringTemplate, regxExtractor, vendorId, config_obj_id };
   }
 }
 </script>
