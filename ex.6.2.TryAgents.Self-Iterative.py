@@ -199,11 +199,11 @@ Remember to be thorough, constructive, and professional in your review. Your goa
 main_llm = store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens=4096)
 eval_llm = store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens=4096)
 
-main_llm = store.add_new_grok(vendor_id='auto',limit_output_tokens=4096)
-eval_llm = store.add_new_grok(vendor_id='auto',limit_output_tokens=4096)
+# main_llm = store.add_new_grok(vendor_id='auto',limit_output_tokens=4096)
+# eval_llm = store.add_new_grok(vendor_id='auto',limit_output_tokens=4096)
 
-main_llm = store.add_new_deepseek(vendor_id='auto',limit_output_tokens=4096)
-eval_llm = store.add_new_deepseek(vendor_id='auto',limit_output_tokens=4096)
+# main_llm = store.add_new_deepseek(vendor_id='auto',limit_output_tokens=4096)
+# eval_llm = store.add_new_deepseek(vendor_id='auto',limit_output_tokens=4096)
 
 store.add_new_obj(EvalAgent(llm_id=eval_llm.get_id()),id='EvalAgent:eval_agent')
 store.add_new_obj(MainAgent(llm_id=main_llm.get_id(),eval_agent_id='EvalAgent:eval_agent'),id='MainAgent:main_agent')
