@@ -1,26 +1,27 @@
 <template>
   <div style="width: 100vw; height: 60vh">
-    <!-- Vendor Details -->
-    <div class="vendor-section bg-white shadow-lg p-6 rounded-lg mb-8">
-      <Button label="Run" icon="pi pi-play" @click="runGraph" />
-      <!-- <h2 class="text-xl font-semibold text-gray-700 mb-4">Vendor Configuration</h2> -->
-      <div class="mb-4">
-        <label for="apiKey" class="block text-gray-600 text-sm font-medium mb-2">OpenAI API Key:</label>
-        <InputText id="apiKey" v-model="openaiApiKey" placeholder="Enter text for OpenAI API Key..."
-          class="p-inputtext w-full border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200" />
+    <Button label="Run" icon="pi pi-play" @click="runGraph" />
+    <BaklavaEditor :view-model="baklava" />
+    <div v-if="config_obj_id" class="vendor-section bg-white shadow-lg p-6 rounded-lg mb-8">
+
+      <div v-if="config_obj_id.split(':')[0]=='StringTemplate'">{{ config_obj_id }}</div>
+
+      <div v-if="config_obj_id.split(':')[0]=='RegxExtractor'">{{ config_obj_id }}</div>
+
+      <div v-if="config_obj_id.split(':')[0]=='ChatGPT4oMini'">        
+        <!-- <h2 class="text-xl font-semibold text-gray-700 mb-4">Vendor Configuration</h2> -->
+        <div class="mb-4">
+          <label for="apiKey" class="block text-gray-600 text-sm font-medium mb-2">OpenAI API Key:</label>
+          <InputText id="apiKey" v-model="openaiApiKey" placeholder="Enter text for OpenAI API Key..."
+            class="p-inputtext w-full border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200" />
+        </div>
+        <p class="text-sm text-gray-600">
+          <strong>Vendor ID:</strong> {{ vendorId }}
+        </p>
       </div>
-      <p class="text-sm text-gray-600">
-        <strong>Vendor ID:</strong> {{ vendorId }}
-      </p>
-    </div>
-    <div class="vendor-section bg-white shadow-lg p-6 rounded-lg mb-8">
-    <p class="text-sm text-gray-600">
-        Config
-      </p>
     </div>
     <div style="margin-top: 1px;">
     </div>
-    <BaklavaEditor :view-model="baklava" />
   </div>
 </template>
 
@@ -128,23 +129,27 @@ export default {
     }, 2000);
 
     // Watch for selected nodes
-    const config_obj_id = ref('null');
+    const config_obj_id = ref('');
     onMounted(() => {
       watch(
         () => baklava.displayedGraph.selectedNodes,
         (newValue) => {
           if (!baklava.editor) return;
+          if (newValue.length==0) return;
           const node = newValue[0];
           if(node.inputs.ID?.value){
             const obj = store.find_all(`*:${node.inputs.ID.value}`)[0];
             config_obj_id.value = obj.get_id();
+          }
+          else{
+            config_obj_id.value = '';
           }
         }
       );
     });
 
 
-    return { baklava, runGraph, openaiApiKey, vendorId };
+    return { baklava, runGraph, openaiApiKey, vendorId, config_obj_id };
   }
 }
 </script>
