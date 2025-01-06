@@ -41,9 +41,14 @@ class Controller4LLMs:
                     # try other vendors
                     pass
                 elif type(self.model) in [Model4LLMs.Grok ]:
-                    # try ollama vendor
                     vs = self._store.find_all('XaiVendor:*')
                     if len(vs)==0:raise ValueError(f'auto get endor of XaiVendor:* is not exists! Please (add and) change_vendor(...)')
+                    else: return vs[0]
+                    # try other vendors
+                    pass
+                elif type(self.model) in [Model4LLMs.DeepSeek ]:
+                    vs = self._store.find_all('DeepSeekVendor:*')
+                    if len(vs)==0:raise ValueError(f'auto get endor of DeepSeekVendor:* is not exists! Please (add and) change_vendor(...)')
                     else: return vs[0]
                     # try other vendors
                     pass
