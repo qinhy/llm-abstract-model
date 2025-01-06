@@ -1,5 +1,5 @@
 <template>
-  <div style="width: 100vw; height: 50vh">
+  <div :style="{width: '100vw', height: config_obj_id?'50vh':'100vh'}">
     <Button label="Run" icon="pi pi-play" @click="runGraph" />
     <BaklavaEditor :view-model="baklava" />
     <div v-if="config_obj_id" class="vendor-section bg-white shadow-lg p-6 rounded-lg mb-8">
@@ -169,8 +169,8 @@ export default {
       watch(
         () => baklava.displayedGraph.selectedNodes,
         (newValue) => {
-          if (!baklava.editor) return;
-          if (newValue.length==0) return;
+          if (!baklava.editor){config_obj_id.value = ''; return;}
+          if (newValue.length==0){config_obj_id.value = ''; return;}
           const node = newValue[0];
           if(node.inputs.ID?.value){
             const obj = store.find_all(`*:${node.inputs.ID.value}`)[0];
