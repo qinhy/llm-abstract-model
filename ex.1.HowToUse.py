@@ -17,6 +17,9 @@ text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
 # phi3    = store.add_new_phi3(vendor_id=vendor.get_id())
 # llama32 = store.add_new_llama(vendor_id=vendor.get_id())
 
+# vendor = store.add_new_DeepSeek_vendor(api_key=os.environ.get('DEEPSEEK_API_KEY','null'))
+# llm = chatgpt4omini = store.add_new_deepseek(vendor_id=vendor.get_id())
+
 # just asking
 print(llm('hi! What is your name?'))
 # -> Hello! I’m called Assistant. How can I help you today?
