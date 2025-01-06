@@ -13,6 +13,11 @@
         <strong>Vendor ID:</strong> {{ vendorId }}
       </p>
     </div>
+    <div class="vendor-section bg-white shadow-lg p-6 rounded-lg mb-8">
+    <p class="text-sm text-gray-600">
+        Config
+      </p>
+    </div>
     <div style="margin-top: 1px;">
     </div>
     <BaklavaEditor :view-model="baklava" />
@@ -20,12 +25,12 @@
 </template>
 
 <script lang="ts">
-import { BaklavaEditor, EditorComponent, useBaklava, DependencyEngine, applyResult, SelectInterface } from "baklavajs";
+import { BaklavaEditor, EditorComponent, useBaklava, DependencyEngine, applyResult, SelectInterface, ButtonInterface } from "baklavajs";
 import "@baklavajs/themes/dist/syrup-dark.css";
 import { CodeBlockExtract, PromptInput, PromptOutput } from "./Nodes/CustomNodes";
 import { defineNode, NodeInterface, TextInputInterface, TextareaInputInterface, TextInterface } from "baklavajs";
 import { Model4LLMs, LLMsStore } from '../libs/LLMsModel';
-import { computed } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RegxExtractor, StringTemplate } from "../libs/utils";
 
 export default {
@@ -71,15 +76,16 @@ export default {
         .forEach(name => {
           const ids = store.keys(`${name}:*`).map(n => n.split(':')[1]);
           // console.log(ids);
+
           baklava.editor.registerNodeType(defineNode({
             type: name,
             inputs: {
-              operation: () => new SelectInterface("Operation", ids[0], ids).setPort(false),
+              ID: () => new SelectInterface("ID", ids[0], ids).setPort(false),
               source: () => new TextInputInterface("Text", ""),
             },
             outputs: { output: () => new NodeInterface<string>("Output", "null"), },
-            async calculate({ source, operation },) {
-              const obj = store.find(`${name}:${operation}`);
+            async calculate({ source, ID },) {
+              const obj = store.find(`${name}:${ID}`);
               if(name=='StringTemplate' && !Array.isArray(source)){
                 source = [source]
               }      
@@ -120,6 +126,23 @@ export default {
       save();
       // console.log("Auto-saved at", new Date().toLocaleTimeString());
     }, 2000);
+
+    // Watch for selected nodes
+    const config_obj_id = ref('null');
+    onMounted(() => {
+      watch(
+        () => baklava.displayedGraph.selectedNodes,
+        (newValue) => {
+          if (!baklava.editor) return;
+          const node = newValue[0];
+          if(node.inputs.ID?.value){
+            const obj = store.find_all(`*:${node.inputs.ID.value}`)[0];
+            config_obj_id.value = obj.get_id();
+          }
+        }
+      );
+    });
+
 
     return { baklava, runGraph, openaiApiKey, vendorId };
   }
