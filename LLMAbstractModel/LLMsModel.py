@@ -800,7 +800,7 @@ class LLMsStore(BasicStore):
         api_key=os.getenv(api_key,api_key)
         return self.add_new_obj(self.MODEL_CLASS_GROUP.XaiVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
-    def add_new_DeepSeek_vendor(self,api_key: str,
+    def add_new_deepseek_vendor(self,api_key: str,
                               api_url: str='https://api.deepseek.com',
                               timeout: int=30) -> MODEL_CLASS_GROUP.DeepSeekVendor:
         api_key=os.getenv(api_key,api_key)
