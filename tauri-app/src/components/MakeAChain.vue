@@ -8,7 +8,7 @@
         
       <div class="mb-4">
         <label for="StringTemplate" class="block text-gray-600 text-sm font-medium mb-2">String Template:</label>
-        <InputText id="StringTemplate" v-model="stringTemplate" placeholder="Enter text for OpenAI API Key..."
+        <InputText id="StringTemplate" v-model="stringTemplate" placeholder="Enter text for String Template..."
           class="p-inputtext w-full border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200" />
       </div>
       </div>
@@ -17,7 +17,7 @@
         
         <div class="mb-4">
           <label for="RegxExtractor" class="block text-gray-600 text-sm font-medium mb-2">Regx Extractor:</label>
-          <InputText id="RegxExtractor" v-model="regxExtractor" placeholder="Enter text for OpenAI API Key..."
+          <InputText id="RegxExtractor" v-model="regxExtractor" placeholder="Enter text for Regx Extractor..."
             class="p-inputtext w-full border border-gray-300 rounded-md shadow-sm focus:ring focus:ring-blue-200" />
         </div>
       </div>
