@@ -190,7 +190,6 @@ export default {
           if (!baklava.editor){config_obj_id.value = ''; return;}
           if (newValue.length==0){config_obj_id.value = ''; return;}
           const node = newValue[0];
-          console.log(node);
           
           if(store.exists(node.title)){
             const obj = store.find(node.title);
