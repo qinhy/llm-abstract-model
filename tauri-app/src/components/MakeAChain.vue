@@ -59,7 +59,7 @@ export default {
   setup() {
     // set up interactive GUI
     const baklava = useBaklava();
-    window.baklava = baklava;
+    // window.baklava = baklava;
     baklava.editor.registerNodeType(PromptInput);
     baklava.editor.registerNodeType(PromptOutput);
     const engine = new DependencyEngine(baklava.editor);
