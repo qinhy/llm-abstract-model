@@ -1020,7 +1020,7 @@ export class LLMsStore extends BasicStore {
     }
 
     addNewChatGPT4oMini(
-        vendorId: string,
+        vendorId: string = "auto",
         systemPrompt: string | null = null,
         limitOutputTokens: number = 1024,
         temperature: number = 0.7,

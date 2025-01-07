@@ -46,7 +46,7 @@
 <script lang="ts">
 import { BaklavaEditor, EditorComponent, useBaklava, DependencyEngine, applyResult, SelectInterface, ButtonInterface } from "baklavajs";
 import "@baklavajs/themes/dist/syrup-dark.css";
-import { CodeBlockExtract, PromptInput, PromptOutput } from "./Nodes/CustomNodes";
+import { PromptInput, PromptOutput } from "./Nodes/CustomNodes";
 import { defineNode, NodeInterface, TextInputInterface, TextareaInputInterface, TextInterface } from "baklavajs";
 import { Model4LLMs, LLMsStore } from '../libs/LLMsModel';
 import { computed, onMounted, ref, watch } from "vue";
@@ -79,32 +79,49 @@ export default {
       store.set("Graph", baklava.editor.save());
       localStorage.setItem('MakeAChain', store.dumps());
     }
-
+      
     const load = () => {
-      store.clean();
-      store.add_new_obj(new StringTemplate('')).get_controller().delete();
-      store.add_new_obj(new RegxExtractor('')).get_controller().delete();
-      store.loads(localStorage.getItem('MakeAChain'));
       loadUI();
+      store.clean();
+      store.loads(localStorage.getItem('MakeAChain'));
       baklava.editor.load(store.get("Graph"))
     }
 
-    const loadUI = () => {
-      store.find_all('*:*').filter(obj => obj.acall || obj.call)
-        .map(obj => obj.get_id().split(':')[0])
-        .forEach(name => {
-          const ids = store.keys(`${name}:*`).map(n => n.split(':')[1]);
-          // console.log(ids);
+    store.addNewChatGPT4oMini().get_controller().delete();
+    store.add_new_obj(new StringTemplate()).get_controller().delete();
+    store.add_new_obj(new RegxExtractor()).get_controller().delete();
 
+    const loadUI = () => {
+      const objs = [
+        new Model4LLMs.ChatGPT4oMini(),new StringTemplate(''),
+        new RegxExtractor('')];
+      objs.filter(obj => obj.acall || obj.call)
+        .forEach(obj => {
+          const name = obj.constructor.name;
           baklava.editor.registerNodeType(defineNode({
             type: name,
             inputs: {
-              ID: () => new SelectInterface("ID", ids[0], ids).setPort(false),
+              // ID: () => new SelectInterface("ID", ids[0], ids).setPort(false),
               source: () => new TextInputInterface("Text", ""),
             },
             outputs: { output: () => new NodeInterface<string>("Output", "null"), },
-            async calculate({ source, ID },) {
-              const obj = store.find(`${name}:${ID}`);
+            onCreate(){
+              this.build = ()=>{
+                if(!this.llm_obj){
+                  this.llm_obj = store.find(this.title);
+                }
+                if(!this.llm_obj){
+                  this.llm_obj = store.add_new_obj(new store.MODEL_CLASS_GROUP[name]());
+                  this.title = this.llm_obj.get_id();
+                }
+              }
+            },
+            onDestroy(){
+              this.llm_obj?.get_controller().delete();
+            },
+            async calculate({ source },) {
+              this.build();
+              const obj = this.llm_obj;//store.find(`${name}:${ID}`);
               if(name=='StringTemplate' && !Array.isArray(source)){
                 source = [source]
               }      
@@ -113,8 +130,8 @@ export default {
               if (obj.acall) return { output: await obj.acall(source) };
             },
           }));
-        })
-    }
+        });
+    }    
 
     const openaiApiKey = computed({
       get: () => { return store.find_all('OpenAIVendor:*')[0].api_key },
@@ -146,11 +163,11 @@ export default {
 \`\`\`translation
 ...
 \`\`\``;
-      store.addNewChatGPT4oMini("auto", systemPrompt);
-      store.add_new_obj(new StringTemplate(`\`\`\`text\n{}\n\`\`\``));
-      store.add_new_obj(new RegxExtractor('```translation\\s*(.*?)\\s*```'));
+      // store.addNewChatGPT4oMini("auto", systemPrompt);
+      // store.add_new_obj(new StringTemplate(`\`\`\`text\n{}\n\`\`\``));
+      // store.add_new_obj(new RegxExtractor('```translation\\s*(.*?)\\s*```'));
       loadUI();
-      baklava.editor.load({"graph":{"id":"f209b6fa-5498-4552-9c9a-c9fecb54b676","nodes":[{"type":"ChatGPT4oMini","id":"8404b184-09c9-4c15-bd54-bf3cefb616a8","title":"ChatGPT4oMini","inputs":{"ID":{"id":"a22af7e5-4777-4bf9-9872-c551fb515439","value":"906a-08ca-928b-e0a5-582c"},"source":{"id":"9dac03dd-656e-4b50-9df1-11159d39a794","value":""}},"outputs":{"output":{"id":"8f62d00f-ba10-473d-85f8-f1ae77cfa44e","value":"null"}},"position":{"x":312.7999683283151,"y":-128.6429774846618},"width":200,"twoColumn":false},{"type":"StringTemplate","id":"531b27b3-a36a-4ae6-a00f-f4644cd8ad9a","title":"StringTemplate","inputs":{"ID":{"id":"6a672382-f309-4fd0-a14b-63f0a0fdfbbd","value":"ea35-2a82-8ce4-b08c-c10f"},"source":{"id":"8288a42f-c629-42b5-aaf2-4d303409b438","value":""}},"outputs":{"output":{"id":"ae5d6995-c193-4cfb-808b-f84770ada3fa","value":"null"}},"position":{"x":89.28288142171132,"y":-130.34984751044357},"width":200,"twoColumn":false},{"type":"PromptInput","id":"18d9def2-8749-4bd8-960b-b67b23477795","title":"PromptInput","inputs":{"source":{"id":"277a3ab1-91fe-4d09-8376-b5271014da09","value":"Hi!"}},"outputs":{"output":{"id":"1a762dc5-f248-4cc9-935b-cafecdfbe2dd","value":"null"}},"position":{"x":-136.09209498739915,"y":-190.33197351695105},"width":200,"twoColumn":false},{"type":"RegxExtractor","id":"b0d0d5d2-fb9c-4cc8-9dcf-56bc673d1c37","title":"RegxExtractor","inputs":{"ID":{"id":"e2c3dbb0-5d9e-4f23-b9a2-f8ed9ebdde89","value":"c49c-5921-db8e-dc28-3ee0"},"source":{"id":"059bbba6-dac4-4d30-bed7-c28b7f00d9c3","value":""}},"outputs":{"output":{"id":"36627195-68fd-4a31-97f9-be2a6cb12de0","value":"null"}},"position":{"x":536.8131917198019,"y":-138.81769319486864},"width":200,"twoColumn":false},{"type":"PromptOutput","id":"6209f68a-542a-44ed-9db8-dc8e8ff92ac5","title":"Display","inputs":{"value":{"id":"b3ab4747-a870-4f84-a264-6d7e9e53924a","value":null}},"outputs":{"display":{"id":"b7d1ae1e-3351-4bfc-8903-22fa9d69d22f","value":"null"}},"position":{"x":761.5711123624714,"y":-97.56476680161879},"width":200,"twoColumn":false}],"connections":[{"id":"69a26221-ca04-4bb3-84e7-e5f996ba78bd","from":"ae5d6995-c193-4cfb-808b-f84770ada3fa","to":"9dac03dd-656e-4b50-9df1-11159d39a794"},{"id":"f304e713-8e6b-4849-b70f-0426fa1f9276","from":"1a762dc5-f248-4cc9-935b-cafecdfbe2dd","to":"8288a42f-c629-42b5-aaf2-4d303409b438"},{"id":"195f740b-f2dc-4d4a-9160-c7b61cbadbf8","from":"8f62d00f-ba10-473d-85f8-f1ae77cfa44e","to":"059bbba6-dac4-4d30-bed7-c28b7f00d9c3"},{"id":"d80c9a20-88ac-49fe-a167-e9f27210a75a","from":"36627195-68fd-4a31-97f9-be2a6cb12de0","to":"b3ab4747-a870-4f84-a264-6d7e9e53924a"}],"inputs":[],"outputs":[],"panning":{"x":1017.8907740695233,"y":306.57506062265844},"scaling":0.5903646427685914},"graphTemplates":[]})
+      // baklava.editor.load({"graph":{"id":"f209b6fa-5498-4552-9c9a-c9fecb54b676","nodes":[{"type":"ChatGPT4oMini","id":"8404b184-09c9-4c15-bd54-bf3cefb616a8","title":"ChatGPT4oMini","inputs":{"ID":{"id":"a22af7e5-4777-4bf9-9872-c551fb515439","value":"906a-08ca-928b-e0a5-582c"},"source":{"id":"9dac03dd-656e-4b50-9df1-11159d39a794","value":""}},"outputs":{"output":{"id":"8f62d00f-ba10-473d-85f8-f1ae77cfa44e","value":"null"}},"position":{"x":312.7999683283151,"y":-128.6429774846618},"width":200,"twoColumn":false},{"type":"StringTemplate","id":"531b27b3-a36a-4ae6-a00f-f4644cd8ad9a","title":"StringTemplate","inputs":{"ID":{"id":"6a672382-f309-4fd0-a14b-63f0a0fdfbbd","value":"ea35-2a82-8ce4-b08c-c10f"},"source":{"id":"8288a42f-c629-42b5-aaf2-4d303409b438","value":""}},"outputs":{"output":{"id":"ae5d6995-c193-4cfb-808b-f84770ada3fa","value":"null"}},"position":{"x":89.28288142171132,"y":-130.34984751044357},"width":200,"twoColumn":false},{"type":"PromptInput","id":"18d9def2-8749-4bd8-960b-b67b23477795","title":"PromptInput","inputs":{"source":{"id":"277a3ab1-91fe-4d09-8376-b5271014da09","value":"Hi!"}},"outputs":{"output":{"id":"1a762dc5-f248-4cc9-935b-cafecdfbe2dd","value":"null"}},"position":{"x":-136.09209498739915,"y":-190.33197351695105},"width":200,"twoColumn":false},{"type":"RegxExtractor","id":"b0d0d5d2-fb9c-4cc8-9dcf-56bc673d1c37","title":"RegxExtractor","inputs":{"ID":{"id":"e2c3dbb0-5d9e-4f23-b9a2-f8ed9ebdde89","value":"c49c-5921-db8e-dc28-3ee0"},"source":{"id":"059bbba6-dac4-4d30-bed7-c28b7f00d9c3","value":""}},"outputs":{"output":{"id":"36627195-68fd-4a31-97f9-be2a6cb12de0","value":"null"}},"position":{"x":536.8131917198019,"y":-138.81769319486864},"width":200,"twoColumn":false},{"type":"PromptOutput","id":"6209f68a-542a-44ed-9db8-dc8e8ff92ac5","title":"Display","inputs":{"value":{"id":"b3ab4747-a870-4f84-a264-6d7e9e53924a","value":null}},"outputs":{"display":{"id":"b7d1ae1e-3351-4bfc-8903-22fa9d69d22f","value":"null"}},"position":{"x":761.5711123624714,"y":-97.56476680161879},"width":200,"twoColumn":false}],"connections":[{"id":"69a26221-ca04-4bb3-84e7-e5f996ba78bd","from":"ae5d6995-c193-4cfb-808b-f84770ada3fa","to":"9dac03dd-656e-4b50-9df1-11159d39a794"},{"id":"f304e713-8e6b-4849-b70f-0426fa1f9276","from":"1a762dc5-f248-4cc9-935b-cafecdfbe2dd","to":"8288a42f-c629-42b5-aaf2-4d303409b438"},{"id":"195f740b-f2dc-4d4a-9160-c7b61cbadbf8","from":"8f62d00f-ba10-473d-85f8-f1ae77cfa44e","to":"059bbba6-dac4-4d30-bed7-c28b7f00d9c3"},{"id":"d80c9a20-88ac-49fe-a167-e9f27210a75a","from":"36627195-68fd-4a31-97f9-be2a6cb12de0","to":"b3ab4747-a870-4f84-a264-6d7e9e53924a"}],"inputs":[],"outputs":[],"panning":{"x":1017.8907740695233,"y":306.57506062265844},"scaling":0.5903646427685914},"graphTemplates":[]})
     }
 
     // engine.start();
@@ -173,9 +190,15 @@ export default {
           if (!baklava.editor){config_obj_id.value = ''; return;}
           if (newValue.length==0){config_obj_id.value = ''; return;}
           const node = newValue[0];
-          if(node.inputs.ID?.value){
-            const obj = store.find_all(`*:${node.inputs.ID.value}`)[0];
+          console.log(node);
+          
+          if(store.exists(node.title)){
+            const obj = store.find(node.title);
             config_obj_id.value = obj.get_id();
+            node.llm_obj = obj;
+          }
+          else if(node.build){
+            node.build();
           }
           else{
             config_obj_id.value = '';
