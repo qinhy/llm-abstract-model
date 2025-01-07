@@ -44,10 +44,10 @@
 </template>
 
 <script lang="ts">
-import { BaklavaEditor, EditorComponent, useBaklava, DependencyEngine, applyResult, SelectInterface, ButtonInterface } from "baklavajs";
+import { BaklavaEditor, useBaklava, DependencyEngine, applyResult } from "baklavajs";
 import "@baklavajs/themes/dist/syrup-dark.css";
 import { PromptInput, PromptOutput } from "./Nodes/CustomNodes";
-import { defineNode, NodeInterface, TextInputInterface, TextareaInputInterface, TextInterface } from "baklavajs";
+import { defineNode, NodeInterface, TextInputInterface } from "baklavajs";
 import { Model4LLMs, LLMsStore } from '../libs/LLMsModel';
 import { computed, onMounted, ref, watch } from "vue";
 import { RegxExtractor, StringTemplate } from "../libs/utils";
