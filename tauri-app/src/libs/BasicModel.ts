@@ -220,10 +220,13 @@ export namespace Model4Basic {
 
         protected _get_controller_class(model_class:any): any {
             const class_type = `${this.constructor.name}Controller`;
-            const res = Object.values(model_class).find(
+            var res = Object.values(model_class).find(
                 (c) => (c as any).name === class_type
             );
-            if (!res) throw new Error(`No such class of ${class_type}`);
+            if (!res){
+                // throw new Error(`No such class of ${class_type}`);
+                res = Controller4Basic.AbstractObjController;
+            }
             return res;
         }
     };

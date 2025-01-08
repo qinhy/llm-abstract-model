@@ -16,8 +16,8 @@
     "@baklavajs/renderer-vue": "^2.6.0",
     "@baklavajs/themes": "^2.5.0",
     "@primevue/themes": "^4.2.5",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/plugin-opener": "^2.2.3",
     "axios": "^1.7.9",
     "baklavajs": "^2.6.0",
     "buffer": "^6.0.3",
@@ -27,7 +27,7 @@
     "primevue": "^4.2.5",
     "quill": "^2.0.3",
     "vue": "^3.5.13",
-    "vue-i18n": "^10.0.5"
+    "vue-i18n": "^11.0.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

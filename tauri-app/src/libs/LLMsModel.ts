@@ -897,6 +897,10 @@ export namespace Model4LLMs {
 export class LLMsStore extends BasicStore {
     MODEL_CLASS_GROUP = Model4LLMs;
 
+    get_class(id: string): typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup {
+        return this._get_class(id);
+    }
+
     protected _get_class(id: string): typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup {
         const class_type = id.split(':')[0];
         const classes: Record<string, any> = {};

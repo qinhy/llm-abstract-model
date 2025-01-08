@@ -58,6 +58,8 @@ export class StringTemplate extends Model4LLMs.AbstractObj {
   }
 
   public call(args: string[]): string {
+    console.log(args);
+    
     return this.format(this.string, args);
   }
 

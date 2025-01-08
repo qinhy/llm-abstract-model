@@ -58,19 +58,39 @@ export default {
     BaklavaEditor
   },
   setup() {
-    const store_name = 'MakeAChain';
+    const store_name = 'CustomWorkflow';
     const llm_objs = [new Model4LLMs.ChatGPT4oMini(),new StringTemplate(''),new RegxExtractor('')];
-    const node_types: Record<string, any> = {"TimeSleepNode":TimeSleepNode, "PromptInput":PromptInput, "Display":PromptOutput};
+    const node_types: Record<string, any> = {"TimeSleepNode":TimeSleepNode,
+                                "PromptInput":PromptInput, "Display":PromptOutput};
     const store = new LLMsStore();
     const initial_nodes = ['PromptInput',
                           new StringTemplate(`\`\`\`text\n{}\n\`\`\``),
-                          new Model4LLMs.ChatGPT4oMini({ system_prompt: 
-`You are an expert in English translation. Please translate the given text without any additional information.
-## Your Reply Format Example
-\`\`\`translation
-...
-\`\`\``}),                new RegxExtractor('```translation\\s*(.*?)\\s*```'),
+                          new RegxExtractor('```translation\\s*(.*?)\\s*```'),
                           'Display']
+
+    const openaiApiKey = computed({
+      get: () => { return (store.find_all('OpenAIVendor:*')[0] as unknown as Model4LLMs.OpenAIVendor).api_key },
+      set: (val) => { store.find_all('OpenAIVendor:*')[0].get_controller().update({ api_key: val }) },
+    })
+
+    const systemPrompt = computed({
+      get: () => { return (store.find(config_obj_id.value) as unknown as Model4LLMs.AbstractLLM).system_prompt },
+      set: (val) => { (store.find(config_obj_id.value) as unknown as Model4LLMs.AbstractLLM)
+                        .get_controller().update({ system_prompt: val }) },
+    })
+
+    const stringTemplate = computed({
+      get: () => { return (store.find(config_obj_id.value) as unknown as StringTemplate).string },
+      set: (val) => { (store.find(config_obj_id.value) as unknown as Model4LLMs.AbstractObj)
+                        .get_controller().update({ string: val }) },
+    })
+
+    const regxExtractor = computed({
+      get: () => { return (store.find(config_obj_id.value) as unknown as RegxExtractor).regx },
+      set: (val) => { (store.find(config_obj_id.value) as unknown as Model4LLMs.AbstractObj)
+                        .get_controller().update({ regx: val }) },
+    })
+
 
     const toast = useToast();
     // set up interactive GUI
@@ -170,29 +190,6 @@ export default {
       baklava.editor.registerNodeType(node_types[name]);
     });
 
-    const openaiApiKey = computed({
-      get: () => { return (store.find_all('OpenAIVendor:*')[0] as unknown as Model4LLMs.OpenAIVendor).api_key },
-      set: (val) => { store.find_all('OpenAIVendor:*')[0].get_controller().update({ api_key: val }) },
-    })
-
-    const systemPrompt = computed({
-      get: () => { return (store.find(config_obj_id.value) as unknown as Model4LLMs.AbstractLLM).system_prompt },
-      set: (val) => { (store.find(config_obj_id.value) as unknown as Model4LLMs.AbstractLLM)
-                        .get_controller().update({ system_prompt: val }) },
-    })
-
-    const stringTemplate = computed({
-      get: () => { return (store.find(config_obj_id.value) as unknown as StringTemplate).string },
-      set: (val) => { (store.find(config_obj_id.value) as unknown as Model4LLMs.AbstractObj)
-                        .get_controller().update({ string: val }) },
-    })
-
-    const regxExtractor = computed({
-      get: () => { return (store.find(config_obj_id.value) as unknown as RegxExtractor).regx },
-      set: (val) => { (store.find(config_obj_id.value) as unknown as Model4LLMs.AbstractObj)
-                        .get_controller().update({ regx: val }) },
-    })
-
     const addNodeWithCoordinates = (nodeType:string, x:number=0, y:number=0)=>{
             const n = new node_types[nodeType]();
             baklava.editor.graph.addNode(n);
@@ -210,12 +207,11 @@ export default {
           }
         });
         nodes.forEach((n,i)=>{
-          
-          if(i==nodes.length-1)return;
-          baklava.editor.graph.addConnection(
-                n.outputs.output,
-                nodes[i+1].inputs.source
-            );
+        if(i==nodes.length-1)return;
+        baklava.editor.graph.addConnection(
+              n.outputs.output,
+              nodes[i+1].inputs.source
+          );
         })
     }
 
