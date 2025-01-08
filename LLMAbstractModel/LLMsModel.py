@@ -41,9 +41,14 @@ class Controller4LLMs:
                     # try other vendors
                     pass
                 elif type(self.model) in [Model4LLMs.Grok ]:
-                    # try ollama vendor
                     vs = self._store.find_all('XaiVendor:*')
                     if len(vs)==0:raise ValueError(f'auto get endor of XaiVendor:* is not exists! Please (add and) change_vendor(...)')
+                    else: return vs[0]
+                    # try other vendors
+                    pass
+                elif type(self.model) in [Model4LLMs.DeepSeek ]:
+                    vs = self._store.find_all('DeepSeekVendor:*')
+                    if len(vs)==0:raise ValueError(f'auto get endor of DeepSeekVendor:* is not exists! Please (add and) change_vendor(...)')
                     else: return vs[0]
                     # try other vendors
                     pass
@@ -416,6 +421,18 @@ class Model4LLMs:
         context_window_tokens: int = 128000
         max_output_tokens: int = 65536
 
+    class DeepSeekVendor(OpenAIVendor):
+        vendor_name: str = "DeepSeek"
+        api_url: str = "https://api.deepseek.com"
+        chat_endpoint: str = "/v1/chat/completions"
+        models_endpoint: str = "/v1/models"
+        rate_limit: Optional[int] = None  # Example rate limit for xAI
+        
+    class DeepSeek(OpenAIChatGPT):
+        llm_model_name:str = 'deepseek-chat'
+        context_window_tokens:int = 64000
+        max_output_tokens:int = 4096*2
+        
     class XaiVendor(OpenAIVendor):
         vendor_name: str = "xAI"
         api_url: str = "https://api.x.ai"
@@ -779,12 +796,20 @@ class LLMsStore(BasicStore):
     def add_new_openai_vendor(self,api_key: str,
                               api_url: str='https://api.openai.com',
                               timeout: int=30) -> MODEL_CLASS_GROUP.OpenAIVendor:
+        api_key=os.getenv(api_key,api_key)
         return self.add_new_obj(self.MODEL_CLASS_GROUP.OpenAIVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
     def add_new_Xai_vendor(self,api_key: str,
                               api_url: str='https://api.x.ai',
                               timeout: int=30) -> MODEL_CLASS_GROUP.XaiVendor:
+        api_key=os.getenv(api_key,api_key)
         return self.add_new_obj(self.MODEL_CLASS_GROUP.XaiVendor(api_url=api_url,api_key=api_key,timeout=timeout))
+    
+    def add_new_deepseek_vendor(self,api_key: str,
+                              api_url: str='https://api.deepseek.com',
+                              timeout: int=30) -> MODEL_CLASS_GROUP.DeepSeekVendor:
+        api_key=os.getenv(api_key,api_key)
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.DeepSeekVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
     def add_new_ollama_vendor(self,api_url: str='http://localhost:11434',
                               timeout: int=30) -> MODEL_CLASS_GROUP.OllamaVendor:
@@ -847,6 +872,22 @@ class LLMsStore(BasicStore):
                                 system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.Grok:
         
         return self.add_new_obj(self.MODEL_CLASS_GROUP.Grok(vendor_id=vendor_id,
+                                limit_output_tokens=limit_output_tokens,
+                                temperature=temperature,
+                                top_p=top_p,
+                                frequency_penalty=frequency_penalty,
+                                presence_penalty=presence_penalty,
+                                system_prompt=system_prompt,),id=id)
+    
+    def add_new_deepseek(self,vendor_id:str,
+                                limit_output_tokens:int = 1024,
+                                temperature:float = 0.7,
+                                top_p:float = 1.0,
+                                frequency_penalty:float = 0.0,
+                                presence_penalty:float = 0.0,
+                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.DeepSeek:
+        
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.DeepSeek(vendor_id=vendor_id,
                                 limit_output_tokens=limit_output_tokens,
                                 temperature=temperature,
                                 top_p=top_p,
