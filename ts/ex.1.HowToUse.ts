@@ -41,5 +41,5 @@ console.log(
 // -> "Hello!"
 
 // Use the text embedding model
-console.log((await textEmbedding.call('hi! What is your name?')).slice(0, 10), '...');
+console.log((await textEmbedding.acall('hi! What is your name?')).slice(0, 10), '...');
 // -> [0.0118862, -0.0006172658, -0.008183353, 0.02926386, -0.03759078, -0.031130238, -0.02367668 ...]

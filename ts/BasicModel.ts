@@ -68,19 +68,20 @@ export namespace Controller4Basic {
     };
 
     export class AbstractGroupController extends Controller4Basic.AbstractObjController {
-        model: Model4Basic.AbstractGroup | null;
+        // model: Model4Basic.AbstractGroup;
 
         constructor(store: BasicStore, model: Model4Basic.AbstractGroup) {
             super(store, model);
         }
 
         *yield_children_recursive(depth = 0): Generator<{ child: any; depth: number }> {
-            if (!this.model) throw new Error('Controller has null model!');
-            for (const child_id of this.model.children_id || []) {
+            const model = this.model as Model4Basic.AbstractGroup;
+            if (!model) throw new Error('Controller has null model!');
+            for (const child_id of model.children_id || []) {
                 if (!this.storage().exists(child_id)) continue;
 
                 const child = this.storage().find(child_id);
-                if (child.hasOwnProperty('parent_id') && child.hasOwnProperty('children_id')) {
+                if (child && child.hasOwnProperty('parent_id') && child.hasOwnProperty('children_id')) {
                     const group = child.get_controller();
                     yield* group.yield_children_recursive(depth + 1);
                 }
@@ -97,14 +98,15 @@ export namespace Controller4Basic {
         }
 
         get_children_recursive(): any[] {
-            if (!this.model) throw new Error('Controller has null model!');
+            const model = this.model as Model4Basic.AbstractGroup;
+            if (!model) throw new Error('Controller has null model!');
             const children_list: any[] = [];
-            for (const child_id of this.model.children_id || []) {
+            for (const child_id of model.children_id || []) {
                 
                 if (!this.storage().exists(child_id)) continue;
 
                 const child = this.storage().find(child_id);
-                if (child.hasOwnProperty('parent_id') && child.hasOwnProperty('children_id')) {
+                if (child && child.hasOwnProperty('parent_id') && child.hasOwnProperty('children_id')) {
                     const group :Controller4Basic.AbstractGroupController = child.get_controller();
                     children_list.push(group.get_children_recursive());
                 } else {
@@ -115,8 +117,9 @@ export namespace Controller4Basic {
         }
 
         get_children(): any[] {
-            if (!this.model) throw new Error('Controller has a null model!');
-            return (this.model.children_id || []).map((child_id) => this.storage().find(child_id));
+            const model = this.model as Model4Basic.AbstractGroup;
+            if (!model) throw new Error('Controller has a null model!');
+            return (model.children_id || []).map((child_id) => this.storage().find(child_id));
         }
 
         get_child(child_id: string): any {
@@ -124,15 +127,20 @@ export namespace Controller4Basic {
         }
 
         add_child(child_id: string): this {
-            if (!this.model) throw new Error('Controller has null model!');
-            return this.update({ children_id: [...(this.model.children_id || []), child_id] });
+            const model = this.model as Model4Basic.AbstractGroup;
+            if (!model) throw new Error('Controller has null model!');
+            return this.update({ children_id: [...(model.children_id || []), child_id] });
         }
 
         delete_child(child_id: string): this {
-            if (!this.model || !this.model.children_id?.includes(child_id)) return this;
+            const model = this.model as Model4Basic.AbstractGroup;
+            if (!model || !model.children_id?.includes(child_id)) return this;
 
-            const remaining_ids = (this.model.children_id || []).filter((cid) => cid !== child_id);
-            const child_con = this.storage().find(child_id).get_controller();
+            const remaining_ids = (model.children_id || []).filter((cid) => cid !== child_id);
+            const child = this.storage().find(child_id);
+            if(!child)return this;
+
+            const child_con = child.get_controller();
 
             if (child_con.delete_recursive) {
                 child_con.delete_recursive();
@@ -210,7 +218,7 @@ export namespace Model4Basic {
             this._controller = new controller_class(store, this);
         }
 
-        private _get_controller_class(model_class: typeof Controller4Basic): any {
+        protected _get_controller_class(model_class:any): any {
             const class_type = `${this.constructor.name}Controller`;
             const res = Object.values(model_class).find(
                 (c) => (c as any).name === class_type
@@ -246,7 +254,7 @@ export class BasicStore extends SingletonKeyValueStorage {
         this.tempTsBackend();
     }
 
-    private _get_class(id: string): typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup {
+    protected _get_class(id: string): typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup {
         const class_type = id.split(':')[0];
         const classes: Record<string, typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup> = {
             'AbstractObj': Model4Basic.AbstractObj,
@@ -257,14 +265,14 @@ export class BasicStore extends SingletonKeyValueStorage {
         return res;
     }
 
-    private _get_as_obj(id: string, data_dict: Record<string, any>): Model4Basic.AbstractObj {
+    protected _get_as_obj(id: string, data_dict: Record<string, any>): Model4Basic.AbstractObj {
         const ClassConstructor = this._get_class(id);
         const obj = new ClassConstructor(data_dict);
         obj.set_id(id).init_controller(this);
         return obj;
     }
 
-    private _add_new_obj(obj: Model4Basic.AbstractObj, id: string | null = null): Model4Basic.AbstractObj {
+    protected _add_new_obj(obj: Model4Basic.AbstractObj, id: string | null = null): Model4Basic.AbstractObj {
         id = id === null ? obj.gen_new_id() : id;
         const data = obj.model_dump_json_dict();
         this.set(id, data);
@@ -278,7 +286,7 @@ export class BasicStore extends SingletonKeyValueStorage {
 
     add_new_group(obj: Model4Basic.AbstractGroup, id: string | null = null): Model4Basic.AbstractGroup {
         if (obj._id !== null) throw new Error(`obj._id is ${obj._id}, must be none`);
-        return this._add_new_obj(obj, id);
+        return this._add_new_obj(obj, id) as Model4Basic.AbstractGroup;
     }
 
     find(id: string): Model4Basic.AbstractObj | null {
