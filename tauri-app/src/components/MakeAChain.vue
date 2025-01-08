@@ -74,6 +74,7 @@ export default {
     const store = new LLMsStore();
     const vendorId = computed({
       get: () => { return store.find_all('OpenAIVendor:*')[0].get_id() },
+      set: (val) => { return val; },
     })
     const save = () => {
       store.set("Graph", baklava.editor.save());
@@ -83,19 +84,23 @@ export default {
     const load = () => {
       loadUI();
       store.clean();
-      store.loads(localStorage.getItem('MakeAChain'));
-      baklava.editor.load(store.get("Graph"))
+      store.loads(localStorage.getItem('MakeAChain')??'{}');
+      const g = store.get("Graph");
+      if(g)baklava.editor.load({
+        graph: g.graph,
+        graphTemplates: g.graphTemplates
+      });
     }
 
     store.addNewChatGPT4oMini().get_controller().delete();
-    store.add_new_obj(new StringTemplate()).get_controller().delete();
-    store.add_new_obj(new RegxExtractor()).get_controller().delete();
+    store.add_new_obj(new StringTemplate('')).get_controller().delete();
+    store.add_new_obj(new RegxExtractor('')).get_controller().delete();
 
     const loadUI = () => {
       const objs = [
         new Model4LLMs.ChatGPT4oMini(),new StringTemplate(''),
         new RegxExtractor('')];
-      objs.filter(obj => obj.acall || obj.call)
+      objs.filter(obj => obj.hasOwnProperty('acall') || obj.hasOwnProperty('call'))
         .forEach(obj => {
           const name = obj.constructor.name;
           baklava.editor.registerNodeType(defineNode({
@@ -106,15 +111,16 @@ export default {
             },
             outputs: { output: () => new NodeInterface<string>("Output", "null"), },
             onCreate(){
-              this.build = ()=>{
-                if(!this.llm_obj){
-                  this.llm_obj = store.find(this.title);
+              Object.assign(this, { build: ()=>{
+                if(this.hasOwnProperty('llm_obj'))return;
+                const obj = store.find(this.title);
+                if(obj){Object.assign(this, {'llm_obj':obj});}
+                else{
+                  const newobj = store.add_new_obj(new store.MODEL_CLASS_GROUP[name]());
+                  Object.assign(this, {'llm_obj':newobj});                  
+                  this.title = newobj.get_id();
                 }
-                if(!this.llm_obj){
-                  this.llm_obj = store.add_new_obj(new store.MODEL_CLASS_GROUP[name]());
-                  this.title = this.llm_obj.get_id();
-                }
-              }
+              } });
             },
             onDestroy(){
               this.llm_obj?.get_controller().delete();
@@ -134,7 +140,7 @@ export default {
     }    
 
     const openaiApiKey = computed({
-      get: () => { return store.find_all('OpenAIVendor:*')[0].api_key },
+      get: () => { return (store.find_all('OpenAIVendor:*')[0] as unknown as Model4LLMs.OpenAIVendor).api_key },
       set: (val) => { store.find_all('OpenAIVendor:*')[0].get_controller().update({ api_key: val }) },
     })
 
@@ -157,12 +163,12 @@ export default {
 
     if (localStorage.getItem('MakeAChain')) { load(); }
     else {
-      const vendor = store.addNewOpenAIVendor('null');
-      const systemPrompt = `You are an expert in English translation. I will provide you with the text. Please translate it. You should reply with translations only, without any additional information.
-## Your Reply Format Example
-\`\`\`translation
-...
-\`\`\``;
+      store.addNewOpenAIVendor('null');
+//       const systemPrompt = `You are an expert in English translation. I will provide you with the text. Please translate it. You should reply with translations only, without any additional information.
+// ## Your Reply Format Example
+// \`\`\`translation
+// ...
+// \`\`\``;
       // store.addNewChatGPT4oMini("auto", systemPrompt);
       // store.add_new_obj(new StringTemplate(`\`\`\`text\n{}\n\`\`\``));
       // store.add_new_obj(new RegxExtractor('```translation\\s*(.*?)\\s*```'));
@@ -190,13 +196,13 @@ export default {
           if (!baklava.editor){config_obj_id.value = ''; return;}
           if (newValue.length==0){config_obj_id.value = ''; return;}
           const node = newValue[0];
+          const obj = store.find(node.title);
           
-          if(store.exists(node.title)){
-            const obj = store.find(node.title);
+          if(obj){
             config_obj_id.value = obj.get_id();
             node.llm_obj = obj;
           }
-          else if(node.build){
+          else if(node.hasOwnProperty('build')){
             node.build();
           }
           else{

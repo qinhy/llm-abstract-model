@@ -7,50 +7,44 @@ export namespace Controller4LLMs {
     export class AbstractObjController extends Controller4Basic.AbstractObjController { };
 
     export class AbstractLLMController extends AbstractObjController {
-        model: any;
-        private _store: LLMsStore;
-
-        constructor(store: LLMsStore, model: any) {
-            super(store, model);
-            this.model = model;
-            this._store = store;
-        }
-
+        
         getVendor(auto: boolean = false): any {
+            const store = this.storage();
+            const model = this.model as unknown as Model4LLMs.AbstractLLM;
             if (!auto) {
-                const vendor = this._store.find(this.model.vendor_id);
+                const vendor = store.find(model.vendor_id);
 
                 if (!vendor) {
-                    throw new Error(`vendor of ${this.model.vendor_id} is not exists! Please change_vendor(...)`);
+                    throw new Error(`vendor of ${model.vendor_id} is not exists! Please change_vendor(...)`);
                 }
                 return vendor;
             } else {
-                const modelType = this.model.constructor;
-                if ([Model4LLMs.ChatGPT4o, Model4LLMs.ChatGPT4oMini].includes(modelType)) {
-                    const vendors = this._store.find_all("OpenAIVendor:*");
+                const modelType = model.constructor.name;
+                if (["ChatGPT4o", "ChatGPT4oMini"].includes(modelType)) {
+                    const vendors = store.find_all("OpenAIVendor:*");
                     if (vendors.length === 0) {
                         throw new Error("auto get vendor of OpenAIVendor:* is not exists! Please (add and) change_vendor(...)");
                     }
                     return vendors[0];
-                } else if (modelType === Model4LLMs.Grok) {
-                    const vendors = this._store.find_all("XaiVendor:*");
+                } else if (modelType === "Grok") {
+                    const vendors = store.find_all("XaiVendor:*");
                     if (vendors.length === 0) {
                         throw new Error("auto get vendor of XaiVendor:* is not exists! Please (add and) change_vendor(...)");
                     }
                     return vendors[0];
-                } else if ([Model4LLMs.Gemma2, Model4LLMs.Phi3, Model4LLMs.Llama].includes(modelType)) {
-                    const vendors = this._store.find_all("OllamaVendor:*");
+                } else if (["Gemma2", "Phi3", "Llama"].includes(modelType)) {
+                    const vendors = store.find_all("OllamaVendor:*");
                     if (vendors.length === 0) {
                         throw new Error("auto get vendor of OllamaVendor:* is not exists! Please (add and) change_vendor(...)");
                     }
                     return vendors[0];
                 }
-                throw new Error(`not support vendor of ${this.model.vendor_id}`);
+                throw new Error(`not support vendor of ${model.vendor_id}`);
             }
         }
 
         changeVendor(vendorId: string): any {
-            const vendor = this._store.find(vendorId);
+            const vendor = this.storage().find(vendorId);
             if (!vendor) {
                 throw new Error(`vendor of ${vendorId} is not exists! Please do add new vendor`);
             }
@@ -70,31 +64,25 @@ export namespace Controller4LLMs {
     export class LlamaController extends AbstractLLMController { }
 
     export class AbstractEmbeddingController extends AbstractObjController {
-        model: any;
-        private _store: LLMsStore;
-
-        constructor(store: LLMsStore, model: any) {
-            super(store, model);
-            this.model = model;
-            this._store = store;
-        }
 
         getVendor(auto: boolean = false): any {
+            const store = this.storage();
+            const model = this.model as unknown as Model4LLMs.AbstractEmbedding;
             if (!auto) {
-                const vendor = this._store.find(this.model.vendor_id);
+                const vendor = store.find(model.vendor_id);
                 if (!vendor) {
-                    throw new Error(`vendor of ${this.model.vendor_id} is not exists! Please change_vendor(...)`);
+                    throw new Error(`vendor of ${model.vendor_id} is not exists! Please change_vendor(...)`);
                 }
                 return vendor;
             } else {
-                if (this.model.constructor === Model4LLMs.TextEmbedding3Small) {
-                    const vendors = this._store.find_all("OpenAIVendor:*");
+                if (model.constructor === Model4LLMs.TextEmbedding3Small) {
+                    const vendors = store.find_all("OpenAIVendor:*");
                     if (vendors.length === 0) {
                         throw new Error("auto get vendor of OpenAIVendor:* is not exists! Please (add and) change_vendor(...)");
                     }
                     return vendors[0];
                 }
-                throw new Error(`not support vendor of ${this.model.vendor_id}`);
+                throw new Error(`not support vendor of ${model.vendor_id}`);
             }
         }
     };
@@ -102,20 +90,12 @@ export namespace Controller4LLMs {
     export class TextEmbedding3SmallController extends AbstractEmbeddingController { }
 
     export class WorkFlowController extends AbstractObjController {
-        model: any;
-        private _store: LLMsStore;
-
-        constructor(store: LLMsStore, model: any) {
-            super(store, model);
-            this.model = model;
-            this._store = store;
-        }
 
         private _topologicalSort(graph: { [key: string]: string[] }): string[] {
             const inDegree: { [key: string]: number } = {};
             const zeroInDegree: string[] = [];
             const result: string[] = [];
-        
+
             // Initialize in-degree for each node
             for (const node in graph) {
                 if (!inDegree[node]) inDegree[node] = 0;
@@ -124,23 +104,23 @@ export namespace Controller4LLMs {
                     inDegree[neighbor]++;
                 }
             }
-        
+
             // Find all nodes with zero in-degree
             for (const node in inDegree) {
                 if (inDegree[node] === 0) zeroInDegree.push(node);
             }
-        
+
             // Process nodes with zero in-degree
             while (zeroInDegree.length > 0) {
                 const node = zeroInDegree.pop()!;
                 result.push(node);
-        
+
                 for (const neighbor of graph[node] || []) {
                     inDegree[neighbor]--;
                     if (inDegree[neighbor] === 0) zeroInDegree.push(neighbor);
                 }
             }
-        
+
             // Check for cycles (if all nodes are not processed)
             // if (result.length !== Object.keys(graph).length) {
             //     throw new Error("Graph has at least one cycle");
@@ -153,47 +133,49 @@ export namespace Controller4LLMs {
         }
 
         async _arun(): Promise<any> {
-            const tasks: Record<string, string[]> = this.model.tasks;
+            const model = this.model as unknown as Model4LLMs.WorkFlow;
 
-            if (this.model.results["final"]) {
-                if(this.model.results["input"]){
-                    this.model.results = {input:this.model.results["input"]};
+            const tasks: Record<string, string[]> = model.tasks;
+
+            if (model.results["final"]) {
+                if (model.results["input"]) {
+                    model.results = { input: model.results["input"] };
                 }
-                else{
-                    this.model.results = {}
+                else {
+                    model.results = {}
                 }
             }
 
             let result = null;
-                
+
             for (const taskId of this._topologicalSort(tasks).reverse()) {
-                if (this.model.results[taskId]) {
+                if (model.results[taskId]) {
                     continue;
                 }
 
-                const dependencyResults = tasks[taskId].map((dep) => this.model.results[dep]);
+                const dependencyResults = tasks[taskId].map((dep) => model.results[dep]);
                 const allArgs = this._extractArgsKwargs(dependencyResults);
 
                 try {
-                    
+
                     const obj = this._readTask(taskId);
-                    if(obj['acall']){
+                    if (obj['acall']) {
                         result = await obj.acall(...allArgs);
-                    }else{
+                    } else {
                         result = obj.call(...allArgs);
                     }
-                    
-                    this.model.results[taskId] = result;
+
+                    model.results[taskId] = result;
                 } catch (e) {
                     throw new Error(`[WorkFlow]: Error at ${taskId}: ${e}`);
                 }
             }
 
             if (result !== null) {
-                this.model.results["final"] = result;
+                model.results["final"] = result;
             }
 
-            this.update({ results: this.model.results });
+            this.update({ results: model.results });
             return result;
         }
 
@@ -223,18 +205,6 @@ export namespace Controller4LLMs {
 
 export namespace Model4LLMs {
     export class AbstractObj extends Model4Basic.AbstractObj {
-        private _get_controller_class(model_class: typeof Controller4LLMs): any {
-            const class_type = `${this.constructor.name}Controller`;
-            const res = Object.values(model_class).find(
-                (c) => (c as any).name === class_type
-            );
-            if (!res) {
-                // console.log(`No such class of ${class_type} use AbstractObjController`);
-                return Controller4LLMs.AbstractObjController;
-            }
-            return res;
-        }
-
         init_controller(store: any): void {
             const controller_class = this._get_controller_class(Controller4LLMs);
             this._controller = new controller_class(store, this);
@@ -242,8 +212,8 @@ export namespace Model4LLMs {
     };
 
     export class AbstractVendor extends AbstractObj {
-        vendor_name: string; // e.g., 'OpenAI'
-        api_url: string; // e.g., 'https://api.openai.com/v1/'
+        vendor_name: string = 'AbstractVendor'; // e.g., 'OpenAI'
+        api_url: string = 'https://api.yourai.com/v1/';; // e.g., 'https://api.openai.com/v1/'
         api_key?: string; // API key for authentication, if required
         timeout: number = 30; // Default timeout for API requests in seconds
 
@@ -273,7 +243,7 @@ export namespace Model4LLMs {
                 const response: AxiosResponse = await axios.get(url, { headers, timeout: this.timeout * 1000 });
                 return response.data;
             } catch (error) {
-                return { error: error.toString() };
+                return { error: error?.toString() };
             }
         }
 
@@ -301,7 +271,7 @@ export namespace Model4LLMs {
             const headers = this._buildHeaders();
             try {
                 const response: AxiosResponse = await axios.post(
-                    url, JSON.stringify(payload),{ headers, timeout: this.timeout * 1000 });
+                    url, JSON.stringify(payload), { headers, timeout: this.timeout * 1000 });
                 return response.data;
             } catch (error: any) {
                 return { error: error.response ? error.response.data : error.toString() };
@@ -310,33 +280,33 @@ export namespace Model4LLMs {
 
         async *chatStreamRequest(payload: Record<string, any> = {}) {
             const url = this._buildUrl(this.chat_endpoint || "");
-            const headers = this._buildHeaders();  
+            const headers = this._buildHeaders();
             try {
                 payload.stream = true;
-                
+
                 const response = await fetch(url, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify(payload),
                     signal: AbortSignal.timeout(this.timeout * 1000),
                 });
-        
+
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
-        
+
                 const reader = response.body?.getReader();
                 if (!reader) {
                     throw new Error("Failed to obtain reader from the response body");
                 }
-        
+
                 const decoder = new TextDecoder();
                 let done = false;
-        
+
                 while (!done) {
                     const { value, done: readerDone } = await reader.read();
                     done = readerDone;
-        
+
                     if (value) {
                         const chunk = decoder.decode(value, { stream: true });
                         const lines = chunk
@@ -356,7 +326,7 @@ export namespace Model4LLMs {
                 console.error('Error in streaming:', error.message || error);
             }
         }
-        
+
 
         chatResult(response: any): string {
             return response;
@@ -389,22 +359,20 @@ export namespace Model4LLMs {
             return this.embeddingRequest(payload);
         }
 
-        private _controller: Controller4LLMs.AbstractVendorController | null = null;
-
-        getController(): Controller4LLMs.AbstractVendorController | null {
+        getController(): Controller4LLMs.AbstractObjController | null {
             return this._controller;
         }
 
         initController(store: any): void {
-            this._controller = new Controller4LLMs.AbstractVendorController(store, this);
+            this._controller = new Controller4LLMs.AbstractObjController(store, this);
         }
     };
 
     export class AbstractLLM extends Model4LLMs.AbstractObj {
         vendor_id: string = "auto";
-        llm_model_name: string;
-        context_window_tokens: number;
-        max_output_tokens: number;
+        llm_model_name: string = "null";
+        context_window_tokens: number = 0;
+        max_output_tokens: number = 0;
         stream: boolean = false;
 
         limit_output_tokens?: number;
@@ -413,6 +381,11 @@ export namespace Model4LLMs {
         frequency_penalty?: number = 0.0;
         presence_penalty?: number = 0.0;
         system_prompt?: string;
+
+        constructor(init?: Partial<Model4LLMs.AbstractLLM>) {
+            super();
+            Object.assign(this, init);
+        }
 
         getVendor(): Model4LLMs.AbstractVendor {
             return this.getController().getVendor(this.vendor_id === "auto");
@@ -427,8 +400,8 @@ export namespace Model4LLMs {
             return true;
         }
 
-        calculateCost(tokensUsed: number): number {
-            return 0.0;
+        calculateCost(tokensUsed: number = 0.0): number {
+            return tokensUsed;
         }
 
         getTokenCount(text: string): number {
@@ -436,7 +409,7 @@ export namespace Model4LLMs {
         }
 
         buildSystem(purpose: string = "..."): string {
-            return `Dummy implementation for building system prompt`;
+            return `Dummy implementation for building system prompt ${purpose}`;
         }
 
         constructPayload(messages: Record<string, any>[]): Record<string, any> {
@@ -481,11 +454,9 @@ export namespace Model4LLMs {
             const payload = this.constructPayload(this.constructMessages(messages));
             const vendor = this.getVendor();
             for await (const chunk of vendor.chatStreamRequest(payload)) {
-                if(chunk)yield chunk;
+                if (chunk) yield chunk;
             }
         }
-
-        private _controller: Controller4LLMs.AbstractLLMController = null;
 
         getController(): Controller4LLMs.AbstractLLMController {
             return this._controller;
@@ -503,7 +474,7 @@ export namespace Model4LLMs {
         models_endpoint: string = "/v1/models";
         embeddings_endpoint: string = "/v1/embeddings";
         default_timeout: number = 30;
-        rate_limit?: number;
+        rate_limit?: number = 0;
 
         async getAvailableModels(): Promise<Record<string, any>> {
             const response = await super.getAvailableModels();
@@ -556,7 +527,7 @@ export namespace Model4LLMs {
         top_p: number = 1.0;
         frequency_penalty: number = 0.0;
         presence_penalty: number = 0.0;
-        system_prompt?: string;
+        system_prompt?: string = '';
 
         stop_sequences: string[] = [];
         n: number = 1;
@@ -627,7 +598,7 @@ export namespace Model4LLMs {
         chat_endpoint: string = "/v1/chat/completions";
         models_endpoint: string = "/v1/models";
         embeddings_endpoint: string = "/v1/embeddings";
-        rate_limit?: number;
+        rate_limit?: number = 0;
     };
 
     export class Grok extends Model4LLMs.OpenAIChatGPT {
@@ -644,7 +615,7 @@ export namespace Model4LLMs {
         embeddings_endpoint: string = "NULL";
 
         async getAvailableModels(): Promise<Record<string, any>> {
-            const response = this._tryObjError(() => super.getAvailableModels(), null);
+            const response = await this.getAvailableModels();
             if (!response) {
                 throw new Error("Cannot get available models");
             }
@@ -675,41 +646,23 @@ export namespace Model4LLMs {
         llm_model_name: string = "gemma-2-2b";
         context_window_tokens: number = -1;
         max_output_tokens: number = -1;
-        limit_output_tokens?: number;
-        temperature?: number;
-        top_p?: number;
-        frequency_penalty?: number;
-        presence_penalty?: number;
-        system_prompt?: string;
     };
 
     export class Phi3 extends Model4LLMs.AbstractLLM {
         llm_model_name: string = "phi-3-3.8b";
         context_window_tokens: number = -1;
         max_output_tokens: number = -1;
-        limit_output_tokens?: number;
-        temperature?: number;
-        top_p?: number;
-        frequency_penalty?: number;
-        presence_penalty?: number;
-        system_prompt?: string;
     };
 
     export class Llama extends Model4LLMs.AbstractLLM {
         llm_model_name: string = "llama-3.2-3b";
         context_window_tokens: number = -1;
         max_output_tokens: number = -1;
-        limit_output_tokens?: number;
-        temperature?: number;
-        top_p?: number;
-        frequency_penalty?: number;
-        presence_penalty?: number;
-        system_prompt?: string;
     };
     export class AbstractEmbedding extends Model4LLMs.AbstractObj {
         vendor_id: string = "auto"; // Vendor identifier (e.g., OpenAI, Google)
-        embedding_model_name: string; // Model name (e.g., "text-embedding-3-small")
-        embedding_dim: number; // Dimensionality of the embeddings, e.g., 768 or 1024
+        embedding_model_name: string = "text-embedding"; // Model name (e.g., "text-embedding-3-small")
+        embedding_dim: number = 0; // Dimensionality of the embeddings, e.g., 768 or 1024
         normalize_embeddings: boolean = true; // Whether to normalize the embeddings to unit vectors
 
         max_input_length?: number; // Optional limit on input length (e.g., max tokens or chars)
@@ -730,14 +683,12 @@ export namespace Model4LLMs {
         }
 
         async generateEmbedding(inputText: string): Promise<number[]> {
-            throw new Error("This method should be implemented by subclasses.");
+            throw new Error(`This method should be implemented by subclasses.${inputText}`);
         }
 
         similarityScore(embedding1: number[], embedding2: number[]): number {
-            throw new Error("This method should be implemented by subclasses.");
+            throw new Error(`This method should be implemented by subclasses.${embedding1},${embedding2}`);
         }
-
-        private _controller: any;
 
         getController(): any {
             return this._controller;
@@ -835,13 +786,13 @@ export namespace Model4LLMs {
             this.name = this.constructor.name;
             // const sig = Reflect.getMetadata("design:paramtypes", this.__call__) || [];
 
-            const typeMap: Record<any, string> = {
-                Number: "number",
-                String: "string",
-                Boolean: "boolean",
-                Array: "array",
-                Object: "object",
-            };
+            // const typeMap: Record<any, string> = {
+            //     Number: "number",
+            //     String: "string",
+            //     Boolean: "boolean",
+            //     Array: "array",
+            //     Object: "object",
+            // };
 
             this.required = [];
             // for (const [name, type] of Object.entries(sig)) {
@@ -858,7 +809,7 @@ export namespace Model4LLMs {
         }
 
         call(...args: any[]): any {
-            throw new Error("This method should be implemented by subclasses.");
+            throw new Error(`This method should be implemented by subclasses.${args}`);
         };
 
         // getDescription(): Record<string, any> {
@@ -871,7 +822,7 @@ export namespace Model4LLMs {
         results: Record<string, any> = {};
 
         constructor(data?: any) {
-            super(data);            
+            super(data);
             this.tasks = data?.tasks || {};
             this.results = data?.results || {};
         }
@@ -884,7 +835,7 @@ export namespace Model4LLMs {
                     this.tasks[firstTaskId].push("input");
                 }
                 this.results["input"] = [args];
-            }else{
+            } else {
                 this.results = {
                     ...this.results,
                     ...args
@@ -896,8 +847,6 @@ export namespace Model4LLMs {
         getResult(taskId: string): any {
             return this.results[taskId] || null;
         }
-
-        private _controller: any;
 
         getController(): any {
             return this._controller;
@@ -921,293 +870,222 @@ export namespace Model4LLMs {
         url!: string;
         headers: Record<string, string> = {};
 
-        async acall(
-            params: Record<string, any> = {},
-            data: Record<string, any> = {},
-            json: Record<string, any> = {},
-            debug: boolean = false,
-            debugData: any = null
-        ): Promise<Record<string, any>> {
-            if (debug) return debugData;
+        //     async acall(
+        //         params: Record<string, any> = {},
+        //         data: Record<string, any> = {},
+        //         json: Record<string, any> = {},
+        //         debug: boolean = false,
+        //         debugData: any = null
+        //     ): Promise<Record<string, any>> {
+        //         if (debug) return debugData;
 
-            try {
-                const response = await axios({
-                    method: this.method,
-                    url: this.url,
-                    headers: this.headers,
-                    params,
-                    data,
-                    json,
-                });
-                return response.data || { text: response.statusText };
-            } catch (error: any) {
-                return { error: error.message, status: error.response?.status || null };
+        //         try {
+        //             const response = await axios({
+        //                 method: this.method,
+        //                 url: this.url,
+        //                 headers: this.headers,
+        //                 params,
+        //                 data,
+        //                 json,
+        //             });
+        //             return response.data || { text: response.statusText };
+        //         } catch (error: any) {
+        //             return { error: error.message, status: error.response?.status || null };
+        //         }
+        //     }
+        // }
+
+    }
+
+    export class LLMsStore extends BasicStore {
+        MODEL_CLASS_GROUP = Model4LLMs;
+
+        protected _get_class(id: string): typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup {
+            const class_type = id.split(':')[0];
+            const classes: Record<string, any> = {};
+            // Dynamically add all classes from Model4LLMs
+            Object.entries(this.MODEL_CLASS_GROUP).forEach((val) => {
+                classes[val[0]] = val[1];
+            });
+            const res = classes[class_type];
+            if (!res) throw new Error(`No such class of ${class_type}`);
+            return res;
+        }
+
+        protected _get_as_obj(id: string, data_dict: Record<string, any>): Model4Basic.AbstractObj {
+            const ClassConstructor = this._get_class(id);
+            const obj = new ClassConstructor();
+            Object.assign(obj, data_dict);
+            obj.set_id(id).init_controller(this);
+            return obj;
+        }
+
+        protected _add_new_obj(obj: Model4Basic.AbstractObj, id: string | null = null): Model4Basic.AbstractObj {
+            if (!this.MODEL_CLASS_GROUP.hasOwnProperty(obj.constructor.name)) {
+                var tmp: { [key: string]: any } = {};
+                tmp[obj.constructor.name] = obj.constructor;
+                Object.assign(this.MODEL_CLASS_GROUP, tmp);
             }
+            id = id === null ? obj.gen_new_id() : id;
+            const data = obj.model_dump_json_dict();
+            this.set(id, data);
+            return this._get_as_obj(id, data);
         }
-    }
 
-}
-
-export class LLMsStore extends BasicStore {
-    MODEL_CLASS_GROUP = Model4LLMs;
-
-    private _get_class(id: string): typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup {
-        const class_type = id.split(':')[0];
-        const classes: Record<string, any> = {};
-        // Dynamically add all classes from Model4LLMs
-        Object.keys(this.MODEL_CLASS_GROUP).forEach((key) => {
-            classes[key] = this.MODEL_CLASS_GROUP[key];
-        });
-        const res = classes[class_type];
-        if (!res) throw new Error(`No such class of ${class_type}`);
-        return res;
-    }
-
-    private _get_as_obj(id: string, data_dict: Record<string, any>): Model4Basic.AbstractObj {
-        const ClassConstructor = this._get_class(id);
-        const obj = new ClassConstructor();
-        Object.assign(obj,data_dict);
-        obj.set_id(id).init_controller(this);
-        return obj;
-    }
-    
-    private _add_new_obj(obj: Model4Basic.AbstractObj, id: string | null = null): Model4Basic.AbstractObj {
-        if(!this.MODEL_CLASS_GROUP.hasOwnProperty(obj.constructor.name)){
-            var tmp = {};
-            tmp[obj.constructor.name] = obj.constructor;
-            Object.assign(this.MODEL_CLASS_GROUP,tmp);
+        addNewOpenAIVendor(apiKey: string, apiUrl: string = "https://api.openai.com", timeout: number = 30): Model4LLMs.OpenAIVendor {
+            return this.add_new_obj(new this.MODEL_CLASS_GROUP.OpenAIVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
         }
-        id = id === null ? obj.gen_new_id() : id;
-        const data = obj.model_dump_json_dict();
-        this.set(id, data);
-        return this._get_as_obj(id, data);
-    }
 
-    addNewOpenAIVendor(apiKey: string, apiUrl: string = "https://api.openai.com", timeout: number = 30): Model4LLMs.OpenAIVendor {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.OpenAIVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
-    }
-
-    addNewXaiVendor(apiKey: string, apiUrl: string = "https://api.x.ai", timeout: number = 30): Model4LLMs.XaiVendor {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.XaiVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
-    }
-
-    addNewOllamaVendor(apiUrl: string = "http://localhost:11434", timeout: number = 30): Model4LLMs.OllamaVendor {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.OllamaVendor({ api_url: apiUrl, api_key: "", timeout }));
-    }
-
-    addNewChatGPT4o(
-        vendorId: string,
-        systemPrompt: string | null = null,
-        limitOutputTokens: number = 1024,
-        temperature: number = 0.7,
-        topP: number = 1.0,
-        frequencyPenalty: number = 0.0,
-        presencePenalty: number = 0.0,
-        id?: string
-    ): Model4LLMs.ChatGPT4o {
-        return this.add_new_obj(
-            new this.MODEL_CLASS_GROUP.ChatGPT4o({
-                vendor_id: vendorId,
-                limit_output_tokens: limitOutputTokens,
-                temperature,
-                top_p: topP,
-                frequency_penalty: frequencyPenalty,
-                presence_penalty: presencePenalty,
-                system_prompt: systemPrompt,
-            }),
-            id
-        );
-    }
-
-    addNewChatGPT4oMini(
-        vendorId: string = "auto",
-        systemPrompt: string | null = null,
-        limitOutputTokens: number = 1024,
-        temperature: number = 0.7,
-        topP: number = 1.0,
-        frequencyPenalty: number = 0.0,
-        presencePenalty: number = 0.0,
-        id?: string
-    ): Model4LLMs.ChatGPT4oMini {
-        return this.add_new_obj(
-            new this.MODEL_CLASS_GROUP.ChatGPT4oMini({
-                vendor_id: vendorId,
-                limit_output_tokens: limitOutputTokens,
-                temperature,
-                top_p: topP,
-                frequency_penalty: frequencyPenalty,
-                presence_penalty: presencePenalty,
-                system_prompt: systemPrompt,
-            }),
-            id
-        );
-    }
-
-    addNewGrok(
-        vendorId: string,
-        systemPrompt: string | null = null,
-        limitOutputTokens: number = 1024,
-        temperature: number = 0.7,
-        topP: number = 1.0,
-        frequencyPenalty: number = 0.0,
-        presencePenalty: number = 0.0,
-        id?: string
-    ): Model4LLMs.Grok {
-        return this.add_new_obj(
-            new this.MODEL_CLASS_GROUP.Grok({
-                vendor_id: vendorId,
-                limit_output_tokens: limitOutputTokens,
-                temperature,
-                top_p: topP,
-                frequency_penalty: frequencyPenalty,
-                presence_penalty: presencePenalty,
-                system_prompt: systemPrompt,
-            }),
-            id
-        );
-    }
-
-    addNewGemma2(vendorId: string, systemPrompt: string | null = null, id?: string): Model4LLMs.Gemma2 {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.Gemma2({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
-    }
-
-    addNewPhi3(vendorId: string, systemPrompt: string | null = null, id?: string): Model4LLMs.Phi3 {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.Phi3({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
-    }
-
-    addNewLlama(vendorId: string, systemPrompt: string | null = null, id?: string): Model4LLMs.Llama {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.Llama({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
-    }
-
-    addNewFunction(functionObj: Model4LLMs.Function, id?: string): Model4LLMs.Function {
-        return this.add_new_obj(functionObj, id);
-    }
-
-    addNewRequest(url: string, method: string = "GET", headers: Record<string, any> = {}, id?: string): Model4LLMs.RequestsFunction {
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.RequestsFunction({ method, url, headers }), id);
-    }
-
-    addNewCeleryRequest(
-        url: string,
-        method: string = "GET",
-        headers: Record<string, any> = {},
-        taskStatusUrl: string = "http://127.0.0.1:8000/tasks/status/{task_id}",
-        id?: string
-    ): Model4LLMs.AsyncCeleryWebApiFunction {
-        return this.add_new_obj(
-            new this.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction({ method, url, headers, task_status_url: taskStatusUrl }),
-            id
-        );
-    }
-
-    addNewWorkFlow(tasks: Record<string, string[]> | string[], metadata: Record<string, any> = {}, id?: string): Model4LLMs.WorkFlow {
-        if (Array.isArray(tasks)) {
-            tasks.reverse();
-            const dependencies = tasks.map((v,i) => (tasks[i+1]?[tasks[i+1]]:[]));
-            tasks = tasks.reduce((acc: Record<string, string[]>, task, index) => {
-                acc[task] = dependencies[index] || [];
-                return acc;
-            }, {});            
+        addNewXaiVendor(apiKey: string, apiUrl: string = "https://api.x.ai", timeout: number = 30): Model4LLMs.XaiVendor {
+            return this.add_new_obj(new this.MODEL_CLASS_GROUP.XaiVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
         }
-        return this.add_new_obj(new this.MODEL_CLASS_GROUP.WorkFlow({ tasks, metadata }), id);
-    }
 
-    findFunction(functionId: string): Model4LLMs.Function {
-        return this.find(functionId);
-    }
-
-    findAllVendors(): Model4LLMs.AbstractVendor[] {
-        return this.find_all("*Vendor:*") as Model4LLMs.AbstractVendor[];
-    }
-
-    static chainDumps(cl: any[]): string {
-        const acc: Record<string, any> = {};
-        for (let index = 0; index < cl.length; index++) {
-            const obj = cl[index];
-            acc[obj.get_id()] = obj.model_dump_json_dict();
+        addNewOllamaVendor(apiUrl: string = "http://localhost:11434", timeout: number = 30): Model4LLMs.OllamaVendor {
+            return this.add_new_obj(new this.MODEL_CLASS_GROUP.OllamaVendor({ api_url: apiUrl, api_key: "", timeout }));
         }
-        return JSON.stringify(acc);
-    }
 
-    chainLoads(clJson: string): Model4Basic.AbstractObj[] {
-        const data: Record<string, any> = JSON.parse(clJson);
-        const tmpStore = new LLMsStore();
-        tmpStore.loads(clJson);
-        const objs = Object.keys(data).map((key) => tmpStore.find(key));
-        objs.forEach((obj) => (obj._id = null));
-        return objs.map((obj) => this.add_new_obj(obj));
+        addNewChatGPT4o(
+            vendorId: string,
+            systemPrompt: string = '',
+            limitOutputTokens: number = 1024,
+            temperature: number = 0.7,
+            topP: number = 1.0,
+            frequencyPenalty: number = 0.0,
+            presencePenalty: number = 0.0,
+            id?: string
+        ): Model4LLMs.ChatGPT4o {
+            return this.add_new_obj(
+                new this.MODEL_CLASS_GROUP.ChatGPT4o({
+                    vendor_id: vendorId,
+                    limit_output_tokens: limitOutputTokens,
+                    temperature,
+                    top_p: topP,
+                    frequency_penalty: frequencyPenalty,
+                    presence_penalty: presencePenalty,
+                    system_prompt: systemPrompt,
+                }),
+                id
+            );
+        }
+
+        addNewChatGPT4oMini(
+            vendorId: string = "auto",
+            systemPrompt: string = '',
+            limitOutputTokens: number = 1024,
+            temperature: number = 0.7,
+            topP: number = 1.0,
+            frequencyPenalty: number = 0.0,
+            presencePenalty: number = 0.0,
+            id?: string
+        ): Model4LLMs.ChatGPT4oMini {
+            return this.add_new_obj(
+                new this.MODEL_CLASS_GROUP.ChatGPT4oMini({
+                    vendor_id: vendorId,
+                    limit_output_tokens: limitOutputTokens,
+                    temperature,
+                    top_p: topP,
+                    frequency_penalty: frequencyPenalty,
+                    presence_penalty: presencePenalty,
+                    system_prompt: systemPrompt,
+                }),
+                id
+            );
+        }
+
+        addNewGrok(
+            vendorId: string,
+            systemPrompt: string = '',
+            limitOutputTokens: number = 1024,
+            temperature: number = 0.7,
+            topP: number = 1.0,
+            frequencyPenalty: number = 0.0,
+            presencePenalty: number = 0.0,
+            id?: string
+        ): Model4LLMs.Grok {
+            return this.add_new_obj(
+                new this.MODEL_CLASS_GROUP.Grok({
+                    vendor_id: vendorId,
+                    limit_output_tokens: limitOutputTokens,
+                    temperature,
+                    top_p: topP,
+                    frequency_penalty: frequencyPenalty,
+                    presence_penalty: presencePenalty,
+                    system_prompt: systemPrompt,
+                }),
+                id
+            );
+        }
+
+        addNewGemma2(vendorId: string, systemPrompt: string = '', id?: string): Model4LLMs.Gemma2 {
+            return this.add_new_obj(new this.MODEL_CLASS_GROUP.Gemma2({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
+        }
+
+        addNewPhi3(vendorId: string, systemPrompt: string = '', id?: string): Model4LLMs.Phi3 {
+            return this.add_new_obj(new this.MODEL_CLASS_GROUP.Phi3({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
+        }
+
+        addNewLlama(vendorId: string, systemPrompt: string = '', id?: string): Model4LLMs.Llama {
+            return this.add_new_obj(new this.MODEL_CLASS_GROUP.Llama({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
+        }
+
+        addNewFunction(functionObj: Model4LLMs.Function, id?: string): Model4LLMs.Function {
+            return this.add_new_obj(functionObj, id);
+        }
+
+        addNewRequest(url: string, method: string = "GET", headers: Record<string, any> = {}, id?: string): Model4LLMs.RequestsFunction {
+            return this.add_new_obj(new this.MODEL_CLASS_GROUP.RequestsFunction({ method, url, headers }), id);
+        }
+
+        // addNewCeleryRequest(
+        //     url: string,
+        //     method: string = "GET",
+        //     headers: Record<string, any> = {},
+        //     taskStatusUrl: string = "http://127.0.0.1:8000/tasks/status/{task_id}",
+        //     id?: string
+        // ): Model4LLMs.AsyncCeleryWebApiFunction {
+        //     return this.add_new_obj(
+        //         new this.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction({ method, url, headers, task_status_url: taskStatusUrl }),
+        //         id
+        //     );
+        // }
+
+        addNewWorkFlow(tasks: Record<string, string[]> | string[], metadata: Record<string, any> = {}, id?: string): Model4LLMs.WorkFlow {
+            if (Array.isArray(tasks)) {
+                const tasks_list = tasks as string[];
+                tasks_list.reverse();
+                const dependencies = tasks_list.map((_, i) => (tasks_list[i + 1] ? [tasks_list[i + 1]] : []));
+                tasks = tasks_list.reduce((acc: Record<string, string[]>, task, index) => {
+                    acc[task] = dependencies[index] || [];
+                    return acc;
+                }, {});
+            }
+            return this.add_new_obj(new this.MODEL_CLASS_GROUP.WorkFlow({ tasks, metadata }), id);
+        }
+
+        findFunction(functionId: string): Model4LLMs.Function {
+            return this.find(functionId) as Model4LLMs.Function;
+        }
+
+        findAllVendors(): Model4LLMs.AbstractVendor[] {
+            return this.find_all("*Vendor:*") as Model4LLMs.AbstractVendor[];
+        }
+
+        static chainDumps(cl: any[]): string {
+            const acc: Record<string, any> = {};
+            for (let index = 0; index < cl.length; index++) {
+                const obj = cl[index];
+                acc[obj.get_id()] = obj.model_dump_json_dict();
+            }
+            return JSON.stringify(acc);
+        }
+
+        chainLoads(clJson: string): Model4Basic.AbstractObj[] {
+            const data: Record<string, any> = JSON.parse(clJson);
+            const tmpStore = new LLMsStore();
+            tmpStore.loads(clJson);
+            const objs = Object.keys(data).map((key) => tmpStore.find(key));
+            objs.forEach((obj) => { if (obj) obj._id = null; });
+            return objs.map((obj) => this.add_new_obj(obj));
+        }
     }
 }
-
-class Tests {
-    private store: LLMsStore;
-
-    constructor() {
-        this.store = new LLMsStore();
-    }
-
-    async testAll(num: number = 1): Promise<void> {
-        for (let i = 0; i < num; i++) {
-            await this.testOpenAI();
-            // await this.testOllama();
-        }
-
-        console.log(this.store.dumps());
-    }
-
-    async testOllama(): Promise<void> {
-        await this.testOllama1();
-        await this.testOllama2();
-        await this.testOllama3();
-    }
-
-    async testOpenAI(): Promise<void> {
-        await this.testOpenAI1();
-        await this.testOpenAI2();
-        await this.testOpenAI3();
-    }
-
-    async testOpenAI1(): Promise<void> {
-        const vendor = this.store.addNewOpenAIVendor("OPENAI_API_KEY");
-        const models = await vendor.getAvailableModels();
-        console.log(models);
-    }
-
-    async testOpenAI2(): Promise<void> {
-        const vendor = this.store.find_all("OpenAIVendor:*")[0];
-        const chatGPT = this.store.addNewChatGPT4oMini(vendor.get_id());
-        console.log(chatGPT);
-    }
-
-    async testOpenAI3(): Promise<void> {
-        const chatGPT = this.store.find_all("ChatGPT4oMini:*")[0];
-        console.log(chatGPT);
-
-        const response = await chatGPT.call("What is your name?");
-        console.log(response);
-    }
-
-    async testOllama1(): Promise<void> {
-        const vendor = this.store.addNewOllamaVendor();
-        const models = await vendor.getAvailableModels();
-        console.log(models);
-    }
-
-    async testOllama2(): Promise<void> {
-        const vendor = this.store.find_all("OllamaVendor:*")[0];
-        const gemma = this.store.addNewGemma2(vendor.get_id());
-        const response = await gemma.acall("What is your name?");
-        console.log(response);
-    }
-
-    async testOllama3(): Promise<void> {
-        const vendor = this.store.find_all("OllamaVendor:*")[0];
-        const llama = this.store.addNewLlama(vendor.get_id());
-        const response = await llama.acall("What is your name?");
-        console.log(response);
-    }
-}
-
-// To run tests
-// const tests = new Tests();
-// tests.testAll(1).catch(console.error);
