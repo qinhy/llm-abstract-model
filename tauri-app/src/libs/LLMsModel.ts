@@ -7,7 +7,7 @@ export namespace Controller4LLMs {
     export class AbstractObjController extends Controller4Basic.AbstractObjController { };
 
     export class AbstractLLMController extends AbstractObjController {
-        
+
         getVendor(auto: boolean = false): any {
             const store = this.storage();
             const model = this.model as unknown as Model4LLMs.AbstractLLM;
@@ -62,6 +62,7 @@ export namespace Controller4LLMs {
     export class Gemma2Controller extends AbstractLLMController { }
     export class Phi3Controller extends AbstractLLMController { }
     export class LlamaController extends AbstractLLMController { }
+    export class OpenAIVendorController extends AbstractLLMController { }
 
     export class AbstractEmbeddingController extends AbstractObjController {
 
@@ -95,7 +96,6 @@ export namespace Controller4LLMs {
             const inDegree: { [key: string]: number } = {};
             const zeroInDegree: string[] = [];
             const result: string[] = [];
-
             // Initialize in-degree for each node
             for (const node in graph) {
                 if (!inDegree[node]) inDegree[node] = 0;
@@ -104,23 +104,19 @@ export namespace Controller4LLMs {
                     inDegree[neighbor]++;
                 }
             }
-
             // Find all nodes with zero in-degree
             for (const node in inDegree) {
                 if (inDegree[node] === 0) zeroInDegree.push(node);
             }
-
             // Process nodes with zero in-degree
             while (zeroInDegree.length > 0) {
                 const node = zeroInDegree.pop()!;
                 result.push(node);
-
                 for (const neighbor of graph[node] || []) {
                     inDegree[neighbor]--;
                     if (inDegree[neighbor] === 0) zeroInDegree.push(neighbor);
                 }
             }
-
             // Check for cycles (if all nodes are not processed)
             // if (result.length !== Object.keys(graph).length) {
             //     throw new Error("Graph has at least one cycle");
@@ -452,6 +448,7 @@ export namespace Model4LLMs {
                 messages = String(messages);
             }
             const payload = this.constructPayload(this.constructMessages(messages));
+
             const vendor = this.getVendor();
             for await (const chunk of vendor.chatStreamRequest(payload)) {
                 if (chunk) yield chunk;
@@ -896,196 +893,195 @@ export namespace Model4LLMs {
         // }
 
     }
+}
+export class LLMsStore extends BasicStore {
+    MODEL_CLASS_GROUP = Model4LLMs;
 
-    export class LLMsStore extends BasicStore {
-        MODEL_CLASS_GROUP = Model4LLMs;
+    protected _get_class(id: string): typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup {
+        const class_type = id.split(':')[0];
+        const classes: Record<string, any> = {};
+        // Dynamically add all classes from Model4LLMs
+        Object.entries(this.MODEL_CLASS_GROUP).forEach((val) => {
+            classes[val[0]] = val[1];
+        });
+        const res = classes[class_type];
+        if (!res) throw new Error(`No such class of ${class_type}`);
+        return res;
+    }
 
-        protected _get_class(id: string): typeof Model4Basic.AbstractObj | typeof Model4Basic.AbstractGroup {
-            const class_type = id.split(':')[0];
-            const classes: Record<string, any> = {};
-            // Dynamically add all classes from Model4LLMs
-            Object.entries(this.MODEL_CLASS_GROUP).forEach((val) => {
-                classes[val[0]] = val[1];
-            });
-            const res = classes[class_type];
-            if (!res) throw new Error(`No such class of ${class_type}`);
-            return res;
+    protected _get_as_obj(id: string, data_dict: Record<string, any>): Model4Basic.AbstractObj {
+        const ClassConstructor = this._get_class(id);
+        const obj = new ClassConstructor();
+        Object.assign(obj, data_dict);
+        obj.set_id(id).init_controller(this);
+        return obj;
+    }
+
+    protected _add_new_obj(obj: Model4Basic.AbstractObj, id: string | null = null): Model4Basic.AbstractObj {
+        if (!this.MODEL_CLASS_GROUP.hasOwnProperty(obj.constructor.name)) {
+            var tmp: { [key: string]: any } = {};
+            tmp[obj.constructor.name] = obj.constructor;
+            Object.assign(this.MODEL_CLASS_GROUP, tmp);
         }
+        id = id === null ? obj.gen_new_id() : id;
+        const data = obj.model_dump_json_dict();
+        this.set(id, data);
+        return this._get_as_obj(id, data);
+    }
 
-        protected _get_as_obj(id: string, data_dict: Record<string, any>): Model4Basic.AbstractObj {
-            const ClassConstructor = this._get_class(id);
-            const obj = new ClassConstructor();
-            Object.assign(obj, data_dict);
-            obj.set_id(id).init_controller(this);
-            return obj;
+    addNewOpenAIVendor(apiKey: string, apiUrl: string = "https://api.openai.com", timeout: number = 30): Model4LLMs.OpenAIVendor {
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.OpenAIVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
+    }
+
+    addNewXaiVendor(apiKey: string, apiUrl: string = "https://api.x.ai", timeout: number = 30): Model4LLMs.XaiVendor {
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.XaiVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
+    }
+
+    addNewOllamaVendor(apiUrl: string = "http://localhost:11434", timeout: number = 30): Model4LLMs.OllamaVendor {
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.OllamaVendor({ api_url: apiUrl, api_key: "", timeout }));
+    }
+
+    addNewChatGPT4o(
+        vendorId: string,
+        systemPrompt: string = '',
+        limitOutputTokens: number = 1024,
+        temperature: number = 0.7,
+        topP: number = 1.0,
+        frequencyPenalty: number = 0.0,
+        presencePenalty: number = 0.0,
+        id?: string
+    ): Model4LLMs.ChatGPT4o {
+        return this.add_new_obj(
+            new this.MODEL_CLASS_GROUP.ChatGPT4o({
+                vendor_id: vendorId,
+                limit_output_tokens: limitOutputTokens,
+                temperature,
+                top_p: topP,
+                frequency_penalty: frequencyPenalty,
+                presence_penalty: presencePenalty,
+                system_prompt: systemPrompt,
+            }),
+            id
+        );
+    }
+
+    addNewChatGPT4oMini(
+        vendorId: string = "auto",
+        systemPrompt: string = '',
+        limitOutputTokens: number = 1024,
+        temperature: number = 0.7,
+        topP: number = 1.0,
+        frequencyPenalty: number = 0.0,
+        presencePenalty: number = 0.0,
+        id?: string
+    ): Model4LLMs.ChatGPT4oMini {
+        return this.add_new_obj(
+            new this.MODEL_CLASS_GROUP.ChatGPT4oMini({
+                vendor_id: vendorId,
+                limit_output_tokens: limitOutputTokens,
+                temperature,
+                top_p: topP,
+                frequency_penalty: frequencyPenalty,
+                presence_penalty: presencePenalty,
+                system_prompt: systemPrompt,
+            }),
+            id
+        );
+    }
+
+    addNewGrok(
+        vendorId: string,
+        systemPrompt: string = '',
+        limitOutputTokens: number = 1024,
+        temperature: number = 0.7,
+        topP: number = 1.0,
+        frequencyPenalty: number = 0.0,
+        presencePenalty: number = 0.0,
+        id?: string
+    ): Model4LLMs.Grok {
+        return this.add_new_obj(
+            new this.MODEL_CLASS_GROUP.Grok({
+                vendor_id: vendorId,
+                limit_output_tokens: limitOutputTokens,
+                temperature,
+                top_p: topP,
+                frequency_penalty: frequencyPenalty,
+                presence_penalty: presencePenalty,
+                system_prompt: systemPrompt,
+            }),
+            id
+        );
+    }
+
+    addNewGemma2(vendorId: string, systemPrompt: string = '', id?: string): Model4LLMs.Gemma2 {
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.Gemma2({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
+    }
+
+    addNewPhi3(vendorId: string, systemPrompt: string = '', id?: string): Model4LLMs.Phi3 {
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.Phi3({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
+    }
+
+    addNewLlama(vendorId: string, systemPrompt: string = '', id?: string): Model4LLMs.Llama {
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.Llama({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
+    }
+
+    addNewFunction(functionObj: Model4LLMs.Function, id?: string): Model4LLMs.Function {
+        return this.add_new_obj(functionObj, id);
+    }
+
+    addNewRequest(url: string, method: string = "GET", headers: Record<string, any> = {}, id?: string): Model4LLMs.RequestsFunction {
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.RequestsFunction({ method, url, headers }), id);
+    }
+
+    // addNewCeleryRequest(
+    //     url: string,
+    //     method: string = "GET",
+    //     headers: Record<string, any> = {},
+    //     taskStatusUrl: string = "http://127.0.0.1:8000/tasks/status/{task_id}",
+    //     id?: string
+    // ): Model4LLMs.AsyncCeleryWebApiFunction {
+    //     return this.add_new_obj(
+    //         new this.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction({ method, url, headers, task_status_url: taskStatusUrl }),
+    //         id
+    //     );
+    // }
+
+    addNewWorkFlow(tasks: Record<string, string[]> | string[], metadata: Record<string, any> = {}, id?: string): Model4LLMs.WorkFlow {
+        if (Array.isArray(tasks)) {
+            const tasks_list = tasks as string[];
+            tasks_list.reverse();
+            const dependencies = tasks_list.map((_, i) => (tasks_list[i + 1] ? [tasks_list[i + 1]] : []));
+            tasks = tasks_list.reduce((acc: Record<string, string[]>, task, index) => {
+                acc[task] = dependencies[index] || [];
+                return acc;
+            }, {});
         }
+        return this.add_new_obj(new this.MODEL_CLASS_GROUP.WorkFlow({ tasks, metadata }), id);
+    }
 
-        protected _add_new_obj(obj: Model4Basic.AbstractObj, id: string | null = null): Model4Basic.AbstractObj {
-            if (!this.MODEL_CLASS_GROUP.hasOwnProperty(obj.constructor.name)) {
-                var tmp: { [key: string]: any } = {};
-                tmp[obj.constructor.name] = obj.constructor;
-                Object.assign(this.MODEL_CLASS_GROUP, tmp);
-            }
-            id = id === null ? obj.gen_new_id() : id;
-            const data = obj.model_dump_json_dict();
-            this.set(id, data);
-            return this._get_as_obj(id, data);
+    findFunction(functionId: string): Model4LLMs.Function {
+        return this.find(functionId) as Model4LLMs.Function;
+    }
+
+    findAllVendors(): Model4LLMs.AbstractVendor[] {
+        return this.find_all("*Vendor:*") as Model4LLMs.AbstractVendor[];
+    }
+
+    static chainDumps(cl: any[]): string {
+        const acc: Record<string, any> = {};
+        for (let index = 0; index < cl.length; index++) {
+            const obj = cl[index];
+            acc[obj.get_id()] = obj.model_dump_json_dict();
         }
+        return JSON.stringify(acc);
+    }
 
-        addNewOpenAIVendor(apiKey: string, apiUrl: string = "https://api.openai.com", timeout: number = 30): Model4LLMs.OpenAIVendor {
-            return this.add_new_obj(new this.MODEL_CLASS_GROUP.OpenAIVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
-        }
-
-        addNewXaiVendor(apiKey: string, apiUrl: string = "https://api.x.ai", timeout: number = 30): Model4LLMs.XaiVendor {
-            return this.add_new_obj(new this.MODEL_CLASS_GROUP.XaiVendor({ api_url: apiUrl, api_key: apiKey, timeout }));
-        }
-
-        addNewOllamaVendor(apiUrl: string = "http://localhost:11434", timeout: number = 30): Model4LLMs.OllamaVendor {
-            return this.add_new_obj(new this.MODEL_CLASS_GROUP.OllamaVendor({ api_url: apiUrl, api_key: "", timeout }));
-        }
-
-        addNewChatGPT4o(
-            vendorId: string,
-            systemPrompt: string = '',
-            limitOutputTokens: number = 1024,
-            temperature: number = 0.7,
-            topP: number = 1.0,
-            frequencyPenalty: number = 0.0,
-            presencePenalty: number = 0.0,
-            id?: string
-        ): Model4LLMs.ChatGPT4o {
-            return this.add_new_obj(
-                new this.MODEL_CLASS_GROUP.ChatGPT4o({
-                    vendor_id: vendorId,
-                    limit_output_tokens: limitOutputTokens,
-                    temperature,
-                    top_p: topP,
-                    frequency_penalty: frequencyPenalty,
-                    presence_penalty: presencePenalty,
-                    system_prompt: systemPrompt,
-                }),
-                id
-            );
-        }
-
-        addNewChatGPT4oMini(
-            vendorId: string = "auto",
-            systemPrompt: string = '',
-            limitOutputTokens: number = 1024,
-            temperature: number = 0.7,
-            topP: number = 1.0,
-            frequencyPenalty: number = 0.0,
-            presencePenalty: number = 0.0,
-            id?: string
-        ): Model4LLMs.ChatGPT4oMini {
-            return this.add_new_obj(
-                new this.MODEL_CLASS_GROUP.ChatGPT4oMini({
-                    vendor_id: vendorId,
-                    limit_output_tokens: limitOutputTokens,
-                    temperature,
-                    top_p: topP,
-                    frequency_penalty: frequencyPenalty,
-                    presence_penalty: presencePenalty,
-                    system_prompt: systemPrompt,
-                }),
-                id
-            );
-        }
-
-        addNewGrok(
-            vendorId: string,
-            systemPrompt: string = '',
-            limitOutputTokens: number = 1024,
-            temperature: number = 0.7,
-            topP: number = 1.0,
-            frequencyPenalty: number = 0.0,
-            presencePenalty: number = 0.0,
-            id?: string
-        ): Model4LLMs.Grok {
-            return this.add_new_obj(
-                new this.MODEL_CLASS_GROUP.Grok({
-                    vendor_id: vendorId,
-                    limit_output_tokens: limitOutputTokens,
-                    temperature,
-                    top_p: topP,
-                    frequency_penalty: frequencyPenalty,
-                    presence_penalty: presencePenalty,
-                    system_prompt: systemPrompt,
-                }),
-                id
-            );
-        }
-
-        addNewGemma2(vendorId: string, systemPrompt: string = '', id?: string): Model4LLMs.Gemma2 {
-            return this.add_new_obj(new this.MODEL_CLASS_GROUP.Gemma2({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
-        }
-
-        addNewPhi3(vendorId: string, systemPrompt: string = '', id?: string): Model4LLMs.Phi3 {
-            return this.add_new_obj(new this.MODEL_CLASS_GROUP.Phi3({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
-        }
-
-        addNewLlama(vendorId: string, systemPrompt: string = '', id?: string): Model4LLMs.Llama {
-            return this.add_new_obj(new this.MODEL_CLASS_GROUP.Llama({ vendor_id: vendorId, system_prompt: systemPrompt }), id);
-        }
-
-        addNewFunction(functionObj: Model4LLMs.Function, id?: string): Model4LLMs.Function {
-            return this.add_new_obj(functionObj, id);
-        }
-
-        addNewRequest(url: string, method: string = "GET", headers: Record<string, any> = {}, id?: string): Model4LLMs.RequestsFunction {
-            return this.add_new_obj(new this.MODEL_CLASS_GROUP.RequestsFunction({ method, url, headers }), id);
-        }
-
-        // addNewCeleryRequest(
-        //     url: string,
-        //     method: string = "GET",
-        //     headers: Record<string, any> = {},
-        //     taskStatusUrl: string = "http://127.0.0.1:8000/tasks/status/{task_id}",
-        //     id?: string
-        // ): Model4LLMs.AsyncCeleryWebApiFunction {
-        //     return this.add_new_obj(
-        //         new this.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction({ method, url, headers, task_status_url: taskStatusUrl }),
-        //         id
-        //     );
-        // }
-
-        addNewWorkFlow(tasks: Record<string, string[]> | string[], metadata: Record<string, any> = {}, id?: string): Model4LLMs.WorkFlow {
-            if (Array.isArray(tasks)) {
-                const tasks_list = tasks as string[];
-                tasks_list.reverse();
-                const dependencies = tasks_list.map((_, i) => (tasks_list[i + 1] ? [tasks_list[i + 1]] : []));
-                tasks = tasks_list.reduce((acc: Record<string, string[]>, task, index) => {
-                    acc[task] = dependencies[index] || [];
-                    return acc;
-                }, {});
-            }
-            return this.add_new_obj(new this.MODEL_CLASS_GROUP.WorkFlow({ tasks, metadata }), id);
-        }
-
-        findFunction(functionId: string): Model4LLMs.Function {
-            return this.find(functionId) as Model4LLMs.Function;
-        }
-
-        findAllVendors(): Model4LLMs.AbstractVendor[] {
-            return this.find_all("*Vendor:*") as Model4LLMs.AbstractVendor[];
-        }
-
-        static chainDumps(cl: any[]): string {
-            const acc: Record<string, any> = {};
-            for (let index = 0; index < cl.length; index++) {
-                const obj = cl[index];
-                acc[obj.get_id()] = obj.model_dump_json_dict();
-            }
-            return JSON.stringify(acc);
-        }
-
-        chainLoads(clJson: string): Model4Basic.AbstractObj[] {
-            const data: Record<string, any> = JSON.parse(clJson);
-            const tmpStore = new LLMsStore();
-            tmpStore.loads(clJson);
-            const objs = Object.keys(data).map((key) => tmpStore.find(key));
-            objs.forEach((obj) => { if (obj) obj._id = null; });
-            return objs.map((obj) => this.add_new_obj(obj));
-        }
+    chainLoads(clJson: string): Model4Basic.AbstractObj[] {
+        const data: Record<string, any> = JSON.parse(clJson);
+        const tmpStore = new LLMsStore();
+        tmpStore.loads(clJson);
+        const objs = Object.keys(data).map((key) => tmpStore.find(key));
+        objs.forEach((obj) => {if(obj)obj._id = null;});
+        return objs.map((obj) => this.add_new_obj(obj));
     }
 }
