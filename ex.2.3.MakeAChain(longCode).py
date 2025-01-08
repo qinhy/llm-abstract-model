@@ -71,24 +71,6 @@ msg_template = store.add_new_function(StringTemplate(string='''
 
 res_ext = store.add_new_function(RegxExtractor(regx=r"```python\s*(.*)\s*\n```"))
 
-def test_summary(llm = llm,
-                 f='The Adventures of Sherlock Holmes.txt',
-                 limit_words=1000,chunk_lines=100, overlap_lines=30):
-    
-    pre_code = None
-    text_file = TextFile(file_path=f, chunk_lines=chunk_lines, overlap_lines=overlap_lines)
-    for i,chunk in enumerate(text_file):        
-        
-        msg    = msg_template('\n'.join(chunk),pre_code)        
-        output = llm(msg)
-        print('#########################')
-        print(output)
-        output = res_ext(output)
-
-        pre_code = output
-        yield output
-
-
 ############# make a custom chain 
 from functools import reduce
 def compose(*funcs):
@@ -112,14 +94,3 @@ for i,chunk_lines in enumerate(TextFile(file_path='./LLMAbstractModel/RSA.py',
         print(code)
         pre_code = code
         # break
-
-# for i,p in enumerate(['file1','file2','file3','filen']):
-#     ts = test_summary(p)
-#     res = ''
-#     for s in ts:
-#         with open(p.replace('file','output'),'a') as f:
-#             f.write(s)
-#             res += s
-#     with open(f'allinone','a') as f:
-#         f.write(f'## {p}\n')
-#         f.write(res)

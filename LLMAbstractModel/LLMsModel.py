@@ -41,9 +41,14 @@ class Controller4LLMs:
                     # try other vendors
                     pass
                 elif type(self.model) in [Model4LLMs.Grok ]:
-                    # try ollama vendor
                     vs = self._store.find_all('XaiVendor:*')
                     if len(vs)==0:raise ValueError(f'auto get endor of XaiVendor:* is not exists! Please (add and) change_vendor(...)')
+                    else: return vs[0]
+                    # try other vendors
+                    pass
+                elif type(self.model) in [Model4LLMs.DeepSeek ]:
+                    vs = self._store.find_all('DeepSeekVendor:*')
+                    if len(vs)==0:raise ValueError(f'auto get endor of DeepSeekVendor:* is not exists! Please (add and) change_vendor(...)')
                     else: return vs[0]
                     # try other vendors
                     pass
@@ -147,11 +152,11 @@ class Controller4LLMs:
                     all_args.append(args_kwargs)
             return all_args, all_kwargs
         
-class KeyOrEnv(BaseModel):
-    key:str
+# class KeyOrEnv(BaseModel):
+#     key:str
 
-    def get(self):
-        return os.getenv(self.key,self.key)
+#     def get(self):
+#         return os.getenv(self.key,self.key)
     
 class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
@@ -160,7 +165,7 @@ class Model4LLMs:
     class AbstractVendor(AbstractObj):
         vendor_name: str  # e.g., 'OpenAI'
         api_url: str  # e.g., 'https://api.openai.com/v1/'
-        api_key: KeyOrEnv = None # API key for authentication, if required
+        api_key: str = None # API key for authentication, if required
         timeout: int = 30  # Default timeout for API requests in seconds
         
         chat_endpoint:str = None # e.g., '/v1/chat/completions'
@@ -173,7 +178,7 @@ class Model4LLMs:
             return llm_model_name       
         
         def get_api_key(self)->str:
-            return self.api_key.get()
+            return self.api_key#.get()
             # return os.getenv(self.api_key,self.api_key)
 
         def get_available_models(self) -> Dict[str, Any]:
@@ -416,6 +421,18 @@ class Model4LLMs:
         context_window_tokens: int = 128000
         max_output_tokens: int = 65536
 
+    class DeepSeekVendor(OpenAIVendor):
+        vendor_name: str = "DeepSeek"
+        api_url: str = "https://api.deepseek.com"
+        chat_endpoint: str = "/v1/chat/completions"
+        models_endpoint: str = "/v1/models"
+        rate_limit: Optional[int] = None  # Example rate limit for xAI
+        
+    class DeepSeek(OpenAIChatGPT):
+        llm_model_name:str = 'deepseek-chat'
+        context_window_tokens:int = 64000
+        max_output_tokens:int = 4096*2
+        
     class XaiVendor(OpenAIVendor):
         vendor_name: str = "xAI"
         api_url: str = "https://api.x.ai"
@@ -811,16 +828,24 @@ class LLMsStore(BasicStore):
     def add_new_openai_vendor(self,api_key: str,
                               api_url: str='https://api.openai.com',
                               timeout: int=30) -> MODEL_CLASS_GROUP.OpenAIVendor:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.OpenAIVendor(api_url=api_url,api_key=KeyOrEnv(key=api_key),timeout=timeout))
+        api_key=os.getenv(api_key,api_key)
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.OpenAIVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
     def add_new_Xai_vendor(self,api_key: str,
                               api_url: str='https://api.x.ai',
                               timeout: int=30) -> MODEL_CLASS_GROUP.XaiVendor:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.XaiVendor(api_url=api_url,api_key=KeyOrEnv(key=api_key),timeout=timeout))
+        api_key=os.getenv(api_key,api_key)
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.XaiVendor(api_url=api_url,api_key=api_key,timeout=timeout))
+    
+    def add_new_deepseek_vendor(self,api_key: str,
+                              api_url: str='https://api.deepseek.com',
+                              timeout: int=30) -> MODEL_CLASS_GROUP.DeepSeekVendor:
+        api_key=os.getenv(api_key,api_key)
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.DeepSeekVendor(api_url=api_url,api_key=api_key,timeout=timeout))
     
     def add_new_ollama_vendor(self,api_url: str='http://localhost:11434',
                               timeout: int=30) -> MODEL_CLASS_GROUP.OllamaVendor:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.OllamaVendor(api_url=api_url,api_key=KeyOrEnv(key=''),timeout=timeout))
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.OllamaVendor(api_url=api_url,api_key='',timeout=timeout))
     
     def add_new_chatgpt4o(self,vendor_id:str,
                                 limit_output_tokens:int = 1024,
@@ -879,6 +904,22 @@ class LLMsStore(BasicStore):
                                 system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.Grok:
         
         return self.add_new_obj(self.MODEL_CLASS_GROUP.Grok(vendor_id=vendor_id,
+                                limit_output_tokens=limit_output_tokens,
+                                temperature=temperature,
+                                top_p=top_p,
+                                frequency_penalty=frequency_penalty,
+                                presence_penalty=presence_penalty,
+                                system_prompt=system_prompt,),id=id)
+    
+    def add_new_deepseek(self,vendor_id:str,
+                                limit_output_tokens:int = 1024,
+                                temperature:float = 0.7,
+                                top_p:float = 1.0,
+                                frequency_penalty:float = 0.0,
+                                presence_penalty:float = 0.0,
+                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.DeepSeek:
+        
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.DeepSeek(vendor_id=vendor_id,
                                 limit_output_tokens=limit_output_tokens,
                                 temperature=temperature,
                                 top_p=top_p,
@@ -959,7 +1000,7 @@ class Tests(unittest.TestCase):
         self.test_openai_3()
 
     def test_openai_1(self):
-        v = self.store.add_new_openai_vendor(api_key=KeyOrEnv(key='OPENAI_API_KEY'))
+        v = self.store.add_new_openai_vendor(os.environ['OPENAI_API_KEY'])
         print(v.get_available_models())
 
     def test_openai_2(self):
