@@ -8,7 +8,7 @@ import time
 
 from pydantic import Field
 from LLMAbstractModel import LLMsStore
-from LLMAbstractModel.LLMsModel import Controller4LLMs, KeyOrEnv, Model4LLMs
+from LLMAbstractModel.LLMsModel import Controller4LLMs, Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor
 from mt5utils import MT5Account, MT5MakeOder, MockLLM, RatesReturn
 
@@ -47,16 +47,16 @@ def init_store():
     accs:list[MT5Account] = [ store.add_new_obj(
                 MT5Account(
                     account_id=i,
-                    password=KeyOrEnv(key=os.environ[f"{i}_PASS"]),
-                    account_server=KeyOrEnv(key=os.environ[f"{i}_SERVER"]),
+                    password=os.environ[f"{i}_PASS"],
+                    account_server=os.environ[f"{i}_SERVER"],
                     metadata={'tags': [str(i)]}
                 )
             ) for i in eval(os.environ["MT5ACCs"])]
     # myprint('accs[0].model_dump_json_dict()')
 
     acc=dict(account_id=accs[0].account_id,
-            password=accs[0].password.get(),
-            account_server=accs[0].account_server.get())
+            password=accs[0].password,
+            account_server=accs[0].account_server)
     book=dict(symbol='USDJPY',price_open = 100.0,volume= 0.01)
 
     # get account info

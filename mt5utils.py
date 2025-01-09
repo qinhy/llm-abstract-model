@@ -1,14 +1,14 @@
 from pydantic import BaseModel
 import json
 from typing import Any
-from LLMAbstractModel.LLMsModel import KeyOrEnv, LLMsStore
+from LLMAbstractModel.LLMsModel import LLMsStore
 from LLMAbstractModel import Model4LLMs
 descriptions = Model4LLMs.Function.param_descriptions
 
 class MT5Account(Model4LLMs.AbstractObj):
     account_id: int = None
-    password: KeyOrEnv = None
-    account_server: KeyOrEnv = None
+    password: str = None
+    account_server: str = None
 
     def is_valid(self):
         if self.account_id is None:raise ValueError('account_id is not set')
@@ -140,8 +140,8 @@ store = LLMsStore()
 acc = store.add_new_obj(
     MT5Account(
         account_id=123,
-        password=KeyOrEnv(key=f"123_PASS"),
-        account_server=KeyOrEnv(key=f"123_SERVER")
+        password=f"123_PASS",
+        account_server=f"123_SERVER"
     )
 )
 
