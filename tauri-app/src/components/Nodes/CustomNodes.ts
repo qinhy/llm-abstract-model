@@ -1,5 +1,5 @@
-// file: CodeBlockExtract.ts
-import { defineNode, NodeInterface, TextInputInterface, TextareaInputInterface, TextInterface, NumberInterface, IntegerInterface } from "baklavajs";
+import { defineNode, NodeInterface, TextInputInterface,
+  TextareaInputInterface, TextInterface, IntegerInterface } from "baklavajs";
 
 export const PromptOutput = defineNode({
     type: "PromptOutput",
