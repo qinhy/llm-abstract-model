@@ -11,8 +11,8 @@ def addllm(store:LLMsStore,system_prompt):
     # return store.add_new_deepseek(vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt)
 
 def init(store = LLMsStore()):    
-    vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
-    vendor = store.add_new_deepseek_vendor(api_key='DEEPSEEK_API_KEY')
+    store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
+    store.add_new_deepseek_vendor(api_key='DEEPSEEK_API_KEY')
     solver = addllm(store,system_prompt='''You will act as a professional problem-solver. Follow these 4 steps for any task or question:  
 
 Step 1: Identify Key Concepts  
@@ -92,53 +92,51 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
         'Please provide a better answer to the following question based on the previous process and review.\n\nQuestion:\n{}\n\nPrevious process:\n{}\n\nPrevious solution review:\n{}'))
     review_tmp = store.add_new_function(StringTemplate(string=
         'Question\n{}\n\nRelevant concepts\n{}\n\nThoughts\n{}\n\nProcess\n{}\n\nSolution\n{}'))
-    
-    review_collect = store.add_new_function(StringTemplate(string='{}\n{}\n{}\n{}'))
-    result_collect = store.add_new_function(StringTemplate(string='{}\n\n\n\n\n{}\n\n\n\n\n{}\n\n\n\n\n{}'))    
-    
-    workflow = store.add_new_workflow(
+        
+    solve_and_review_1 = store.add_new_workflow(
         tasks={
-            question_plain.get_id():['question_param'],
+            question_plain.get_id():['__input__'],
 
-            question_tmp.get_id():['question_param'],
-            solver.get_id():[question_tmp.get_id()],
+            question_tmp.get_id()  :['__input__'],
+            solver.get_id()        :[question_tmp.get_id()],
 
-            relevant_concepts_extract.get_id():[solver.get_id()],
-            thoughts_extract.get_id():[solver.get_id()],
-            process_extract.get_id():[solver.get_id()],
-            solution_extract.get_id():[solver.get_id()],
+            relevant_concepts_extract.get_id() :[solver.get_id()],
+            thoughts_extract.get_id()          :[solver.get_id()],
+            process_extract.get_id()           :[solver.get_id()],
+            solution_extract.get_id()          :[solver.get_id()],
 
             review_tmp.get_id():[question_plain.get_id(),relevant_concepts_extract.get_id(),
                                 thoughts_extract.get_id(),process_extract.get_id(),solution_extract.get_id()],
             
             reviewer.get_id():[review_tmp.get_id()],
 
-            initial_review_extract.get_id():[reviewer.get_id()],
-            reasoning_feedback_extract.get_id():[reviewer.get_id()],
-            process_errors_extract.get_id():[reviewer.get_id()],
-            overall_assessment_extract.get_id():[reviewer.get_id()],
+            # initial_review_extract.get_id():[reviewer.get_id()],
+            # reasoning_feedback_extract.get_id():[reviewer.get_id()],
+            # process_errors_extract.get_id():[reviewer.get_id()],
+            # overall_assessment_extract.get_id():[reviewer.get_id()],
 
-            review_collect.get_id():[initial_review_extract.get_id(),reasoning_feedback_extract.get_id(),
-                                     process_errors_extract.get_id(),overall_assessment_extract.get_id()],
-
-            result_collect.get_id():[question_plain.get_id(),process_extract.get_id(),
-                                     review_collect.get_id(),solution_extract.get_id()],
-        },
-    # metadata={'tags': [str(accs[0].account_id)]}
+            'final':[question_plain.get_id(),process_extract.get_id(),
+                     reviewer.get_id(),solution_extract.get_id()],
+        }
     )
 
-    # workflowf = lambda question:workflow(
-    #     question_param=[(question,'no solution','no review'),dict()]
-    # )
+    solve_and_review_2 = store.add_new_obj(solve_and_review_1.model_copy(update={'_id':None}))
+    solve_and_review_3 = store.add_new_obj(solve_and_review_1.model_copy(update={'_id':None}))
 
-    q,p,r,s = 'How many characters of the letter "r" in "rarspberrrry"?','no process','no review','no solution'
-    for i in range(5):
-        print('#####################',i)
-        workflow(question_param=[(q,s,r),dict()])
-        q,p,r,s = workflow.results['final'].split('\n\n\n\n\n')
-        print(s)
-        print(p)
-    return workflow
+    store.add_new_workflow(
+        tasks={
+            solve_and_review_1.get_id():['__input__'],
+            solve_and_review_2.get_id():[solve_and_review_1.get_id()],
+            solve_and_review_3.get_id():[solve_and_review_2.get_id()],
+        },id='WorkFlow:solve_and_review_3_times')
+    
+    return store    
 
+store = init()
+data = store.dumps()
 
-workflow = init()
+store.clean()
+store.loads(data)
+
+store.find('WorkFlow:solve_and_review_3_times'
+           )('How many characters of the letter "r" in "rarspberrrry"?','no process','no review','no solution')
