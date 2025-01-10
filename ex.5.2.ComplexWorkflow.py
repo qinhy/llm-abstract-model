@@ -6,49 +6,51 @@ descriptions = Model4LLMs.Function.param_descriptions
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
+def addllm(store:LLMsStore,system_prompt):
+    return store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt)
+    # return store.add_new_deepseek(vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt)
 
 def init(store = LLMsStore()):    
     vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
-    solver = store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens = 2048,
-                        system_prompt='''You will act as a professional problem-solver. Follow these steps for any task or question:  
+    vendor = store.add_new_deepseek_vendor(api_key='DEEPSEEK_API_KEY')
+    solver = addllm(store,system_prompt='''You will act as a professional problem-solver. Follow these 4 steps for any task or question:  
 
 Step 1: Identify Key Concepts  
-Read the task carefully and identify the main ideas and knowledge areas needed. Use `<relevant_concepts>` xml tags for this.
+Read the task carefully and identify the main ideas and knowledge areas needed.
 
 Step 2: Plan and Brainstorm  
-Think of ideas and approaches to solve the task, exploring different strategies and perspectives. Document your thoughts within `<thoughts>` xml tags in this format:  
+Think of ideas and approaches to solve the task, exploring different strategies and perspectives. Document your thoughts in this format:
 - Observation: Note details from the user's input or previous steps.
 - Thought: Consider the observation and decide on the next step.
 - Action: Specify what action to take next.
 
 Step 3: Solve the Problem  
-Execute the solution based on your plan. Provide a detailed step-by-step explanation within `<process>` xml tags, breaking down complex ideas into simpler parts.
+Execute the solution based on your plan. Provide a detailed step-by-step explanation, breaking down complex ideas into simpler parts.
 
 Step 4: Present the Solution  
-Share the final outcome clearly and concisely in `<solution>` xml tags. Include necessary labels, units, and context.
+Share the final outcome clearly and concisely. Include necessary labels, units, and context.
 
 Additional Notes:  
 Stay professional, thorough, and precise. Your solution should be clear, actionable, and well-explained.''')
     
-    reviewer = store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens = 2048,
-                        system_prompt='''You will review another assistant's solution to a question. Your task is to evaluate and improve it by following these steps:
+    reviewer = addllm(store,system_prompt='''You will review another assistant's solution to a question. Your task is to evaluate and improve it by following these 4 steps:
 
 Step 1: Review the Solution  
-Read the question and solution carefully. Assess if it's clear, logical, and well-organized. Write your review inside `<initial_review>` xml tags.
+Read the question and solution carefully. Assess if it's clear, logical, and well-organized.
 
 Step 2: Check Reasoning  
-Examine the reasoning behind the solution. Ensure it's clear and coherent. Suggest improvements, if needed, inside `<reasoning_feedback>` xml tags.
+Examine the reasoning behind the solution. Ensure it's clear and coherent. Suggest improvements, if needed.
 
 Step 3: Verify the Process  
-Re-check the solution’s steps one by one. Be thorough and look for any errors. Document mistakes inside `<process_errors>` xml tags.
+Re-check the solution steps one by one. Be thorough and look for any errors and document mistakes.
 
 Step 4: Provide an Overall Assessment  
-Evaluate the solution’s accuracy, clarity, and thoroughness. Highlight strengths, weaknesses, and suggestions inside `<overall_assessment>` xml tags.
+Evaluate the solution accuracy, clarity, and thoroughness. Highlight strengths, weaknesses, and suggestions.
 
+Additional Notes:
 Be professional and constructive to improve the solution quality.''')
     
-    jugde = store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens = 2048,
-                        system_prompt='''Task: Evaluate multiple solutions to a problem and select the best one. Follow these steps:
+    jugde = addllm(store,system_prompt='''Task: Evaluate multiple solutions to a problem and select the best one. Follow these steps:
 
 1. Review Each Solution: Analyze the concepts, logic, and structure of each solution.
    - Assign scores (1-5) for:
@@ -63,30 +65,31 @@ Be professional and constructive to improve the solution quality.''')
      - Clarity & Presentation: Tertiary.
 
 3. Report Results: Use this format:
-   ```
-   ## Solution X
+   ```plaintext
+   Solution X
    process: {score:.2f}, reasoning_and_logic: {score:.2f}, clarity_and_presentation: {score:.2f}, overall_score: {score:.2f}
+   ...
+
    The best solution is: {solution_number}
    Justification: (Brief explanation)
-   Final solution: <solution>
+   Final solution: (the solution)
    ```
 
 Key: Be objective, consistent, and thorough. Choose the solution with the best reasoning, accuracy, and clarity.''')
     
+    relevant_concepts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 1:.*?(?=Step \d+:|$)"))
+    thoughts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 2:.*?(?=Step \d+:|$)"))
+    process_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 3:.*?(?=Step \d+:|$)"))
+    solution_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 4:.*?(?=Step \d+:|$)"))
     
-    relevant_concepts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"<relevant_concepts>\s*(.*)\s*</relevant_concepts>"))
-    thoughts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"<thoughts>\s*(.*)\s*</thoughts>"))
-    process_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"<process>\s*(.*)\s*</process>"))
-    solution_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"<solution>\s*(.*)\s*</solution>"))
-    
-    initial_review_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"<initial_review>\s*(.*)\s*</initial_review>"))
-    reasoning_feedback_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"<reasoning_feedback>\s*(.*)\s*</reasoning_feedback>"))
-    process_errors_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"<process_errors>\s*(.*)\s*</process_errors>"))
-    overall_assessment_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"<overall_assessment>\s*(.*)\s*</overall_assessment>"))
+    initial_review_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 1:.*?(?=Step \d+:|$)"))
+    reasoning_feedback_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 2:.*?(?=Step \d+:|$)"))
+    process_errors_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 3:.*?(?=Step \d+:|$)"))
+    overall_assessment_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 4:.*?(?=Step \d+:|$)"))
     
     question_plain:StringTemplate = store.add_new_function(StringTemplate(string='{}'))
     question_tmp:StringTemplate = store.add_new_function(StringTemplate(string=
-        '"Please provide a better answer to the following question based on the previous process and review.\n\nQuestion\n{}\n\nPrevious process\n{}\n\nPrevious solution review\n{}'))
+        'Please provide a better answer to the following question based on the previous process and review.\n\nQuestion:\n{}\n\nPrevious process:\n{}\n\nPrevious solution review:\n{}'))
     review_tmp = store.add_new_function(StringTemplate(string=
         'Question\n{}\n\nRelevant concepts\n{}\n\nThoughts\n{}\n\nProcess\n{}\n\nSolution\n{}'))
     
@@ -136,3 +139,6 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
         print(s)
         print(p)
     return workflow
+
+
+workflow = init()
