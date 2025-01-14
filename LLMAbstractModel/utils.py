@@ -15,13 +15,18 @@ class RegxExtractor(Model4LLMs.Function):
     def __call__(self,text:str):
         return self.extract(text)
     
-    def extract(self,text)->str:
+    def extract(self,text,only_first=True)->str:
         matches = re.findall(self.regx, text, re.DOTALL)        
         if not self._try_binary_error(lambda:matches[0]):
             self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
             return text
-        if self.is_json:return json.loads(matches[0])
-        return matches[0]
+        if only_first:
+            m = matches[0]
+            if self.is_json:return json.loads(m)
+            return m
+        else:
+            if self.is_json:return [json.loads(m) for m in matches]
+            return matches
 
 @descriptions('String Template for format function',
               args='string.format args')

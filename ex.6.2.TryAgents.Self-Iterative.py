@@ -11,7 +11,6 @@ vendor = store.add_new_Xai_vendor(api_key='XAI_API_KEY',timeout=600)
 vendor = store.add_new_deepseek_vendor(api_key='DEEPSEEK_API_KEY',timeout=600)
 debug = True
 
-
 # enhance from https://github.com/richards199999/Self-Iterative-Agent-System-for-Complex-Problem-Solving/tree/main
 
 ## add Main model
@@ -213,7 +212,7 @@ store.clean()
 store.loads(data)
 
 # Example usage
-question='You have six horses and want to race them to see which is fastest. What is the best way to do this?'
+question='How many characters of the letter "r" in "raspberrrry"?'
 print(f'\n\n######## Question ########\n\n{question}')
 answer,solution = store.find('MainAgent:main_agent')(question=question,debug=False)
 print(f'\n\n######## Answer ########\n\n{answer}')

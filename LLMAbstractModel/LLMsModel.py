@@ -114,17 +114,20 @@ class Controller4LLMs:
             
             # Execute tasks in topological order
             result = None
-            for task_id in sorter.static_order():
-                if task_id in self.model.results:
-                    continue
-                
+            todo_list = list(sorter.static_order())
+            for task_id in todo_list:
+                if task_id in self.model.results: continue
                 # Gather results from dependencies to pass as arguments
                 dependency_results = [self.model.results[dep] for dep in tasks[task_id]]
                 all_args, all_kwargs = self._extract_args_kwargs(dependency_results)
 
                 # Execute the task and store its result
                 try:
-                    result = self._read_task(task_id)(*all_args, **all_kwargs)
+                    if task_id != 'final':
+                        result = self._read_task(task_id)(*all_args, **all_kwargs)
+                    else:
+                        result = [all_args, all_kwargs]
+                        
                     self.model.results[task_id] = result
                 except Exception as e:
                     raise ValueError(f'[WorkFlow]: Error at {task_id}: {e}')
@@ -672,12 +675,20 @@ class Model4LLMs:
 
             # if a sequential task input
             if len(args)!=0:
-                first_task_id = list(self.tasks.keys())[-1]
-                first_task_deps = self.tasks[first_task_id]
-                if '__input__' not in first_task_deps:
-                    self.tasks[first_task_id].append('__input__')
+                first_task_id = self.todo_list()[0]
+                if first_task_id != '__input__':
+                    first_task_deps = self.tasks[first_task_id]
+                    if '__input__' not in first_task_deps:
+                        self.tasks[first_task_id].append('__input__')
                 kwargs['__input__'] = [args,{}]
             return self.get_controller().run(**kwargs)
+
+        
+        def todo_list(self):
+            return list(TopologicalSorter(self.tasks).static_order())
+        
+        def find_dependency_results(self,task_id):
+            return [self.results[dep] for dep in self.tasks[task_id]]
 
         def get_result(self, task_uuid: str) -> Any:
             """Returns the result of a specified task."""
