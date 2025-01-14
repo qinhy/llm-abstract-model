@@ -7,13 +7,13 @@ def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
 def addllm(store:LLMsStore,system_prompt):
-    return store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt)
-    # return store.add_new_deepseek(vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt)
+    # return store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt)
+    return store.add_new_deepseek(vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt)
 
 def init(store = LLMsStore()):    
     store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
     store.add_new_deepseek_vendor(api_key='DEEPSEEK_API_KEY')
-    solver = addllm(store,system_prompt='''You will act as a professional problem-solver. Follow these 4 steps for any task or question:  
+    solver = addllm(store,system_prompt='''You will act as a professional problem-solver. Follow these 4 steps for any task or question without any tool ( python ... ):  
 
 Step 1: Identify Key Concepts  
 Read the task carefully and identify the main ideas and knowledge areas needed.
@@ -124,11 +124,11 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
     solve_and_review_3 = store.add_new_obj(solve_and_review_1.model_copy(update={'_id':None}))
 
     store.add_new_workflow(
-        tasks={
-            solve_and_review_1.get_id():['__input__'],
-            # solve_and_review_2.get_id():[solve_and_review_1.get_id()],
-            # solve_and_review_3.get_id():[solve_and_review_2.get_id()],
-        },id='WorkFlow:solve_and_review_3_times')
+        tasks=[
+            solve_and_review_1.get_id(),
+            solve_and_review_2.get_id(),
+            solve_and_review_3.get_id(),
+        ],id='WorkFlow:solve_and_review_3_times')
     
     return store    
 
