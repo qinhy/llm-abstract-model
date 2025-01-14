@@ -77,15 +77,15 @@ Be professional and constructive to improve the solution quality.''')
 
 Key: Be objective, consistent, and thorough. Choose the solution with the best reasoning, accuracy, and clarity.''')
     
-    relevant_concepts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 1(.*?)(?=Step\s\d+:|$)"))
-    thoughts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 2(.*?)(?=Step\s\d+:|$)"))
-    process_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 3(.*?)(?=Step\s\d+:|$)"))
-    solution_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 4(.*?)(?=Step\s\d+:|$)"))
+    relevant_concepts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 1:.+?\n(.*?)(?=Step\s\d+:|$)"))
+    thoughts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 2:.+?\n(.*?)(?=Step\s\d+:|$)"))
+    process_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 3:.+?\n(.*?)(?=Step\s\d+:|$)"))
+    solution_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 4:.+?\n(.*?)(?=Step\s\d+:|$)"))
     
-    initial_review_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 1(.*?)(?=Step\s\d+:|$)"))
-    reasoning_feedback_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 2(.*?)(?=Step\s\d+:|$)"))
-    process_errors_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 3(.*?)(?=Step\s\d+:|$)"))
-    overall_assessment_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 4(.*?)(?=Step\s\d+:|$)"))
+    initial_review_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 1:.+?\n(.*?)(?=Step\s\d+:|$)"))
+    reasoning_feedback_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 2:.+?\n(.*?)(?=Step\s\d+:|$)"))
+    process_errors_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 3:.+?\n(.*?)(?=Step\s\d+:|$)"))
+    overall_assessment_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 4:.+?\n(.*?)(?=Step\s\d+:|$)"))
     
     question_plain:StringTemplate = store.add_new_function(StringTemplate(string='{}'))
     question_tmp:StringTemplate = store.add_new_function(StringTemplate(string=
@@ -126,8 +126,8 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
     store.add_new_workflow(
         tasks={
             solve_and_review_1.get_id():['__input__'],
-            solve_and_review_2.get_id():[solve_and_review_1.get_id()],
-            solve_and_review_3.get_id():[solve_and_review_2.get_id()],
+            # solve_and_review_2.get_id():[solve_and_review_1.get_id()],
+            # solve_and_review_3.get_id():[solve_and_review_2.get_id()],
         },id='WorkFlow:solve_and_review_3_times')
     
     return store    
