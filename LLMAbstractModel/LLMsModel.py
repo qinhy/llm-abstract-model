@@ -890,7 +890,8 @@ class LLMsStore(BasicStore):
                                 presence_penalty=presence_penalty,
                                 system_prompt=system_prompt,),id=id)
     
-    def add_new_deepseek(self,vendor_id:str,
+    def add_new_deepseek(self,vendor_id:str,                         
+                                llm_model_name:str = 'deepseek-chat',
                                 limit_output_tokens:int = 1024,
                                 temperature:float = 0.7,
                                 top_p:float = 1.0,
@@ -899,6 +900,7 @@ class LLMsStore(BasicStore):
                                 system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.DeepSeek:
         
         return self.add_new_obj(self.MODEL_CLASS_GROUP.DeepSeek(vendor_id=vendor_id,
+                                llm_model_name=llm_model_name,
                                 limit_output_tokens=limit_output_tokens,
                                 temperature=temperature,
                                 top_p=top_p,
