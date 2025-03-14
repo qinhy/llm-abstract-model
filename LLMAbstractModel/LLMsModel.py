@@ -804,6 +804,24 @@ class LLMsStore(BasicStore):
         if res is None: raise ValueError(f'No such class of {class_type}')
         return res
     
+    def add_new_vendor(self,vendor_class_type=MODEL_CLASS_GROUP.OpenAIVendor):
+        def add_vendor(api_key: str,
+                       api_url: str='https://api.openai.com',
+                       timeout: int=30)->Model4LLMs.AbstractVendor:
+            self.add_new(vendor_class_type)(api_key=api_key,api_url=api_url,timeout=timeout)
+        return add_vendor
+
+    # def add_new_llm(self,vendor_class_type=MODEL_CLASS_GROUP.OpenAIVendor):
+    #     def add_llm(vendor_id:str,
+    #                 limit_output_tokens:int = 1024,
+    #                 temperature:float = 0.7,
+    #                 top_p:float = 1.0,
+    #                 frequency_penalty:float = 0.0,
+    #                 presence_penalty:float = 0.0,
+    #                 system_prompt:str = None , id:str=None)->Model4LLMs.AbstractVendor:
+    #         self.add_new(vendor_class_type)(api_key=api_key,api_url=api_url,timeout=timeout)
+    #     return add_llm
+    
     def add_new_openai_vendor(self,api_key: str,
                               api_url: str='https://api.openai.com',
                               timeout: int=30) -> MODEL_CLASS_GROUP.OpenAIVendor:
