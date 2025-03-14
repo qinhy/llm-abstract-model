@@ -3,10 +3,10 @@ from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.LLMsModel import Model4LLMs
 store = LLMsStore()
 
-vendor = store.add_new_openai_vendor(api_key=os.environ.get('OPENAI_API_KEY','null'))
-llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id())
+vendor = store.add_new(Model4LLMs.OpenAIVendor)(api_key=os.environ.get('OPENAI_API_KEY','null'))
+llm = chatgpt4omini = store.add_new(Model4LLMs.ChatGPT4oMini)(vendor_id=vendor.get_id())
 # llm = o1mini = store.add_new_chatgpto1mini(vendor_id=vendor.get_id())
-text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
+text_embedding = store.add_new(Model4LLMs.TextEmbedding3Small)(vendor_id=vendor.get_id())
 
 # vendor = store.add_new_Xai_vendor(api_key=os.environ.get('XAI_API_KEY','null'))
 # llm = grok = store.add_new_grok(vendor_id=vendor.get_id())
