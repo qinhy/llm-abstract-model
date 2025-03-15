@@ -2,15 +2,14 @@ import json
 import os
 import time
 
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 import time
 
-from pydantic import Field
 from LLMAbstractModel import LLMsStore
-from LLMAbstractModel.LLMsModel import Controller4LLMs, Model4LLMs
+from LLMAbstractModel.LLMsModel import Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor
-from mt5utils import MT5Account, MT5MakeOder, MockLLM, RatesReturn
+from mt5utils import MT5Account, MT5MakeOder, RatesReturn
 
 
 descriptions = Model4LLMs.Function.param_descriptions
@@ -46,11 +45,10 @@ def init_store():
     # Add an MT5 accounts to the store
     accs:list[MT5Account] = [ store.add_new_obj(
                 MT5Account(
-                    account_id=i,
-                    password=os.environ[f"{i}_PASS"],
-                    account_server=os.environ[f"{i}_SERVER"],
-                    metadata={'tags': [str(i)]}
-                )
+                    account_id      = i,
+                    password        = os.environ[f"{i}_PASS"],
+                    account_server  = os.environ[f"{i}_SERVER"],
+                    metadata        = {'tags': [str(i)]})
             ) for i in eval(os.environ["MT5ACCs"])]
     # myprint('accs[0].model_dump_json_dict()')
 
@@ -76,15 +74,15 @@ def init_store():
     decode_rates = store.add_new_function(RatesReturn())
     # myprint('''decode_rates(get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30)))''')
 
-    # Initialize LLM vendor and add to the store
-    vendor = store.add_new_openai_vendor(api_key=os.environ['OPENAI_API_KEY'])
-    llm = store.add_new_chatgpt4o(vendor_id='auto', system_prompt=system_prompt)
+    # Initialize LLM vendor and add to the store    
+    vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key=os.environ['OPENAI_API_KEY'])
+    llm = store.add_new(Model4LLMs.ChatGPT4oMini)(vendor_id=vendor.get_id(), system_prompt=system_prompt)
     # llm = store.add_new_function(MockLLM()) if debug else llm
 
     # Add functions to the store
     extract_json = store.add_new_function(RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True))
     to_book_plan = store.add_new_function(MT5MakeOder())
-    books_send = store.add_new_celery_request(url='http://localhost:8000/books/send',
+    books_send   = store.add_new_celery_request(url='http://localhost:8000/books/send',
                                             method='POST',id='AsyncCeleryWebApiFunction:books_send')
     # myprint('''books_send(json=dict(acc=acc,book=book))''')
 
@@ -158,23 +156,23 @@ myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
 def start_monitoring(store=store):
     llm = store.find_all('ChatGPT4o:*')[0]
     monitor_pairs = store.get('monitor_pairs')['monitor_pairs']
-    workflow = store.find_all('WorkFlow:*')[0]
+    workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
     accs = store.find_all('MT5Account:*')
     acc = accs[0]
     books_send = store.find('AsyncCeleryWebApiFunction:books_send')
     books_info = store.find('AsyncCeleryWebApiFunction:books_info')
 
     workflowf = lambda acc,symbol:workflow(
-        init_deps=[(),dict(json=acc)],
-        rates_param=[(),dict(params=dict(symbol=symbol,timeframe='H4',count=30))]
+        init_deps   =[(),dict(json=acc)],
+        rates_param =[(),dict(params=dict(symbol=symbol,timeframe='H4',count=30))]
     )
     
     class SyncAccounts:
         def __init__(self,accs:list[MT5Account]):
             self.accs = [
                 dict(account_id=acc.account_id,
-                        password=acc.password.get(),
-                        account_server=acc.account_server.get())
+                        password=acc.password,
+                        account_server=acc.account_server)
                         for acc in accs]
 
         def books_send(self,plan):
