@@ -89,6 +89,7 @@ class Controller4LLMs:
                     # try other vendors
                     pass
             raise ValueError(f'not support vendor of {self.model.vendor_id}')
+        
     class WorkFlowController(AbstractObjController):
         def __init__(self, store, model):
             super().__init__(store, model)
@@ -155,12 +156,7 @@ class Controller4LLMs:
                     all_args.append(args_kwargs)
             return all_args, all_kwargs
         
-# class KeyOrEnv(BaseModel):
-#     key:str
 
-#     def get(self):
-#         return os.getenv(self.key,self.key)
-    
 class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
         pass
