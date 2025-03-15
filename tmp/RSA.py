@@ -176,3 +176,152 @@ def ex3():
     print(f"\nDecrypted Text:[{decrypted_text}]")
 
 ex3()
+import base64
+
+class PEMFileReader:
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self.key_bytes = self._read_pem_file()
+
+    def _read_pem_file(self):
+        with open(self.file_path, 'r') as file:
+            lines = file.readlines()
+        key_data = ''.join(line.strip() for line in lines if "BEGIN" not in line and "END" not in line)
+        return base64.b64decode(key_data)
+
+    def _parse_asn1_der_element(self, data, index):
+        tag = data[index]
+        index += 1
+        length_byte = data[index]
+        index += 1
+        if length_byte & 0x80 == 0:
+            length = length_byte & 0x7F
+        else:
+            num_length_bytes = length_byte & 0x7F
+            length = int.from_bytes(data[index:index+num_length_bytes], byteorder='big')
+            index += num_length_bytes
+
+        value = data[index:index+length]
+        index += length
+        return tag, length, value, index
+
+    def _parse_asn1_der_integer(self, data, index):
+        tag, _, value, index = self._parse_asn1_der_element(data, index)
+        if tag != 0x02:
+            raise ValueError("Expected INTEGER")
+        integer = int.from_bytes(value, byteorder='big')
+        return integer, index
+
+    def _parse_asn1_der_sequence(self, data, index):
+        tag, length, value, index = self._parse_asn1_der_element(data, index)
+        if tag != 0x30:
+            raise ValueError("Expected SEQUENCE")
+        return value, index
+
+    def load_public_pkcs8_key(self):
+        data, _ = self._parse_asn1_der_sequence(self.key_bytes, 0)
+        index = 0
+        _, index = self._parse_asn1_der_sequence(data, index)
+        tag, _, value, index = self._parse_asn1_der_element(data, index)
+        if tag != 0x03:
+            raise ValueError("Expected BIT STRING")
+        if value[0] != 0x00:
+            raise ValueError("Invalid BIT STRING padding")
+        public_key_bytes = value[1:]
+        rsa_key_data, _ = self._parse_asn1_der_sequence(public_key_bytes, 0)
+        index = 0
+        n, index = self._parse_asn1_der_integer(rsa_key_data, index)
+        e, _ = self._parse_asn1_der_integer(rsa_key_data, index)
+        return e, n
+
+    def load_private_pkcs8_key(self):
+        data, _ = self._parse_asn1_der_sequence(self.key_bytes, 0)
+        index = 0
+        _, index = self._parse_asn1_der_integer(data, index)
+        _, index = self._parse_asn1_der_sequence(data, index)
+        tag, _, private_key_bytes, index = self._parse_asn1_der_element(data, index)
+        if tag != 0x04:
+            raise ValueError("Expected OCTET STRING")
+        rsa_key_data, _ = self._parse_asn1_der_sequence(private_key_bytes, 0)
+        index = 0
+        _, index = self._parse_asn1_der_integer(rsa_key_data, index)
+        # Continue with further parsing logic
+n, index = self._parse_asn1_der_integer(rsa_key_data, index)
+        e, index = self._parse_asn1_der_integer(rsa_key_data, index)
+        d, _ = self._parse_asn1_der_integer(rsa_key_data, index)
+        return d, n
+
+class SimpleRSAChunkEncryptor:
+    def __init__(self, public_key: tuple[int, int] = None, private_key: tuple[int, int] = None):
+        self.public_key = public_key
+        self.private_key = private_key
+        if public_key:
+            self.chunk_size = (public_key[1].bit_length() // 8)
+            if self.chunk_size <= 0:
+                raise ValueError("The modulus 'n' is too small. Please use a larger key size.")
+
+    def encrypt_chunk(self, chunk: bytes):
+        if not self.public_key:
+            raise ValueError("Public key is required for encryption.")
+        e, n = self.public_key
+        chunk_int = int.from_bytes(chunk, byteorder='big')
+        encrypted_chunk_int = pow(chunk_int, e, n)
+        return encrypted_chunk_int.to_bytes((n.bit_length() + 7) // 8, byteorder='big')
+
+    def decrypt_chunk(self, encrypted_chunk: bytes):
+        if not self.private_key:
+            raise ValueError("Private key is required for decryption.")
+        d, n = self.private_key
+        encrypted_chunk_int = int.from_bytes(encrypted_chunk, byteorder='big')
+        decrypted_chunk_int = pow(encrypted_chunk_int, d, n)
+        decrypted_chunk = decrypted_chunk_int.to_bytes((n.bit_length() + 7) // 8, byteorder='big')
+        return decrypted_chunk.lstrip(b'\x00')
+
+    def encrypt_string(self, plaintext: str, compress: bool = True) -> str:
+        if not self.chunk_size:
+            raise ValueError("Public key required for encryption.")
+        
+        data = zlib.compress(plaintext.encode('utf-8')) if compress else plaintext.encode('utf-8')
+        chunk_size = self.chunk_size - 1
+        chunks = [data[i:i + chunk_size] for i in range(0, len(data), chunk_size)]
+        e, n = self.public_key
+
+        encrypted_chunks = []
+        for chunk in chunks:
+            chunk_hex = chunk.hex()
+            chunk_int = int('0x1' + chunk_hex, 16)
+            encrypted_int = pow(chunk_int, e, n)
+            encrypted_hex = encrypted_int.to_bytes((self.chunk_size * 2) * 4 // 8, 'big').hex()
+            encrypted_base64 = base64.b64encode(bytes.fromhex(encrypted_hex)).decode('utf-8')
+            encrypted_chunks.append(encrypted_base64)
+
+        return '|'.join(encrypted_chunks)
+
+    def decrypt_string(self, encrypted_data: str):
+        if not self.private_key:
+            raise ValueError("Private key required for decryption.")
+        
+        encrypted_chunks = encrypted_data.split('|')
+        decoded_chunks = [base64.b64decode(chunk) for chunk in encrypted_chunks]
+        decrypted_chunks = [self.decrypt_chunk(chunk) for chunk in decoded_chunks]
+        data = b''.join(decrypted_chunks)
+        
+        try:
+            return zlib.decompress(data).decode('utf-8')
+        except zlib.error:
+            return data.decode('utf-8')
+def _parse_asn1_der_integer(self, data: bytes, start_index: int):
+        if data[start_index] != 0x02:
+            raise ValueError("Expected ASN.1 integer")
+        length = data[start_index + 1]
+        integer = int.from_bytes(data[start_index + 2:start_index + 2 + length], byteorder='big')
+        return integer, start_index + 2 + length
+
+    def _split_data_into_chunks(self, data: bytes, chunk_size: int):
+        return [data[i:i + chunk_size] for i in range(0, len(data), chunk_size)]
+
+    def _convert_chunk_to_int(self, chunk: bytes):
+        return int.from_bytes(chunk, byteorder='big')
+
+    def _convert_int_to_chunk(self, integer: int, chunk_size: int):
+        return integer.to_bytes(chunk_size, byteorder='big')

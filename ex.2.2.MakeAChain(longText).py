@@ -1,6 +1,8 @@
 import os
 from LLMAbstractModel import LLMsStore
+from LLMAbstractModel.LLMsModel import Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor, StringTemplate, TextFile
+
 store = LLMsStore()
 
 system_prompt = '''I will provide pieces of the text along with prior summarizations.
@@ -12,13 +14,8 @@ You should reply summarizations only, without any additional information.
 - This text shows ...
 ```'''
 
-vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
-chatgpt4omini = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(),system_prompt=system_prompt)
-
-vendor  = store.add_new_ollama_vendor()
-gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt=system_prompt)
-phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt=system_prompt)
-llama32 = store.add_new_llama(vendor_id=vendor.get_id(),system_prompt=system_prompt)
+vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key="OPENAI_API_KEY")#auto check os.environ
+llm = chatgpt4omini = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto',system_prompt=system_prompt)
 
 msg_template = store.add_new_function(StringTemplate(string='''
 Please reply summarizations in {}, and should not over {} words.
@@ -33,7 +30,7 @@ Please reply summarizations in {}, and should not over {} words.
 
 res_ext = store.add_new_function(RegxExtractor(regx=r"```summarization\s*(.*)\s*\n```"))
 
-def test_summary(llm = llama32,
+def test_summary(llm = llm,
                  f='The Adventures of Sherlock Holmes.txt',
                  limit_words=1000,chunk_lines=100, overlap_lines=30):
     

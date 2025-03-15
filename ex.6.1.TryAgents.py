@@ -7,7 +7,7 @@ def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
 store = LLMsStore()
-vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")
+vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
 debug = True
 
 ## add French Address Search function
@@ -118,10 +118,10 @@ french_address_agent
 
 
 # Define the French address agent
-french_address_llm = store.add_new_chatgpt4omini(vendor_id='auto')
+french_address_llm = store.add_new(Model4LLMs.ChatGPT4oMini)(vendor_id='auto')
 
 # Define the triage agent
-triage_llm = store.add_new_chatgpt4omini(vendor_id='auto')
+triage_llm = store.add_new(Model4LLMs.ChatGPT4oMini)(vendor_id='auto')
 
 store.add_new_obj(FrenchAddressAgent(   french_address_llm_id=french_address_llm.get_id(),
                                         french_address_search_function_id=french_address_search_function.get_id()

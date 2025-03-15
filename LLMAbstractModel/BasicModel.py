@@ -197,6 +197,16 @@ class BasicStore(SingletonKeyValueStorage):
         if obj._id is not None: raise ValueError(f'obj._id is {obj._id}, must be none')
         return self._add_new_obj(obj,id)
     
+    def add_new(self, obj_class_type=MODEL_CLASS_GROUP.AbstractObj,id:str=None):#, id:str=None)->MODEL_CLASS_GROUP.AbstractObj:
+        obj_name = obj_class_type.__name__
+        if not hasattr(self.MODEL_CLASS_GROUP,obj_name):
+            setattr(self.MODEL_CLASS_GROUP,obj_name,obj_class_type)
+        def add_obj(*args,**kwargs):
+            obj = obj_class_type(*args,**kwargs)
+            if obj._id is not None: raise ValueError(f'obj._id is "{obj._id}", must be none')
+            return self._add_new_obj(obj,id)
+        return add_obj
+    
     def add_new_group(self, obj:Model4Basic.AbstractGroup, id:str=None)->Model4Basic.AbstractGroup:        
         if obj._id is not None: raise ValueError(f'obj._id is {obj._id}, must be none')
         return self._add_new_obj(obj,id)

@@ -70,8 +70,9 @@ You should reply with translations only, without any additional information.
 ```
 '''.strip()
 
-vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")
-llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto', system_prompt=system_prompt)
+
+vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
+llm = chatgpt4omini = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto',system_prompt=system_prompt)
 
 # Create template and extractor tasks
 input_template = store.add_new_function(

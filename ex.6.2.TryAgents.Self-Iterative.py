@@ -6,9 +6,7 @@ def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
 store = LLMsStore()
-vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY",timeout=60)
-vendor = store.add_new_Xai_vendor(api_key='XAI_API_KEY',timeout=600)
-vendor = store.add_new_deepseek_vendor(api_key='DEEPSEEK_API_KEY',timeout=600)
+vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY',timeout=60)
 debug = True
 
 # enhance from https://github.com/richards199999/Self-Iterative-Agent-System-for-Complex-Problem-Solving/tree/main
@@ -195,8 +193,8 @@ Remember to be thorough, constructive, and professional in your review. Your goa
         # debugprint(f'overall_assessment == [{self.overall_assessment_extract(answer)}]')
         return f'### initial review\n{self.initial_review_extract(answer)}\n### reasoning feedback\n{self.reasoning_feedback_extract(answer)}\n### process errors\n{self.process_errors_extract(answer)}\n### overall assessmt\n{self.overall_assessment_extract(answer)}'
 
-main_llm = store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens=4096)
-eval_llm = store.add_new_chatgpt4omini(vendor_id='auto',limit_output_tokens=4096)
+main_llm = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto',limit_output_tokens=4096)
+eval_llm = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto',limit_output_tokens=4096)
 
 # main_llm = store.add_new_grok(vendor_id='auto',limit_output_tokens=4096)
 # eval_llm = store.add_new_grok(vendor_id='auto',limit_output_tokens=4096)
