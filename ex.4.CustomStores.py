@@ -9,13 +9,8 @@ store = LLMsStore()
 
 system_prompt = 'You are smart assistant'
 
-vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
-chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',system_prompt=system_prompt)
-
-# vendor  = store.add_new_ollama_vendor()
-# gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt=system_prompt)
-# phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt=system_prompt)
-# llama32 = store.add_new_llama(vendor_id=vendor.get_id(),system_prompt=system_prompt)
+vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
+chatgpt4omini = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto',system_prompt=system_prompt)
 
 ## add custom function
 @descriptions('generate Fibonacci sequence up to n-th number',

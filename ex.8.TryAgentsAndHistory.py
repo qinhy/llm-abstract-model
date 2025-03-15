@@ -161,6 +161,6 @@ def load_history_agent():
 # print(agent("Welcome back! What's planned for today?"))
 
 store = LLMsStore()
-vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY')
-llm = store.add_new_chatgpt4omini(vendor_id=vendor.get_id(), temperature=0.7)
+vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
+llm = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id=vendor.get_id(), temperature=0.7)
 agent = HistoryAssistantAgent(llm=llm)

@@ -181,8 +181,8 @@ class Model4LLMs:
             return llm_model_name       
         
         def get_api_key(self)->str:
-            return self.api_key#.get()
-            # return os.getenv(self.api_key,self.api_key)
+            # return self.api_key#.get()
+            return os.getenv(self.api_key,self.api_key)
 
         def get_available_models(self) -> Dict[str, Any]:
             return requests.get(self._build_url(self.models_endpoint),
@@ -479,41 +479,11 @@ class Model4LLMs:
     class Gemma2(AbstractLLM):
         llm_model_name:str = 'gemma-2-2b'
 
-        context_window_tokens:int = -1
-        max_output_tokens:int = -1
-        
-        limit_output_tokens: Optional[int] = None
-        temperature: Optional[float] = None
-        top_p: Optional[float] = None
-        frequency_penalty: Optional[float] = None
-        presence_penalty: Optional[float] = None
-        system_prompt: Optional[str] = None
-
     class Phi3(AbstractLLM):
         llm_model_name:str = 'phi-3-3.8b'
 
-        context_window_tokens:int = -1
-        max_output_tokens:int = -1
-        
-        limit_output_tokens: Optional[int] = None
-        temperature: Optional[float] = None
-        top_p: Optional[float] = None
-        frequency_penalty: Optional[float] = None
-        presence_penalty: Optional[float] = None
-        system_prompt: Optional[str] = None
-
     class Llama(AbstractLLM):
         llm_model_name:str = 'llama-3.2-3b'
-
-        context_window_tokens:int = -1
-        max_output_tokens:int = -1
-        
-        limit_output_tokens: Optional[int] = None
-        temperature: Optional[float] = None
-        top_p: Optional[float] = None
-        frequency_penalty: Optional[float] = None
-        presence_penalty: Optional[float] = None
-        system_prompt: Optional[str] = None
     
     ##################### embedding model #####
     class AbstractEmbedding(AbstractObj):
@@ -522,9 +492,9 @@ class Model4LLMs:
         embedding_dim: int                     # Dimensionality of the embeddings, e.g., 768 or 1024
         normalize_embeddings: bool = True      # Whether to normalize the embeddings to unit vectors
         
-        max_input_length: Optional[int] = None # Optional limit on input length (e.g., max tokens or chars)
-        pooling_strategy: Optional[str] = 'mean'  # Pooling strategy if working with sentence embeddings (e.g., "mean", "max")
-        distance_metric: Optional[str] = 'cosine' # Metric for comparing embeddings ("cosine", "euclidean", etc.)
+        max_input_length: Optional[int] = None     # Optional limit on input length (e.g., max tokens or chars)
+        pooling_strategy: Optional[str] = 'mean'   # Pooling strategy if working with sentence embeddings (e.g., "mean", "max")
+        distance_metric:  Optional[str] = 'cosine' # Metric for comparing embeddings ("cosine", "euclidean", etc.)
         
         cache_embeddings: bool = False         # Option to cache embeddings to improve efficiency
         cache: Optional[dict[str,List[float]]] = None
@@ -805,135 +775,30 @@ class LLMsStore(BasicStore):
         return res
     
     def add_new_vendor(self,vendor_class_type=MODEL_CLASS_GROUP.OpenAIVendor):
-        def add_vendor(api_key: str,
+        def add_vendor(api_key: str='',
                        api_url: str='https://api.openai.com',
                        timeout: int=30)->Model4LLMs.AbstractVendor:
-            self.add_new(vendor_class_type)(api_key=api_key,api_url=api_url,timeout=timeout)
+            return self.add_new(vendor_class_type)(api_key=api_key,api_url=api_url,timeout=timeout)
         return add_vendor
-
-    # def add_new_llm(self,vendor_class_type=MODEL_CLASS_GROUP.OpenAIVendor):
-    #     def add_llm(vendor_id:str,
-    #                 limit_output_tokens:int = 1024,
-    #                 temperature:float = 0.7,
-    #                 top_p:float = 1.0,
-    #                 frequency_penalty:float = 0.0,
-    #                 presence_penalty:float = 0.0,
-    #                 system_prompt:str = None , id:str=None)->Model4LLMs.AbstractVendor:
-    #         self.add_new(vendor_class_type)(api_key=api_key,api_url=api_url,timeout=timeout)
-    #     return add_llm
     
-    def add_new_openai_vendor(self,api_key: str,
-                              api_url: str='https://api.openai.com',
-                              timeout: int=30) -> MODEL_CLASS_GROUP.OpenAIVendor:
-        api_key=os.getenv(api_key,api_key)
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.OpenAIVendor(api_url=api_url,api_key=api_key,timeout=timeout))
-    
-    def add_new_Xai_vendor(self,api_key: str,
-                              api_url: str='https://api.x.ai',
-                              timeout: int=30) -> MODEL_CLASS_GROUP.XaiVendor:
-        api_key=os.getenv(api_key,api_key)
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.XaiVendor(api_url=api_url,api_key=api_key,timeout=timeout))
-    
-    def add_new_deepseek_vendor(self,api_key: str,
-                              api_url: str='https://api.deepseek.com',
-                              timeout: int=30) -> MODEL_CLASS_GROUP.DeepSeekVendor:
-        api_key=os.getenv(api_key,api_key)
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.DeepSeekVendor(api_url=api_url,api_key=api_key,timeout=timeout))
-    
-    def add_new_ollama_vendor(self,api_url: str='http://localhost:11434',
-                              timeout: int=30) -> MODEL_CLASS_GROUP.OllamaVendor:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.OllamaVendor(api_url=api_url,api_key='',timeout=timeout))
-    
-    def add_new_chatgpt4o(self,vendor_id:str,
-                                limit_output_tokens:int = 1024,
-                                temperature:float = 0.7,
-                                top_p:float = 1.0,
-                                frequency_penalty:float = 0.0,
-                                presence_penalty:float = 0.0,
-                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.ChatGPT4o:
-        
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.ChatGPT4o(vendor_id=vendor_id,
-                                limit_output_tokens=limit_output_tokens,
-                                temperature=temperature,
-                                top_p=top_p,
-                                frequency_penalty=frequency_penalty,
-                                presence_penalty=presence_penalty,
-                                system_prompt=system_prompt,),id=id)
-    
-    def add_new_chatgpt4omini(self,vendor_id:str,
-                                limit_output_tokens:int = 1024,
-                                temperature:float = 0.7,
-                                top_p:float = 1.0,
-                                frequency_penalty:float = 0.0,
-                                presence_penalty:float = 0.0,
-                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.ChatGPT4oMini:
-        
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.ChatGPT4oMini(vendor_id=vendor_id,
-                                limit_output_tokens=limit_output_tokens,
-                                temperature=temperature,
-                                top_p=top_p,
-                                frequency_penalty=frequency_penalty,
-                                presence_penalty=presence_penalty,
-                                system_prompt=system_prompt,),id=id)
-    
-    def add_new_chatgpto1mini(self,vendor_id:str,
-                                limit_output_tokens:int = 2048,
-                                temperature:float = 0.7,
-                                top_p:float = 1.0,
-                                frequency_penalty:float = 0.0,
-                                presence_penalty:float = 0.0,
-                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.ChatGPTO1Mini:
-        
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.ChatGPTO1Mini(vendor_id=vendor_id,
-                                limit_output_tokens=limit_output_tokens,
-                                temperature=temperature,
-                                top_p=top_p,
-                                frequency_penalty=frequency_penalty,
-                                presence_penalty=presence_penalty,
-                                system_prompt=system_prompt,),id=id)
-    
-    def add_new_grok(self,vendor_id:str,
-                                limit_output_tokens:int = 1024,
-                                temperature:float = 0.7,
-                                top_p:float = 1.0,
-                                frequency_penalty:float = 0.0,
-                                presence_penalty:float = 0.0,
-                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.Grok:
-        
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.Grok(vendor_id=vendor_id,
-                                limit_output_tokens=limit_output_tokens,
-                                temperature=temperature,
-                                top_p=top_p,
-                                frequency_penalty=frequency_penalty,
-                                presence_penalty=presence_penalty,
-                                system_prompt=system_prompt,),id=id)
-    
-    def add_new_deepseek(self,vendor_id:str,                         
-                                llm_model_name:str = 'deepseek-chat',
-                                limit_output_tokens:int = 1024,
-                                temperature:float = 0.7,
-                                top_p:float = 1.0,
-                                frequency_penalty:float = 0.0,
-                                presence_penalty:float = 0.0,
-                                system_prompt:str = None , id:str=None) -> MODEL_CLASS_GROUP.DeepSeek:
-        
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.DeepSeek(vendor_id=vendor_id,
-                                llm_model_name=llm_model_name,
-                                limit_output_tokens=limit_output_tokens,
-                                temperature=temperature,
-                                top_p=top_p,
-                                frequency_penalty=frequency_penalty,
-                                presence_penalty=presence_penalty,
-                                system_prompt=system_prompt,),id=id)
-        
-    def add_new_gemma2(self,vendor_id:str,system_prompt:str = None, id:str=None) -> MODEL_CLASS_GROUP.Gemma2:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.Gemma2(vendor_id=vendor_id,system_prompt=system_prompt),id=id)
-    
-    def add_new_phi3(self,vendor_id:str,system_prompt:str = None, id:str=None) -> MODEL_CLASS_GROUP.Phi3:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.Phi3(vendor_id=vendor_id,system_prompt=system_prompt),id=id)
-    
-    def add_new_llama(self,vendor_id:str,system_prompt:str = None, id:str=None) -> MODEL_CLASS_GROUP.Llama:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.Llama(vendor_id=vendor_id,system_prompt=system_prompt),id=id)
+    def add_new_llm(self,llm_class_type=MODEL_CLASS_GROUP.AbstractLLM):
+        def add_llm(vendor_id:str,
+                    limit_output_tokens:int = 1024,
+                    temperature:float = 0.7,
+                    top_p:float = 1.0,
+                    frequency_penalty:float = 0.0,
+                    presence_penalty:float = 0.0,
+                    system_prompt:str = None,
+                    id:str=None)->Model4LLMs.AbstractLLM:
+            return self.add_new(llm_class_type)(vendor_id=vendor_id,
+                        limit_output_tokens=limit_output_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        frequency_penalty=frequency_penalty,
+                        presence_penalty=presence_penalty,
+                        system_prompt=system_prompt,
+                        id=id)
+        return add_llm
     
     def add_new_function(self, function_obj:MODEL_CLASS_GROUP.Function, id:str=None)->MODEL_CLASS_GROUP.Function:
         return self.add_new_obj(function_obj,id=id)
@@ -999,12 +864,12 @@ class Tests(unittest.TestCase):
         self.test_openai_3()
 
     def test_openai_1(self):
-        v = self.store.add_new_openai_vendor(os.environ['OPENAI_API_KEY'])
+        v = self.store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
         print(v.get_available_models())
 
     def test_openai_2(self):
         v = self.store.find_all('OpenAIVendor:*')[0]
-        c = self.store.add_new_chatgpt4omini(vendor_id=v.get_id())
+        c = self.store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto')
         print(c)
     
     def test_openai_3(self):
@@ -1012,15 +877,15 @@ class Tests(unittest.TestCase):
         print(c('What is your name?'))
     
     def test_ollama_1(self):
-        v = self.store.add_new_ollama_vendor()
+        v = self.store.add_new_vendor(Model4LLMs.OllamaVendor)()
         print(v.get_available_models())
 
     def test_ollama_2(self):
         v = self.store.find_all('OllamaVendor:*')[0]
-        c = self.store.add_new_gemma2(vendor_id=v.get_id())
+        c = self.store.add_new_llm(Model4LLMs.Gemma2)(vendor_id=v.get_id())
         print(c('What is your name?'))
 
     def test_ollama_3(self):
         v = self.store.find_all('OllamaVendor:*')[0]
-        c = self.store.add_new_llama(vendor_id=v.get_id())
+        c = self.store.add_new_llm(Model4LLMs.Llama)(vendor_id=v.get_id())
         print(c('What is your name?'))

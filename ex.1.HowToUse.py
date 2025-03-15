@@ -1,6 +1,7 @@
 import os
 from LLMAbstractModel import LLMsStore
 from LLMAbstractModel.LLMsModel import Model4LLMs
+
 store = LLMsStore()
 
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key=os.environ.get('OPENAI_API_KEY','null'))
@@ -8,17 +9,17 @@ llm = chatgpt4omini = store.add_new(Model4LLMs.ChatGPT4oMini)(vendor_id=vendor.g
 # llm = o1mini = store.add_new_chatgpto1mini(vendor_id=vendor.get_id())
 text_embedding = store.add_new(Model4LLMs.TextEmbedding3Small)(vendor_id=vendor.get_id())
 
-# vendor = store.add_new_Xai_vendor(api_key=os.environ.get('XAI_API_KEY','null'))
-# llm = grok = store.add_new_grok(vendor_id=vendor.get_id())
+# vendor = store.add_new_vendor(Model4LLMs.XaiVendor)(api_key=os.environ.get('XAI_API_KEY','null'))
+# llm = grok = store.add_new_llm(Model4LLMs.Grok)(vendor_id=vendor.get_id())
 
 ## if you have ollam
-# vendor  = store.add_new_ollama_vendor()
-# gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id())
-# phi3    = store.add_new_phi3(vendor_id=vendor.get_id())
-# llama32 = store.add_new_llama(vendor_id=vendor.get_id())
+# vendor  = store.add_new_vendor(Model4LLMs.OllamaVendor)()
+# gemma2  = store.add_new_llm(Model4LLMs.Gemma2)(vendor_id=vendor.get_id())
+# phi3    = store.add_new_llm(Model4LLMs.Phi3)(vendor_id=vendor.get_id())
+# llama32 = store.add_new_llm(Model4LLMs.Llama)(vendor_id=vendor.get_id())
 
-# vendor = store.add_new_deepseek_vendor(api_key=os.environ.get('DEEPSEEK_API_KEY','null'))
-# llm = deepseek = store.add_new_deepseek(vendor_id=vendor.get_id())
+# vendor = store.add_new_vendor(Model4LLMs.DeepSeekVendor)(api_key=os.environ.get('DEEPSEEK_API_KEY','null'))
+# llm = deepseek = store.add_new_llm(Model4LLMs.DeepSeek)(vendor_id=vendor.get_id())
 
 # just asking
 print(llm('hi! What is your name?'))

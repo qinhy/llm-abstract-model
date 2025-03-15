@@ -1,6 +1,7 @@
 
 import json
 from LLMAbstractModel import LLMsStore
+from LLMAbstractModel.LLMsModel import Model4LLMs
 from LLMAbstractModel.utils import StringTemplate,RegxExtractor
 
 store = LLMsStore()
@@ -11,18 +12,9 @@ system_prompt='''You are an expert in English translation. I will provide you wi
 ...
 ```'''
 
-vendor = store.add_new_openai_vendor(api_key="OPENAI_API_KEY")#auto check os.environ
-llm = chatgpt4omini = store.add_new_chatgpt4omini(vendor_id='auto',#vendor.get_id(),
+vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key="OPENAI_API_KEY")#auto check os.environ
+llm = chatgpt4omini = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto',#vendor.get_id(),
                                                   system_prompt=system_prompt)
-
-# vendor = store.add_new_Xai_vendor(api_key='XAI_API_KEY')
-# llm = grok = store.add_new_grok(vendor_id=vendor.get_id(),system_prompt=system_prompt)
-
-# vendor  = store.add_new_ollama_vendor()
-# llm = llama32 = store.add_new_llama(vendor_id='auto',#vendor.get_id(),
-#                                     system_prompt=system_prompt)
-# gemma2  = store.add_new_gemma2(vendor_id=vendor.get_id(),system_prompt=system_prompt)
-# phi3    = store.add_new_phi3(vendor_id=vendor.get_id(),system_prompt=system_prompt)
 
 print('############# make a message template')
 translate_template = store.add_new_function(
@@ -91,8 +83,6 @@ print(translator('こんにちは！はじめてのチェーン作りです！')
 print('############# additional template usage')
 
 llm = store.add_new_chatgpt4omini(vendor_id='auto')
-# llm = grok = store.add_new_grok(vendor_id='auto')
-# llm = store.add_new_llama(vendor_id='auto')
 
 # we use raw json to do template
 translate_template = store.add_new_function(

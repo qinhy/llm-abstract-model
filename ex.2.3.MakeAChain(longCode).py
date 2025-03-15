@@ -1,5 +1,6 @@
 import os
 from LLMAbstractModel import LLMsStore
+from LLMAbstractModel.LLMsModel import Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor, StringTemplate, TextFile
 store = LLMsStore()
 
@@ -34,14 +35,9 @@ def adjust_value(x):
 ```
 '''
 
-vendor = store.add_new_openai_vendor(api_key='OPENAI_API_KEY',timeout=60)
-llm = store.add_new_chatgpt4o(vendor_id=vendor.get_id(),system_prompt=system_prompt,limit_output_tokens=2048)
-
-# vendor = store.add_new_Xai_vendor(api_key=os.environ.get('XAI_API_KEY','null'),timeout=60)
-# llm = grok = store.add_new_grok(vendor_id=vendor.get_id(),system_prompt=system_prompt,limit_output_tokens=2048)
-
-# vendor = store.add_new_deepseek_vendor(api_key=os.environ.get('DEEPSEEK_API_KEY','null'),timeout=600)
-# llm = deepseek = store.add_new_deepseek(vendor_id=vendor.get_id(),llm_model_name='deepseek-chat')
+vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY',timeout=60)
+llm = store.add_new_llm(Model4LLMs.ChatGPT4o)(
+                        vendor_id=vendor.get_id(),system_prompt=system_prompt,limit_output_tokens=2048)
 
 # Please reply refactored code in {}, and should not over {} words.
 msg_template = store.add_new_function(StringTemplate(string='''
