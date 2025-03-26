@@ -716,15 +716,17 @@ class Model4LLMs:
         timeout: int = 60
         url: str
         headers: Dict[str, str] = {}
-        task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}'
+        task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}'
 
         def _make_request(self, url: str, params: Optional[Dict[str, Any]] = None, 
                         data: Optional[Dict[str, Any]] = None, 
-                        json: Optional[Dict[str, Any]] = None) -> requests.Response:
+                        json: Optional[Dict[str, Any]] = None,
+                        method=None) -> requests.Response:
             """Helper method to send an HTTP request and handle exceptions."""
             try:
+                if method is None:method=self.method
                 response = requests.request(
-                    method=self.method,
+                    method=method,
                     url=url,
                     headers=self.headers,
                     params=params,
@@ -757,7 +759,8 @@ class Model4LLMs:
                     url=self.task_status_url.format(task_id=task_id),
                     params=params,
                     data=data,
-                    json=json
+                    json=json,
+                    method='GET'
                 )
 
                 response_data = response.json()
@@ -835,7 +838,7 @@ class LLMsStore(BasicStore):
         return self.add_new_obj(self.MODEL_CLASS_GROUP.RequestsFunction(method=method,url=url,headers=headers),id=id)
     
     def add_new_celery_request(self, url:str, method='GET', headers={},
-                               task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}', id:str=None
+                               task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}', id:str=None
                                )->MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction:
         return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
                                                         headers=headers,task_status_url=task_status_url),id=id)

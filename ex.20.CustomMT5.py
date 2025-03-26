@@ -33,13 +33,13 @@ def init_store():
 
     # try celery web requests, need a valid url(here is local one)
     store.clean()
-    req = store.add_new_celery_request(url='http://localhost:8000/terminals/add',method='POST')
+    # req = store.add_new_celery_request(url='http://localhost:8000/terminals/add',method='POST')
     # myprint('req.model_dump()')
     # ->  {'rank': [0], 'create_time': datetime.datetime(2024, 10, 18, 9, 44, 4, 502305, tzinfo=TzInfo(UTC)), 'update_time': datetime.datetime(2024, 10, 18, 9, 44, 4, 502305, tzinfo=TzInfo(UTC)), 'status': '', 'metadata': {}, 'name': 'RequestsFunction', 'description': 'Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.', 'parameters': {'type': 'object', 'properties': {'params': {'type': 'object', 'description': 'query parameters'}, 'data': {'type': 'object', 'description': 'form data'}, 'json': {'type': 'object', 'description': 'JSON payload'}}}, 'required': [], 'method': 'GET', 'url': 'http://localhost:8000/tasks/status/some-task-id', 'headers': {}} 
     # myprint('req(params={"broker": "TitanFX", "path": "C:/Program Files/Titan FX MetaTrader 5/terminal64.exe"})')
     # ->  {'task_id': 'some-task-id', 'status': 'STARTED', 'result': {'message': 'Task is started'}} 
 
-    req = store.add_new_celery_request(url='http://localhost:8000/terminals/',method='GET')
+    # req = store.add_new_celery_request(url='http://localhost:8000/terminals/',method='GET')
     # myprint('req()')
 
     # Add an MT5 accounts to the store
@@ -58,14 +58,24 @@ def init_store():
     book=dict(symbol='USDJPY',price_open = 100.0,volume= 0.01)
 
     # get account info
-    account_info = store.add_new_celery_request(url='http://localhost:8000/accounts/info/',
-                                                method='GET',id='AsyncCeleryWebApiFunction:account_info')
-    # myprint('''account_info(json=acc)''')
+    account_info = store.add_new_celery_request(url='http://localhost:8000/bookservice/',
+                                            method='POST',id='AsyncCeleryWebApiFunction:account_info')
+    # account_info(json={
+    #   "param": {
+    #     "account": acc.model_dump_json_dict(),
+    #     "action": "account_info"
+    #   }
+    # })
 
     # get books info
-    books_info = store.add_new_celery_request(url='http://localhost:8000/books/',
-                                                method='GET',id='AsyncCeleryWebApiFunction:books_info')
-    # myprint('''books_info(json=acc)''')
+    books_info = store.add_new_celery_request(url='http://localhost:8000/bookservice/',
+                                                method='POST',id='AsyncCeleryWebApiFunction:books_info')
+    # account_info(json={
+    #   "param": {
+    #     "account": acc.model_dump_json_dict(),
+    #     "action": "getBooks"
+    #   }
+    # })
 
     # get rates
     get_rates = store.add_new_celery_request(url='http://localhost:8000/rates/',method='GET')
