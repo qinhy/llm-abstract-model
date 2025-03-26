@@ -78,11 +78,24 @@ def init_store():
     # })
 
     # get rates
-    get_rates = store.add_new_celery_request(url='http://localhost:8000/rates/',method='GET')
-    # myprint('''get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30))''')
+    get_rates = store.add_new_celery_request(url='http://localhost:8000/mt5copylastratesservice/',method='POST')
+    # {
+    #     "param": {
+    #         "account": acc.model_dump_json_dict(),
+    #     },
+  
+    #     "args": {
+    #             "symbol": "USDJPY",
+    #             "timeframe": "H4",
+    #             "count": 30,
+    #             "debug": false,
+    #             "retry_times_on_error": 3
+    #         }
+    # } 
+    # myprint('''get_rates(json=...)''')
 
     decode_rates = store.add_new_function(RatesReturn())
-    # myprint('''decode_rates(get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30)))''')
+    # myprint('''decode_rates(get_rates(json=...))''')
 
     # Initialize LLM vendor and add to the store    
     vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key=os.environ['OPENAI_API_KEY'])
@@ -92,7 +105,7 @@ def init_store():
     # Add functions to the store
     extract_json = store.add_new_function(RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True))
     to_book_plan = store.add_new_function(MT5MakeOder())
-    books_send   = store.add_new_celery_request(url='http://localhost:8000/books/send',
+    books_send   = store.add_new_celery_request(url='http://localhost:8000/bookservice/',
                                             method='POST',id='AsyncCeleryWebApiFunction:books_send')
     # myprint('''books_send(json=dict(acc=acc,book=book))''')
 
