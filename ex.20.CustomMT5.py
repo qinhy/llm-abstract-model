@@ -171,6 +171,10 @@ def start_monitoring(store=store):
     acc = accs[0]
     books_send = store.find('AsyncCeleryWebApiFunction:books_send')
     books_info = store.find('AsyncCeleryWebApiFunction:books_info')
+    get_rates = store.find('AsyncCeleryWebApiFunction:47ca31f7-933d-4127-a462-ce0de163b987')
+    decode_rates = store.find_all('RatesReturn:*')[0]
+    extract_json = store.find_all('RegxExtractor:*')[0]
+    to_book_plan = store.find_all('MT5MakeOder:*')[0]
 
     workflowf = lambda acc,symbol:workflow(
         init_deps   =[(),dict(json=acc)],
@@ -196,14 +200,20 @@ def start_monitoring(store=store):
     sa = SyncAccounts(accs)
     acc = sa.accs[0]
     try:
-        alls = set(monitor_pairs) - {book['symbol'] for book in json.loads(books_info(json=acc)['result']).values()}
+        alls = set(monitor_pairs) - {book['symbol'] for book in json.loads(books_info(json=acc)['result'])['ret']['first_book'] if book['volume']==0.01}
         plans = []
         for currency in list(alls):
-            workflow_result = workflowf(acc,currency)
-            print("Result:", workflow_result)
+            # workflow_result = workflowf(acc,currency)
+            res = get_rates(json=acc,params=dict(symbol=currency,timeframe='H4',count=30))
+            res = decode_rates(res)
+            llmr = res = llm(res)
+            res = extract_json(res)
+            p = to_book_plan(res)
+            # res = books_send(json=dict(acc=acc,book=res))
+            print("Result:", p)
             with open('../llm-abstract-model-logs.txt', 'a') as log_file:
-                log_file.write(workflow.results[llm.get_id()] + '\n')
-            plans.append(workflow_result)
+                log_file.write(llmr + '\n')
+            plans.append(p)
 
         for p in plans:sa.books_send(p)
         

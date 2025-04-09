@@ -115,7 +115,7 @@ class RatesReturn(Model4LLMs.Function):
             )
         
     def __call__(self, rates):
-        return str(RatesReturn.Rates(**json.loads(rates['result'])))
+        return str(RatesReturn.Rates(**(json.loads(rates['result']))['ret']))
 
     
 # Define and add a mock LLM function if in debug mode
