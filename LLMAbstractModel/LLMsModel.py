@@ -392,10 +392,21 @@ class Model4LLMs:
         
     class ChatGPT4oMini(ChatGPT4o):
         llm_model_name:str = 'gpt-4o-mini'
+
+    class ChatGPT41(OpenAIChatGPT):
+        llm_model_name:str = 'gpt-4.1'
+        context_window_tokens:int = 1047576
+        max_output_tokens:int = 32768
+        
+    class ChatGPT41Mini(ChatGPT41):
+        llm_model_name:str = 'gpt-4.1-mini'
+        
+    class ChatGPT41Nano(ChatGPT41):
+        llm_model_name:str = 'gpt-4.1-nano'
         
     class ChatGPTO1(OpenAIChatGPT):
         limit_output_tokens: Optional[int] = 2048
-        llm_model_name: str = 'o1-preview'
+        llm_model_name: str = 'o1'
         context_window_tokens: int = 128000
         max_output_tokens: int = 32768
         temperature: Optional[float] = 1.0
