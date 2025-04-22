@@ -5,8 +5,8 @@ from LLMAbstractModel.LLMsModel import Model4LLMs
 store = LLMsStore()
 
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key=os.environ.get('OPENAI_API_KEY','null'))
-llm = chatgpt4omini = store.add_new(Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id())
-# llm = o1mini = store.add_new_chatgpto1mini(vendor_id=vendor.get_id())
+llm = store.add_new(Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id())
+# llm = store.add_new_chatgpto1mini(vendor_id=vendor.get_id())
 text_embedding = store.add_new(Model4LLMs.TextEmbedding3Small)(vendor_id=vendor.get_id())
 
 # vendor = store.add_new_vendor(Model4LLMs.XaiVendor)(api_key=os.environ.get('XAI_API_KEY','null'))

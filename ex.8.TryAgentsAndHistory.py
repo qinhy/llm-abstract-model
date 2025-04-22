@@ -149,7 +149,7 @@ def load_history_agent():
     store.load_RSA('./tmp/TryAgentsAndHistory.rjson', './tmp/private_key.pem')
     
     # Retrieve saved model instances
-    llm = store.find_all('ChatGPT4oMini:*')[0]
+    llm = store.find_all('ChatGPT*:*')[0]
     
     # Reconstruct history tree from stored data
     agent = HistoryAssistantAgent(history_root=store.get('history'), llm=llm)
@@ -162,5 +162,5 @@ def load_history_agent():
 
 store = LLMsStore()
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
-llm = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id=vendor.get_id(), temperature=0.7)
+llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id(), temperature=0.7)
 agent = HistoryAssistantAgent(llm=llm)
