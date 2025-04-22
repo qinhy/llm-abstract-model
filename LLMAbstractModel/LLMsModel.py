@@ -33,32 +33,28 @@ class Controller4LLMs:
                     raise ValueError(f'vendor of {self.model.vendor_id} is not exists! Please change_vendor(...)')
                 return vendor
             else:
-                if type(self.model) in [Model4LLMs.ChatGPT4o,Model4LLMs.ChatGPT4oMini]:
+                if 'ChatGPT' in self.model.__class__.__name__:
                     # try openai vendor
                     vs = self._store.find_all('OpenAIVendor:*')
                     if len(vs)==0:raise ValueError(f'auto get endor of OpenAIVendor:* is not exists! Please (add and) change_vendor(...)')
                     else: return vs[0]
-                    # try other vendors
-                    pass
-                elif type(self.model) in [Model4LLMs.Grok ]:
+                    
+                elif 'Grok' in self.model.__class__.__name__:
                     vs = self._store.find_all('XaiVendor:*')
                     if len(vs)==0:raise ValueError(f'auto get endor of XaiVendor:* is not exists! Please (add and) change_vendor(...)')
                     else: return vs[0]
-                    # try other vendors
-                    pass
-                elif type(self.model) in [Model4LLMs.DeepSeek ]:
+                    
+                elif 'DeepSeek' in self.model.__class__.__name__:
                     vs = self._store.find_all('DeepSeekVendor:*')
                     if len(vs)==0:raise ValueError(f'auto get endor of DeepSeekVendor:* is not exists! Please (add and) change_vendor(...)')
                     else: return vs[0]
-                    # try other vendors
-                    pass
+                    
                 elif type(self.model) in [Model4LLMs.Gemma2, Model4LLMs.Phi3, Model4LLMs.Llama ]:
                     # try ollama vendor
                     vs = self._store.find_all('OllamaVendor:*')
                     if len(vs)==0:raise ValueError(f'auto get endor of OllamaVendor:* is not exists! Please (add and) change_vendor(...)')
                     else: return vs[0]
-                    # try other vendors
-                    pass
+                    
             raise ValueError(f'not support vendor of {self.model.vendor_id}')
         
         def change_vendor(self,vendor_id:str):
@@ -388,10 +384,21 @@ class Model4LLMs:
         
     class ChatGPT4oMini(ChatGPT4o):
         llm_model_name:str = 'gpt-4o-mini'
+
+    class ChatGPT41(OpenAIChatGPT):
+        llm_model_name:str = 'gpt-4.1'
+        context_window_tokens:int = 1047576
+        max_output_tokens:int = 32768
+        
+    class ChatGPT41Mini(ChatGPT41):
+        llm_model_name:str = 'gpt-4.1-mini'
+        
+    class ChatGPT41Nano(ChatGPT41):
+        llm_model_name:str = 'gpt-4.1-nano'
         
     class ChatGPTO1(OpenAIChatGPT):
         limit_output_tokens: Optional[int] = 2048
-        llm_model_name: str = 'o1-preview'
+        llm_model_name: str = 'o1'
         context_window_tokens: int = 128000
         max_output_tokens: int = 32768
         temperature: Optional[float] = 1.0

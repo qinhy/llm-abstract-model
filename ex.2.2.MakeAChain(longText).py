@@ -15,7 +15,7 @@ You should reply summarizations only, without any additional information.
 ```'''
 
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key="OPENAI_API_KEY")#auto check os.environ
-llm = chatgpt4omini = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto',system_prompt=system_prompt)
+llm = chatgpt = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',system_prompt=system_prompt)
 
 msg_template = store.add_new_function(StringTemplate(string='''
 Please reply summarizations in {}, and should not over {} words.
@@ -53,7 +53,7 @@ def compose(*funcs):
         return reduce(lambda acc, f: f(*acc if isinstance(acc, tuple) else (acc,), **kwargs), funcs, args)
     return chained_function
 
-chain_list = [msg_template, chatgpt4omini, res_ext]
+chain_list = [msg_template, chatgpt, res_ext]
 chain = compose(*chain_list)
 # print(LLMsStore.chain_dumps(chain_list))
 # print(store.chain_loads(LLMsStore.chain_dumps(chain_list)))

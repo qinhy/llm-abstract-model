@@ -13,7 +13,7 @@ system_prompt='''You are an expert in English translation. I will provide you wi
 ```'''
 
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key="OPENAI_API_KEY")#auto check os.environ
-llm = chatgpt4omini = store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto',#vendor.get_id(),
+llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',#vendor.get_id(),
                                                   system_prompt=system_prompt)
 
 print('############# make a message template')
@@ -31,7 +31,7 @@ print(llm( translate_template('こんにちは！はじめてのチェーン作�
 # -> Hello! This is my first time making a chain!
 # -> ```
 
-
+store:LLMsStore = store
 print('############# make a "translation" extractor, strings between " ```translation " and " ``` "')
 get_result = store.add_new_function(RegxExtractor(regx=r"```translation\s*(.*)\s*\n```"))
 
@@ -82,7 +82,7 @@ print(translator('こんにちは！はじめてのチェーン作りです！')
 
 print('############# additional template usage')
 
-llm = store.add_new_chatgpt4omini(vendor_id='auto')
+llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto')
 
 # we use raw json to do template
 translate_template = store.add_new_function(

@@ -218,3 +218,13 @@ class BasicStore(SingletonKeyValueStorage):
     
     def find_all(self,id:str=f'AbstractObj:*')->list[MODEL_CLASS_GROUP.AbstractObj]:
         return [self.find(k) for k in self.keys(id)]
+            
+    def find_type(self, obj_class_type=MODEL_CLASS_GROUP.AbstractObj):
+        def find_type_by_uuid(uuid:str):
+            return self.find(f'{obj_class_type.__name__}:{uuid}')
+        return find_type_by_uuid
+
+    def find_all_type(self, obj_class_type=MODEL_CLASS_GROUP.AbstractObj):
+        def find_all_type_by_regx(regx:str='*'):
+            return self.find_all(f'{obj_class_type.__name__}:{regx}')
+        return find_all_type_by_regx
