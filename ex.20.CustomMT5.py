@@ -86,7 +86,7 @@ def init_store():
 
     # Initialize LLM vendor and add to the store    
     vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key=os.environ['OPENAI_API_KEY'])
-    llm = store.add_new(Model4LLMs.ChatGPT4oMini)(vendor_id=vendor.get_id(), system_prompt=system_prompt)
+    llm = store.add_new(Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id(), system_prompt=system_prompt)
     # llm = store.add_new_function(MockLLM()) if debug else llm
 
     # Add functions to the store
@@ -164,7 +164,7 @@ myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
     
 # Monitoring loop
 def start_monitoring(store=store):
-    llm = store.find_all('ChatGPT4o:*')[0]
+    llm = store.find_all('ChatGPT*:*')[0]
     monitor_pairs = store.get('monitor_pairs')['monitor_pairs']
     workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
     accs = store.find_all('MT5Account:*')
