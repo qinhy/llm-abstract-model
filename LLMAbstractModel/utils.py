@@ -197,3 +197,9 @@ def files2files(in_dir,out_dir,ext='.md',transfunc=lambda x:x,overwrite=False):
         op = p.replace(in_dir,out_dir)
         if os.path.exists(op) and not overwrite:continue
         yield file2file(p,op,transfunc)
+
+def files2file(in_dir,out_path,ext='.md',transfunc=lambda x:x,overwrite=False):
+    s = ""
+    for p in traverse_files(in_dir,ext,True):
+        with open(p, 'r', encoding='utf-8') as f: s+=f.read()
+    create_file_forcefully(out_path,transfunc(s))
