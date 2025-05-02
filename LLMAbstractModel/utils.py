@@ -163,20 +163,20 @@ class TextFile(Model4Basic.AbstractObj):
 # text_file.close()
 
 def traverse_files(folder_path, ext='.md', recursive=True):
-    files:list[str] = []
+    ext_files:list[str] = []
 
     if recursive:
         for root, _, files in os.walk(folder_path):
             for file in files:
                 if file.lower().endswith(ext):
-                    files.append(os.path.join(root, file))
+                    ext_files.append(os.path.join(root, file))
     else:
         for file in os.listdir(folder_path):
             full_path = os.path.join(folder_path, file)
             if os.path.isfile(full_path) and file.lower().endswith(ext):
-                files.append(full_path)
+                ext_files.append(full_path)
 
-    return files
+    return ext_files
 
 def create_file_forcefully(file_path, content=''):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
