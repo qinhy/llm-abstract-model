@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from pydantic import Field
 from typing import Any, Callable, Optional, List
@@ -160,3 +161,39 @@ class TextFile(Model4Basic.AbstractObj):
 # for chunk in text_file:
 #     print(chunk)
 # text_file.close()
+
+def traverse_files(folder_path, ext='.md', recursive=True):
+    files:list[str] = []
+
+    if recursive:
+        for root, _, files in os.walk(folder_path):
+            for file in files:
+                if file.lower().endswith(ext):
+                    files.append(os.path.join(root, file))
+    else:
+        for file in os.listdir(folder_path):
+            full_path = os.path.join(folder_path, file)
+            if os.path.isfile(full_path) and file.lower().endswith(ext):
+                files.append(full_path)
+
+    return files
+
+def create_file_forcefully(file_path, content=''):
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+def file2file(in_path,out_path,transfunc=lambda x:x):
+    try:
+        with open(in_path, 'r', encoding='utf-8') as f: s=f.read()
+        create_file_forcefully(out_path,transfunc(s))
+        return [in_path,out_path,True]
+    except Exception as e:
+        print(e)
+        return [in_path,out_path,False,e]
+
+def files2files(in_dir,out_dir,ext='.md',transfunc=lambda x:x,overwrite=False):
+    for p in traverse_files(in_dir,ext,True):
+        op = p.replace(in_dir,out_dir)
+        if os.path.exists(op) and not overwrite:continue
+        yield file2file(p,op,transfunc)
