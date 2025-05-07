@@ -56,10 +56,10 @@ class ClassificationTemplate(Model4LLMs.Function):
 
         return results
     
-store = LLMsStore()
-store.add_new_obj(RegxExtractor(regx='')).get_controller().delete()
-store.add_new_obj(StringTemplate(string='')).get_controller().delete()
-store.add_new_obj(ClassificationTemplate()).get_controller().delete()
+    
+LLMsStore().add_new_obj(RegxExtractor(regx='')).get_controller().delete()
+LLMsStore().add_new_obj(StringTemplate(string='')).get_controller().delete()
+LLMsStore().add_new_obj(ClassificationTemplate()).get_controller().delete()
 
 class TextFile(Model4Basic.AbstractObj):
     file_path: str

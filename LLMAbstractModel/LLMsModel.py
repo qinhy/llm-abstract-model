@@ -266,7 +266,66 @@ class Model4LLMs:
             payload = {"model": model,"input": text}
             return self.embedding_request(payload)
 
-    class AbstractLLM(AbstractObj):
+        
+    class AbstractLLM(AbstractObj):            
+        # from mcp pkg
+        class MCPTool(BaseModel):        
+            class MCPToolAnnotations(BaseModel):
+                title: str | None = None
+                """A human-readable title for the tool."""
+
+                readOnlyHint: bool | None = None
+                """
+                If true, the tool does not modify its environment.
+                Default: false
+                """
+
+                destructiveHint: bool | None = None
+                """
+                If true, the tool may perform destructive updates to its environment.
+                If false, the tool performs only additive updates.
+                (This property is meaningful only when `readOnlyHint == false`)
+                Default: true
+                """
+
+                idempotentHint: bool | None = None
+                """
+                If true, calling the tool repeatedly with the same arguments 
+                will have no additional effect on the its environment.
+                (This property is meaningful only when `readOnlyHint == false`)
+                Default: false
+                """
+
+                openWorldHint: bool | None = None
+                """
+                If true, this tool may interact with an "open world" of external
+                entities. If false, the tool's domain of interaction is closed.
+                For example, the world of a web search tool is open, whereas that
+                of a memory tool is not.
+                Default: true
+                """
+
+            """Definition for a tool the client can call."""
+            name: str
+            """The name of the tool."""
+            description: str | None = None
+            """A human-readable description of the tool."""
+            inputSchema: dict[str, Any]
+            """A JSON Schema object defining the expected parameters for the tool."""
+            annotations: MCPToolAnnotations | None = None
+            """Optional additional tool information."""
+        
+            def to_openai_tool(self):
+                """Convert the Tool instance to an OpenAI tool format."""
+                openai_tool = {
+                    "type": "function",
+                    "function": {
+                        "name": self.name,
+                        "description": self.description,
+                        "parameters": self.inputSchema,
+                    }, 
+                }
+
         vendor_id:str='auto'
         llm_model_name:str
         context_window_tokens:int
@@ -280,6 +339,7 @@ class Model4LLMs:
         frequency_penalty: Optional[float] = 0.0
         presence_penalty: Optional[float] = 0.0
         system_prompt: Optional[str] = None
+        mcp_tools: Optional[list[MCPTool]] = None
         
         # # field_validator to ensure correct range of temperature
         # @field_validator('temperature')
@@ -326,9 +386,14 @@ class Model4LLMs:
             return len(text.split())
         
         def build_system(self, purpose='...'):
-            return """
-            Dummy implementation for building system prompt
-            """
+            raise NotImplementedError
+
+        def set_mcp_tools(self, mcp_tools_json = '{}'):
+            self.mcp_tools = [Model4LLMs.AbstractLLM.MCPTool(**tool) for tool in json.loads(mcp_tools_json)]
+            self.get_controller().update(mcp_tools=self.mcp_tools)
+
+        def get_tools(self):
+            raise NotImplementedError
 
         def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:            
             payload = {
@@ -375,6 +440,9 @@ class Model4LLMs:
         # New attributes for advanced configurations
         stop_sequences: Optional[List[str]] = Field(default_factory=list)
         n: Optional[int] = 1  # Number of completions to generate for each input prompt
+
+        def get_tools(self):
+            raise NotImplementedError
 
         def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:
             payload = super().construct_payload(messages)            
