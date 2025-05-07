@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field
@@ -107,33 +108,81 @@ class HistoryAssistantAgent(BaseModel):
             self.history_last = self.history_root
         return self.history_last
 
-    def add_history(self, content: str, role:str='user'):
-        last = TextContentNode(content=role+'@@@@'+content)
-        self.get_last_history().add(last)
-        self.history_last = last
-    
     def history_retrieval(self, last_k: int=4):
         p = self.get_last_history()
         res = p.parents() + [p]
         return [i for i in res if not i.is_root()][-last_k:]
+
+    def add_history(self, content: str, role:str='user',name:str=''):
+        if content is None:content='NULL'
+        content=role+'@@@@'+content
+        if name:
+            content = content+'@@@@'+name
+        last = TextContentNode(content=content)
+        self.get_last_history().add(last)
+        self.history_last = last
+        # {role}@@@@{content}
+        # {role}@@@@{content}@@@@{name}
+
+    def add_funcalls_history(self,tool_calls: str,
+                            content: str='NULL', role:str='assistant'):
+        self.add_history(content,role)
+        last = self.get_last_history()
+        last.content += '@@tc@@'+tool_calls
+        # assistant@@@@{content}@@tc@@{tool_calls}
+        # assistant@@@@{content}@@@@{name}@@tc@@{tool_calls}
+        
+    def add_funres_history(self,name: str,tool_call_id: str,
+                            content: str='NULL', role:str='tool'):
+        self.add_history(content,role,name)
+        last = self.get_last_history()
+        last.content += '@@tcid@@'+tool_call_id
+        # tool@@@@{content}@@@@{name}@@tcid@@{tool_call_id}
+
+    def prepare_openai_his_messages(self, history: List[TextContentNode]):
+        msgs = []
+        for h in history:
+            if '@@@@' in h.content:
+                cs = h.content.split('@@@@')
+                msgs.append({'role':cs[0],'content':cs[1]})
+                if len(cs)>2:
+                    msgs[-1]['name'] = cs[2]
+                
+            if '@@tcid@@' in h.content:
+                i = h.content.split('@@tcid@@')[1]
+                msgs[-1]['tool_call_id'] = i
+
+            if '@@tc@@' in h.content:
+                c = h.content.split('@@tc@@')[1]
+                msgs[-1]['tool_calls'] = json.loads(c)
+                
+            if 'NULL@@' in msgs[-1]['content']:
+                msgs[-1]['content'] = ''
+                
+        return msgs
 
     def __call__(self, qustion: str, system_prompt:str=None, last_k: int=4, print_history=True) -> str:
         tmp = self.llm.system_prompt
         self.llm.system_prompt = system_prompt
 
         history = self.history_retrieval(last_k)
-        msgs = [{'role':h.content.split('@@@@')[0],
-                 'content':'@@@@'.join(h.content.split('@@@@')[1:])} for h in history
-            ]+[{'role':'user','content':qustion}]
+        msgs = self.prepare_openai_his_messages(history)
+        msgs.append({'role':'user','content':qustion})
+
         if print_history:
             print("############ For Debug ##############")
             self.print_tree()
             print("#####################################")
             [print(i) for i in msgs]
             print("#####################################")
-        response = self.llm(msgs)
+
         self.add_history(qustion)
-        self.add_history(response,'assistant')
+        response = self.llm(msgs)
+        if 'calls' in response:
+            self.add_funcalls_history(
+                json.dumps(response['calls']),response['content'])
+        else:
+            self.add_history(response,'assistant')        
 
         self.llm.system_prompt = tmp
         return response
@@ -161,6 +210,8 @@ def load_history_agent():
 # print(agent("Welcome back! What's planned for today?"))
 
 store = LLMsStore()
-vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
-llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id(), temperature=0.7)
+vendor = store.add_new_vendor(
+    Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
+llm = store.add_new_llm(
+    Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id(), temperature=0.7)
 agent = HistoryAssistantAgent(llm=llm)
