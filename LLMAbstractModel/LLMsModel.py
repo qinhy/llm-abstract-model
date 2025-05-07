@@ -39,6 +39,11 @@ class Controller4LLMs:
                     if len(vs)==0:raise ValueError(f'auto get endor of OpenAIVendor:* is not exists! Please (add and) change_vendor(...)')
                     else: return vs[0]
                     
+                elif 'Claude' in self.model.__class__.__name__:
+                    vs = self._store.find_all('AnthropicVendor:*')
+                    if len(vs)==0:raise ValueError(f'auto get endor of AnthropicVendor:* is not exists! Please (add and) change_vendor(...)')
+                    else: return vs[0]
+
                 elif 'Grok' in self.model.__class__.__name__:
                     vs = self._store.find_all('XaiVendor:*')
                     if len(vs)==0:raise ValueError(f'auto get endor of XaiVendor:* is not exists! Please (add and) change_vendor(...)')
@@ -243,53 +248,6 @@ class Model4LLMs:
         _controller: Controller4LLMs.AbstractVendorController = None
         def get_controller(self)->Controller4LLMs.AbstractVendorController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractVendorController(store,self)
-
-    class OpenAIVendor(AbstractVendor):
-        vendor_name:str = 'OpenAI'
-        api_url:str = 'https://api.openai.com'
-        chat_endpoint:str = '/v1/chat/completions'
-        models_endpoint:str = '/v1/models'
-        embeddings_endpoint:str = '/v1/embeddings'
-        default_timeout: int = 30               # Timeout for API requests in seconds
-        rate_limit: Optional[int] = None        # Requests per minute, if applicable
-        
-        def get_available_models(self) -> Dict[str, Any]:
-            response = super().get_available_models()
-            return {model['id']: model for model in response.json().get('data', [])}
-
-
-        def chat_result(self, response) -> Union[str, Dict[str, Any]]:
-            # print(response)
-            choice = response['choices'][0]
-            content = ''
-            if self._try_binary_error(lambda: response['choices'][0]['message']['content']):
-                content = response['choices'][0]['message']['content']
-            # Handle function_call (legacy function call support)
-            if 'function_call' in choice['message']:
-                return {
-                    'content':content,
-                    'type': 'function_call',
-                    'name': choice['message']['function_call']['name'],
-                    'arguments': choice['message']['function_call'].get('arguments')
-                }
-
-            # Handle tool_calls (newer API style with multiple tool calls)
-            if 'tool_calls' in choice['message']:
-                return {
-                    'content':content,
-                    'type': 'tool_calls',
-                    'calls': choice['message']['tool_calls']
-                }
-
-            # Standard chat message
-            if content:return content
-
-            self._log_error(ValueError(f'cannot get result from {response}'))
-
-        def get_embedding(self, text: str, model: str='text-embedding-3-small') -> Dict[str, Any]:
-            payload = {"model": model,"input": text}
-            return self.embedding_request(payload)
-
         
     class AbstractLLM(AbstractObj):            
         # from mcp pkg
@@ -452,7 +410,53 @@ class Model4LLMs:
         _controller: Controller4LLMs.AbstractLLMController = None
         def get_controller(self)->Controller4LLMs.AbstractLLMController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractLLMController(store,self)
-    
+
+    class OpenAIVendor(AbstractVendor):
+        vendor_name:str = 'OpenAI'
+        api_url:str = 'https://api.openai.com'
+        chat_endpoint:str = '/v1/chat/completions'
+        models_endpoint:str = '/v1/models'
+        embeddings_endpoint:str = '/v1/embeddings'
+        default_timeout: int = 30               # Timeout for API requests in seconds
+        rate_limit: Optional[int] = None        # Requests per minute, if applicable
+        
+        def get_available_models(self) -> Dict[str, Any]:
+            response = super().get_available_models()
+            return {model['id']: model for model in response.json().get('data', [])}
+
+
+        def chat_result(self, response) -> Union[str, Dict[str, Any]]:
+            # print(response)
+            choice = response['choices'][0]
+            content = ''
+            if self._try_binary_error(lambda: response['choices'][0]['message']['content']):
+                content = response['choices'][0]['message']['content']
+            # Handle function_call (legacy function call support)
+            if 'function_call' in choice['message']:
+                return {
+                    'content':content,
+                    'type': 'function_call',
+                    'name': choice['message']['function_call']['name'],
+                    'arguments': choice['message']['function_call'].get('arguments')
+                }
+
+            # Handle tool_calls (newer API style with multiple tool calls)
+            if 'tool_calls' in choice['message']:
+                return {
+                    'content':content,
+                    'type': 'tool_calls',
+                    'calls': choice['message']['tool_calls']
+                }
+
+            # Standard chat message
+            if content:return content
+
+            self._log_error(ValueError(f'cannot get result from {response}'))
+
+        def get_embedding(self, text: str, model: str='text-embedding-3-small') -> Dict[str, Any]:
+            payload = {"model": model,"input": text}
+            return self.embedding_request(payload)
+
     class OpenAIChatGPT(AbstractLLM):
 
         limit_output_tokens: Optional[int] = 1024
@@ -477,7 +481,7 @@ class Model4LLMs:
                       Model4LLMs.AbstractLLM.MCPTool(**t) for t in self.mcp_tools]
                 payload.update({"tools":[t.to_openai_tool() for t in ts]})
             return {k: v for k, v in payload.items() if v is not None}
-                    
+
     class ChatGPT4o(OpenAIChatGPT):
         llm_model_name:str = 'gpt-4o'
         context_window_tokens:int = 128000
@@ -589,6 +593,72 @@ class Model4LLMs:
     class Llama(AbstractLLM):
         llm_model_name:str = 'llama-3.2-3b'
     
+    class AnthropicVendor(AbstractVendor):
+        vendor_name: str = "Anthropic"
+        api_url: str = "https://api.anthropic.com"
+        chat_endpoint: str = "/v1/messages"
+        models_endpoint: str = "/v1/models"
+        embeddings_endpoint: str = "NULL"
+        default_timeout: int = 30
+        rate_limit: Optional[int] = None
+
+        def chat_result(self, response) -> str:
+            if "content" in response:
+                return response["content"][0]["text"]
+            return self._log_error(ValueError(f'cannot get result from {response}'))
+
+        def _build_headers(self) -> Dict[str, str]:
+            headers = super()._build_headers()
+            headers["anthropic-version"] = "2023-06-01"
+            headers["x-api-key"] = self.get_api_key()
+            headers.pop("Authorization", None)  # Remove Bearer token
+            return headers
+    
+    class Claude(OpenAIChatGPT):
+        context_window_tokens: int = 200_000
+        max_output_tokens: int = 4096
+        
+        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:            
+            payload = {
+                "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
+                "stream": self.stream,
+                "messages": messages,
+                "max_tokens": self.limit_output_tokens,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "frequency_penalty": self.frequency_penalty,
+                "presence_penalty": self.presence_penalty,
+            }
+            if self.system_prompt:
+                payload["system"] = self.system_prompt
+                
+            # Only include allowed fields
+            allowed_keys = {
+                "model", "messages", "max_tokens", "temperature", "top_p", "system", "stream"
+            }
+            return {k: v for k, v in payload.items() if k in allowed_keys and v is not None}
+        
+        def construct_messages(self, messages: Optional[List | str]) -> list:
+            if isinstance(messages, str):
+                messages = [{"role": "user", "content": messages}]
+
+            # Extract and remove any system message from the list
+            cleaned_messages = []
+            for msg in messages:
+                if msg.get("role") == "system":
+                    self.system_prompt = msg.get("content", "")
+                else:
+                    cleaned_messages.append(msg)
+            return cleaned_messages
+
+    class Claude35(Claude):
+        llm_model_name: str = "claude-3-5-sonnet-latest"
+        max_output_tokens: int = 8192
+
+    class Claude37(Claude):
+        llm_model_name: str = "claude-3-7-sonnet-latest"
+        max_output_tokens: int = 64000
+
     ##################### embedding model #####
     class AbstractEmbedding(AbstractObj):
         vendor_id: str = 'auto'                # Vendor identifier (e.g., OpenAI, Google)
