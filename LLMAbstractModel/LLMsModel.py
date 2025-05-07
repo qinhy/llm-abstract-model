@@ -5,7 +5,7 @@ import math
 import os
 import time
 import unittest
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field
 import requests
 from typing import Dict, Any
@@ -257,10 +257,34 @@ class Model4LLMs:
             response = super().get_available_models()
             return {model['id']: model for model in response.json().get('data', [])}
 
-        def chat_result(self, response) -> str:
-            if not self._try_binary_error(lambda: response['choices'][0]['message']['content']):
-                return self._log_error(ValueError(f'cannot get result from {response}'))
-            return response['choices'][0]['message']['content']
+
+        def chat_result(self, response) -> Union[str, Dict[str, Any]]:
+            # print(response)
+            choice = response['choices'][0]
+            content = ''
+            if self._try_binary_error(lambda: response['choices'][0]['message']['content']):
+                content = response['choices'][0]['message']['content']
+            # Handle function_call (legacy function call support)
+            if 'function_call' in choice['message']:
+                return {
+                    'content':content,
+                    'type': 'function_call',
+                    'name': choice['message']['function_call']['name'],
+                    'arguments': choice['message']['function_call'].get('arguments')
+                }
+
+            # Handle tool_calls (newer API style with multiple tool calls)
+            if 'tool_calls' in choice['message']:
+                return {
+                    'content':content,
+                    'type': 'tool_calls',
+                    'calls': choice['message']['tool_calls']
+                }
+
+            # Standard chat message
+            if content:return content
+
+            self._log_error(ValueError(f'cannot get result from {response}'))
 
         def get_embedding(self, text: str, model: str='text-embedding-3-small') -> Dict[str, Any]:
             payload = {"model": model,"input": text}
@@ -315,7 +339,7 @@ class Model4LLMs:
             annotations: MCPToolAnnotations | None = None
             """Optional additional tool information."""
         
-            def to_openai_tool(self):
+            def to_openai_tool(self)->dict:
                 """Convert the Tool instance to an OpenAI tool format."""
                 openai_tool = {
                     "type": "function",
@@ -325,6 +349,7 @@ class Model4LLMs:
                         "parameters": self.inputSchema,
                     }, 
                 }
+                return json.loads(json.dumps(openai_tool))
 
         vendor_id:str='auto'
         llm_model_name:str
@@ -447,6 +472,10 @@ class Model4LLMs:
         def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:
             payload = super().construct_payload(messages)            
             payload.update({"stop": self.stop_sequences, "n": self.n,})
+            if self.mcp_tools:
+                ts = [t if type(t) is Model4LLMs.AbstractLLM.MCPTool else 
+                      Model4LLMs.AbstractLLM.MCPTool(**t) for t in self.mcp_tools]
+                payload.update({"tools":[t.to_openai_tool() for t in ts]})
             return {k: v for k, v in payload.items() if v is not None}
                     
     class ChatGPT4o(OpenAIChatGPT):
