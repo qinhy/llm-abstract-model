@@ -166,323 +166,25 @@ class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
         pass
     
-    class AbstractVendor(AbstractObj):
-        vendor_name: str  # e.g., 'OpenAI'
-        api_url: str  # e.g., 'https://api.openai.com/v1/'
-        api_key: str = None # API key for authentication, if required
-        timeout: int = 30  # Default timeout for API requests in seconds
-        
-        chat_endpoint:str = None # e.g., '/v1/chat/completions'
-        models_endpoint:str = None # e.g., '/v1/models'
-        embeddings_endpoint:str = None
-        default_timeout: int = 30        # Timeout for API requests in seconds
-        rate_limit: Optional[int] = None # Requests per minute, if applicable
-        
-        def format_llm_model_name(self,llm_model_name:str)->str:
-            return llm_model_name       
-        
-        def get_api_key(self)->str:
-            # return self.api_key#.get()
-            return os.getenv(self.api_key,self.api_key)
-
-        def get_available_models(self) -> Dict[str, Any]:
-            return requests.get(self._build_url(self.models_endpoint),
-                                    headers=self._build_headers(),
-                                    timeout=self.timeout)
-
-        def _build_headers(self) -> Dict[str, str]:
-            headers = {
-                'Content-Type': 'application/json'
-            }
-            if self.api_key:
-                headers['Authorization'] = f'Bearer {self.get_api_key()}'
-            return headers
-
-        def _build_url(self, endpoint: str) -> str:
-            """
-            Construct the full API URL for a given endpoint.
-            :param endpoint: API endpoint to be called.
-            :return: Full API URL.
-            """
-            return f"{self.api_url.rstrip('/')}/{endpoint.lstrip('/')}"
-
-        def chat_request(self,payload={}):
-            url=self._build_url(self.chat_endpoint)
-            headers=self._build_headers()
-            response = requests.post(url=url, data=json.dumps(payload,ensure_ascii=True),
-                                     headers=headers,timeout=self.timeout)
-            try:
-                response = json.loads(response.text,strict=False)
-            except Exception as e:
-                if type(response) is not dict:
-                    return {'error':f'{e}'}
-                else:
-                    return {'error':f'{response}({e})'}
-            return response
-        
-        def chat_result(self,response)->str:
-            return response
-        
-        def embedding_request(self, payload={}) -> Dict[str, Any]:
-            """
-            Method to make embedding requests. Requires the payload to have 'model' and 'input' keys.
-            """
-            if not self.embeddings_endpoint:
-                return {'error': 'Embeddings endpoint not defined for this vendor.'}
-
-            url = self._build_url(self.embeddings_endpoint)
-            headers = self._build_headers()
-            response = requests.post(url=url, data=json.dumps(payload, ensure_ascii=True),
-                                    headers=headers, timeout=self.timeout)
-            try:
-                response = json.loads(response.text, strict=False)['data'][0]['embedding']
-            except Exception as e:
-                return {'error': f'{e}'}
-            return response
-        
-        def get_embedding(self, text: str, model: str) -> Dict[str, Any]:
-            payload = {"model": model,"input": text}
-            return self.embedding_request(payload)
-
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
+    from .ModelInterface import AbstractVendor
+    class AbstractVendor(AbstractVendor,AbstractObj):
         _controller: Controller4LLMs.AbstractVendorController = None
         def get_controller(self)->Controller4LLMs.AbstractVendorController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.AbstractVendorController(store,self)
-        
-    class AbstractLLM(AbstractObj):            
-        # from mcp pkg
-        class MCPTool(BaseModel):        
-            class MCPToolAnnotations(BaseModel):
-                title: str | None = None
-                """A human-readable title for the tool."""
+        def init_controller(self,store):self._controller = Controller4LLMs.AbstractVendorController(store,self)        
 
-                readOnlyHint: bool | None = None
-                """
-                If true, the tool does not modify its environment.
-                Default: false
-                """
-
-                destructiveHint: bool | None = None
-                """
-                If true, the tool may perform destructive updates to its environment.
-                If false, the tool performs only additive updates.
-                (This property is meaningful only when `readOnlyHint == false`)
-                Default: true
-                """
-
-                idempotentHint: bool | None = None
-                """
-                If true, calling the tool repeatedly with the same arguments 
-                will have no additional effect on the its environment.
-                (This property is meaningful only when `readOnlyHint == false`)
-                Default: false
-                """
-
-                openWorldHint: bool | None = None
-                """
-                If true, this tool may interact with an "open world" of external
-                entities. If false, the tool's domain of interaction is closed.
-                For example, the world of a web search tool is open, whereas that
-                of a memory tool is not.
-                Default: true
-                """
-
-            """Definition for a tool the client can call."""
-            name: str
-            """The name of the tool."""
-            description: str | None = None
-            """A human-readable description of the tool."""
-            inputSchema: dict[str, Any]
-            """A JSON Schema object defining the expected parameters for the tool."""
-            annotations: MCPToolAnnotations | None = None
-            """Optional additional tool information."""
-        
-            def to_openai_tool(self)->dict:
-                """Convert the Tool instance to an OpenAI tool format."""
-                openai_tool = {
-                    "type": "function",
-                    "function": {
-                        "name": self.name,
-                        "description": self.description,
-                        "parameters": self.inputSchema,
-                    }, 
-                }
-                return json.loads(json.dumps(openai_tool))
-
-        vendor_id:str='auto'
-        llm_model_name:str
-        context_window_tokens:int
-        # Context Window Size: The context window size dictates the total number of tokens the model can handle at once. For example, if a model has a context window of 4096 tokens, it can process up to 4096 tokens of combined input and output.
-        max_output_tokens:int
-        stream:bool = False
-        
-        limit_output_tokens: Optional[int] = None
-        temperature: Optional[float] = 0.7
-        top_p: Optional[float] = 1.0
-        frequency_penalty: Optional[float] = 0.0
-        presence_penalty: Optional[float] = 0.0
-        system_prompt: Optional[str] = None
-        mcp_tools: Optional[list[MCPTool]] = None
-        
-        # # field_validator to ensure correct range of temperature
-        # @field_validator('temperature')
-        # def validate_temperature(cls, value):
-        #     if not 0 <= value <= 1:
-        #         raise ValueError("Temperature must be between 0 and 1.")
-        #     return value
-
-        # # field_validator to ensure correct range of top_p
-        # @field_validator('top_p')
-        # def validate_top_p(cls, value):
-        #     if not 0 <= value <= 1:
-        #         raise ValueError("top_p must be between 0 and 1.")
-        #     return value
-        
-        def get_vendor(self):
-            return self.get_controller().get_vendor(auto=(self.vendor_id=='auto'))
-
-        def get_usage_limits(self) -> Dict[str, Any]:
-            """
-            Abstract method to get usage limits, such as rate limits, token limits, etc.
-            """
-            pass
-
-        def validate_input(self, prompt: str) -> bool:
-            """
-            Validate the input prompt based on max input tokens.
-            """
-            if len(prompt) > self.context_window_tokens:
-                raise ValueError(f"Input exceeds the maximum token limit of {self.context_window_tokens}.")
-            return True
-
-        def calculate_cost(self, tokens_used: int) -> float:
-            """
-            Optional method to calculate the cost based on tokens used.
-            Can be overridden by subclasses to implement vendor-specific cost calculation.
-            """
-            return 0.0
-
-        def get_token_count(self, text: str) -> int:
-            """
-            Dummy implementation for token counting. Replace with vendor-specific logic.
-            """
-            return len(text.split())
-        
-        def build_system(self, purpose='...'):
-            raise NotImplementedError
-
-        def set_mcp_tools(self, mcp_tools_json = '{}'):
-            if type(mcp_tools_json) is not str:
-                mcp_tools_json = json.dumps(mcp_tools_json)
-            self.mcp_tools = [Model4LLMs.AbstractLLM.MCPTool(**tool) for tool in json.loads(mcp_tools_json)]
-            self.get_controller().update(mcp_tools=self.mcp_tools)
-
-        def get_tools(self):
-            raise NotImplementedError
-
-        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:            
-            payload = {
-                "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
-                "stream": self.stream,
-                "messages": messages,
-                "max_tokens": self.limit_output_tokens,
-                "temperature": self.temperature,
-                "top_p": self.top_p,
-                "frequency_penalty": self.frequency_penalty,
-                "presence_penalty": self.presence_penalty,
-            }
-            return {k: v for k, v in payload.items() if v is not None}
-        
-        def construct_messages(self,messages:Optional[List|str])->list:
-            msgs = []
-            if self.system_prompt:
-                msgs.append({"role":"system","content":self.system_prompt})
-            if type(messages) is str:
-                messages = [{"role":"user","content":messages}]
-            return msgs+messages
-
-        def __call__(self, messages:Optional[List|str], auto_str=True)->str:
-            if not isinstance(messages,list) and not isinstance(messages,str):
-                if auto_str:messages=str(messages)
-            payload = self.construct_payload(self.construct_messages(messages))
-            vendor = self.get_vendor()
-            return vendor.chat_result(vendor.chat_request(payload))
-
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
+    from .ModelInterface import AbstractLLM
+    class AbstractLLM(AbstractLLM,AbstractObj):
         _controller: Controller4LLMs.AbstractLLMController = None
         def get_controller(self)->Controller4LLMs.AbstractLLMController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractLLMController(store,self)
 
-    class OpenAIVendor(AbstractVendor):
-        vendor_name:str = 'OpenAI'
-        api_url:str = 'https://api.openai.com'
-        chat_endpoint:str = '/v1/chat/completions'
-        models_endpoint:str = '/v1/models'
-        embeddings_endpoint:str = '/v1/embeddings'
-        default_timeout: int = 30               # Timeout for API requests in seconds
-        rate_limit: Optional[int] = None        # Requests per minute, if applicable
-        
-        def get_available_models(self) -> Dict[str, Any]:
-            response = super().get_available_models()
-            return {model['id']: model for model in response.json().get('data', [])}
+    from .ModelInterface import OpenAIVendor
+    class OpenAIVendor(OpenAIVendor, AbstractVendor, AbstractObj):
+        pass
 
-
-        def chat_result(self, response) -> Union[str, Dict[str, Any]]:
-            # print(response)
-            choice = response['choices'][0]
-            content = ''
-            if self._try_binary_error(lambda: response['choices'][0]['message']['content']):
-                content = response['choices'][0]['message']['content']
-            # Handle function_call (legacy function call support)
-            if 'function_call' in choice['message']:
-                return {
-                    'content':content,
-                    'type': 'function_call',
-                    'name': choice['message']['function_call']['name'],
-                    'arguments': choice['message']['function_call'].get('arguments')
-                }
-
-            # Handle tool_calls (newer API style with multiple tool calls)
-            if 'tool_calls' in choice['message']:
-                return {
-                    'content':content,
-                    'type': 'tool_calls',
-                    'calls': choice['message']['tool_calls']
-                }
-
-            # Standard chat message
-            if content:return content
-
-            self._log_error(ValueError(f'cannot get result from {response}'))
-
-        def get_embedding(self, text: str, model: str='text-embedding-3-small') -> Dict[str, Any]:
-            payload = {"model": model,"input": text}
-            return self.embedding_request(payload)
-
-    class OpenAIChatGPT(AbstractLLM):
-
-        limit_output_tokens: Optional[int] = 1024
-        temperature: Optional[float] = 0.7
-        top_p: Optional[float] = 1.0
-        frequency_penalty: Optional[float] = 0.0
-        presence_penalty: Optional[float] = 0.0
-        system_prompt: Optional[str] = None
-
-        # New attributes for advanced configurations
-        stop_sequences: Optional[List[str]] = Field(default_factory=list)
-        n: Optional[int] = 1  # Number of completions to generate for each input prompt
-
-        def get_tools(self):
-            raise NotImplementedError
-
-        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:
-            payload = super().construct_payload(messages)            
-            payload.update({"stop": self.stop_sequences, "n": self.n,})
-            if self.mcp_tools:
-                ts = [t if type(t) is Model4LLMs.AbstractLLM.MCPTool else 
-                      Model4LLMs.AbstractLLM.MCPTool(**t) for t in self.mcp_tools]
-                payload.update({"tools":[t.to_openai_tool() for t in ts]})
-            return {k: v for k, v in payload.items() if v is not None}
+    from.ModelInterface import OpenAIChatGPT
+    class OpenAIChatGPT(OpenAIChatGPT,AbstractLLM):
+        pass
 
     class ChatGPT4o(OpenAIChatGPT):
         llm_model_name:str = 'gpt-4o'
@@ -503,37 +205,24 @@ class Model4LLMs:
     class ChatGPT41Nano(ChatGPT41):
         llm_model_name:str = 'gpt-4.1-nano'
         
-    class ChatGPTO1(OpenAIChatGPT):
+    class ChatGPTO3(OpenAIChatGPT):
         limit_output_tokens: Optional[int] = 2048
-        llm_model_name: str = 'o1'
+        llm_model_name: str = 'o3'
         context_window_tokens: int = 128000
         max_output_tokens: int = 32768
         temperature: Optional[float] = 1.0
 
         def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:            
-            payload = {
-                "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
-                "stream": self.stream,
-                "messages": messages,
-                "max_completion_tokens": self.limit_output_tokens,
-                "top_p": self.top_p,
-                "frequency_penalty": self.frequency_penalty,
-                "presence_penalty": self.presence_penalty,
-            }
-            return {k: v for k, v in payload.items() if v is not None}
+            return self.openai_o_models_construct_payload(messages)
             
         def construct_messages(self,messages:Optional[List|str])->list:
-            if type(messages) is str:
-                messages = [{"role":"user","content":messages}]
-            if self.system_prompt:
-                messages[0]["content"] = self.system_prompt+'\n'+messages[0]["content"]
-            return messages
+            return self.openai_o_models_construct_messages(messages)
         
-    class ChatGPTO1Mini(ChatGPTO1):
-        llm_model_name: str = 'o1-mini'
-        context_window_tokens: int = 128000
-        max_output_tokens: int = 65536
-
+    class ChatGPTO3Mini(ChatGPTO3):
+        llm_model_name: str = 'o3-mini'
+        context_window_tokens: int = 1047576
+        max_output_tokens: int = 32768
+        
     class DeepSeekVendor(OpenAIVendor):
         vendor_name: str = "DeepSeek"
         api_url: str = "https://api.deepseek.com"
@@ -620,38 +309,11 @@ class Model4LLMs:
         context_window_tokens: int = 200_000
         max_output_tokens: int = 4096
         
-        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:            
-            payload = {
-                "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
-                "stream": self.stream,
-                "messages": messages,
-                "max_tokens": self.limit_output_tokens,
-                "temperature": self.temperature,
-                "top_p": self.top_p,
-                "frequency_penalty": self.frequency_penalty,
-                "presence_penalty": self.presence_penalty,
-            }
-            if self.system_prompt:
-                payload["system"] = self.system_prompt
-                
-            # Only include allowed fields
-            allowed_keys = {
-                "model", "messages", "max_tokens", "temperature", "top_p", "system", "stream"
-            }
-            return {k: v for k, v in payload.items() if k in allowed_keys and v is not None}
+        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:   
+            return self.claude_construct_payload(messages)
         
         def construct_messages(self, messages: Optional[List | str]) -> list:
-            if isinstance(messages, str):
-                messages = [{"role": "user", "content": messages}]
-
-            # Extract and remove any system message from the list
-            cleaned_messages = []
-            for msg in messages:
-                if msg.get("role") == "system":
-                    self.system_prompt = msg.get("content", "")
-                else:
-                    cleaned_messages.append(msg)
-            return cleaned_messages
+            return self.claude_construct_messages(messages)
 
     class Claude35(Claude):
         llm_model_name: str = "claude-3-5-sonnet-latest"

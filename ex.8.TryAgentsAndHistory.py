@@ -215,3 +215,4 @@ vendor = store.add_new_vendor(
 llm = store.add_new_llm(
     Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id(), temperature=0.7)
 agent = HistoryAssistantAgent(llm=llm)
+print(agent("Welcome back! What's planned for today?"))

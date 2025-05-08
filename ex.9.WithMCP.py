@@ -42,10 +42,10 @@ async def call_tool(tool_name, tool_args)->str:
     
 async def openai_call_tools(res):
     """Extract and invoke tool calls from the assistant's response."""
-    if "tool_calls" not in res: return []
+    if "calls" not in res: return []
 
     results = []
-    for call in res["tool_calls"]:
+    for call in res["calls"]:
         tool_data = call.get(call['type'])
         tool_call_id = call['id']
         if not tool_data: continue
@@ -67,13 +67,13 @@ def one_query(ask:str='How many "r" in "raspberrypi"?',llm=llm):
     # First assistant response (might suggest a tool)
     res = llm(messages)
     # Handle tool calls
-    if "tool_calls" not in res: return res
+    if "calls" not in res: return res
     # Insert assistant message with tool_calls
     messages.append({
         "role": "assistant",
             # might be empty or partial
         "content": res.get("content", ""),
-        "tool_calls": res["tool_calls"]
+        "tool_calls": res["calls"]
     })
     # Run the tool(s)
     tool_results = asyncio.run(openai_call_tools(res))
@@ -81,7 +81,7 @@ def one_query(ask:str='How many "r" in "raspberrypi"?',llm=llm):
     for i, tr in enumerate(tool_results):
         messages.append({
             "role": "tool",
-            "tool_call_id": res["tool_calls"][i]["id"],  # MUST match
+            "tool_call_id": res["calls"][i]["id"],  # MUST match
             "name": tr["name"],"content": tr["content"]
         })
     # Now ask assistant for final response
@@ -93,6 +93,7 @@ def one_query(ask:str='How many "r" in "raspberrypi"?',llm=llm):
 
 # --- Main Conversation Flow ---
 llm.set_mcp_tools(asyncio.run(get_tools()))
+print(llm('tell me your tools.'))
 # data = store.dumps()
 # del store
 # store = LLMsStore()
