@@ -372,6 +372,8 @@ class Model4LLMs:
             raise NotImplementedError
 
         def set_mcp_tools(self, mcp_tools_json = '{}'):
+            if type(mcp_tools_json) is not str:
+                mcp_tools_json = json.dumps(mcp_tools_json)
             self.mcp_tools = [Model4LLMs.AbstractLLM.MCPTool(**tool) for tool in json.loads(mcp_tools_json)]
             self.get_controller().update(mcp_tools=self.mcp_tools)
 
