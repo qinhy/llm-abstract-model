@@ -11,6 +11,10 @@ import requests
 from typing import Dict, Any
 
 from .BasicModel import Controller4Basic, Model4Basic, BasicStore
+from .ModelInterface import AbstractVendor
+from .ModelInterface import AbstractLLM
+from .ModelInterface import OpenAIVendor
+from .ModelInterface import OpenAIChatGPT
 
 class Controller4LLMs:
     class AbstractObjController(Controller4Basic.AbstractObjController):
@@ -166,24 +170,20 @@ class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
         pass
     
-    from .ModelInterface import AbstractVendor
     class AbstractVendor(AbstractVendor,AbstractObj):
         _controller: Controller4LLMs.AbstractVendorController = None
         def get_controller(self)->Controller4LLMs.AbstractVendorController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractVendorController(store,self)        
 
-    from .ModelInterface import AbstractLLM
     class AbstractLLM(AbstractLLM,AbstractObj):
         _controller: Controller4LLMs.AbstractLLMController = None
         def get_controller(self)->Controller4LLMs.AbstractLLMController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractLLMController(store,self)
 
-    from .ModelInterface import OpenAIVendor
     class OpenAIVendor(OpenAIVendor, AbstractVendor, AbstractObj):
         pass
 
-    from.ModelInterface import OpenAIChatGPT
-    class OpenAIChatGPT(OpenAIChatGPT,AbstractLLM):
+    class OpenAIChatGPT(OpenAIChatGPT,AbstractLLM):    
         pass
 
     class ChatGPT4o(OpenAIChatGPT):
