@@ -4,17 +4,20 @@ from LLMAbstractModel.LLMsModel import Model4LLMs
 
 store = LLMsStore()
 
-vendor = store.add_new(Model4LLMs.OpenAIVendor)(api_key=os.environ.get('OPENAI_API_KEY','null'))
-text_embedding = store.add_new(Model4LLMs.TextEmbedding3Small)(vendor_id=vendor.get_id())
-llm = store.add_new(Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id())
+vendor = store.add_new(Model4LLMs.OpenAIVendor)(
+                            api_key='OPENAI_API_KEY')
+text_embedding = store.add_new(Model4LLMs.TextEmbedding3Small)(
+                            vendor_id=vendor.get_id())
+llm = store.add_new(Model4LLMs.ChatGPT41Nano)(
+                            vendor_id=vendor.get_id())
 
-# vendor = store.add_new(Model4LLMs.AnthropicVendor)(api_key=os.environ.get('ANTHROPIC_API_KEY','null'))
+# vendor = store.add_new(Model4LLMs.AnthropicVendor)(api_key='ANTHROPIC_API_KEY')
 # llm = store.add_new(Model4LLMs.Claude35)(vendor_id=vendor.get_id())
 
-# vendor = store.add_new(Model4LLMs.DeepSeekVendor)(api_key=os.environ.get('DEEPSEEK_API_KEY','null'))
+# vendor = store.add_new(Model4LLMs.DeepSeekVendor)(api_key='DEEPSEEK_API_KEY')
 # llm = deepseek = store.add_new(Model4LLMs.DeepSeek)(vendor_id=vendor.get_id())
 
-# vendor = store.add_new_vendor(Model4LLMs.XaiVendor)(api_key=os.environ.get('XAI_API_KEY','null'))
+# vendor = store.add_new_vendor(Model4LLMs.XaiVendor)(api_key='XAI_API_KEY')
 # llm = grok = store.add_new_llm(Model4LLMs.Grok)(vendor_id=vendor.get_id())
 
 ## if you have ollam
@@ -38,3 +41,15 @@ print(llm([
 
 print(text_embedding('hi! What is your name?')[:10], '...')
 # -> [0.0118862, -0.0006172658, -0.008183353, 0.02926386, -0.03759078, -0.031130238, -0.02367668 ...
+
+# save all to json
+store.dump('./tmp/ex.1.1HowToUse.json')
+
+# # optional: save all to json with RSA encryption
+# store.dump_RSA(path='path/to/your/private_data.rjson',
+#                 public_key_path='path/to/your/public_key.pem',
+#                 compress=True)
+# # optional: load all from json with RSA decryption
+# store.load_RSA(path='path/to/your/private_data.rjson',
+#                 private_key_path='path/to/your/private_key.pem',
+#                 compress=True)

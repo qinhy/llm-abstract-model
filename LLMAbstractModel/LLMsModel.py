@@ -636,6 +636,25 @@ class LLMsStore(BasicStore):
     
     def find_all_vendors(self)->list[MODEL_CLASS_GROUP.AbstractVendor]:
         return self.find_all('*Vendor:*')
+    
+    def find_all_llms(self) -> list[MODEL_CLASS_GROUP.AbstractLLM]:
+        """Find all concrete LLM model classes (excluding abstract/utility classes)"""
+        llms = []
+        all_llms_item = dict(filter(
+            lambda item: all([
+                '_' not in item[0],
+                'Function' not in item[0], 
+                'WorkFlow' not in item[0],
+                'Vendor' not in item[0],
+                'TextEmbedding' not in item[0],
+                'Abstract' not in item[0],
+                'utils' not in str(item[1])
+            ]),
+            self.MODEL_CLASS_GROUP.__dict__.items()
+        ))
+        for k,v in all_llms_item.items():
+            llms += self.find_all(f'{k}:*')
+        return llms
 
     @staticmethod    
     def chain_dumps(cl:list[Model4Basic.AbstractObj]):
