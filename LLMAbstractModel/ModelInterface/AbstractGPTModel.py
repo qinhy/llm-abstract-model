@@ -4,13 +4,26 @@ from typing import List, Dict, Any, Optional, Union
 # Import the required modules
 from .AbstractLLM import AbstractLLM,MCPTool,MCPToolAnnotations
 
-
-class AbstractGPTModel(AbstractLLM):
-    """Base class for GPT-style language models.
+class AbstractGPTModel(AbstractLLM, BaseModel):
+    """Implementation of OpenAI's ChatGPT models.
     
-    This class provides common functionality for OpenAI and compatible API models,
-    including payload construction and message formatting for different model variants.
+    This class provides the configuration and functionality needed to interact
+    with OpenAI's GPT models through their chat completions API.
     """
+    
+    # Basic configuration parameters
+    limit_output_tokens: Optional[int] = 1024
+    temperature: Optional[float] = 0.7
+    top_p: Optional[float] = 1.0
+    frequency_penalty: Optional[float] = 0.0
+    presence_penalty: Optional[float] = 0.0
+    system_prompt: Optional[str] = None
+
+    # Advanced configuration parameters
+    stop_sequences: Optional[List[str]] = Field(default_factory=list)
+    n: Optional[int] = 1  # Number of completions to generate
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     
     def get_tools(self) -> List[Dict[str, Any]]:
         """Get the tools available to this model in OpenAI format.
@@ -141,47 +154,3 @@ class AbstractGPTModel(AbstractLLM):
                 cleaned_messages.append(msg)
                 
         return cleaned_messages
-
-
-class OpenAIChatGPT(AbstractGPTModel, BaseModel):
-    """Implementation of OpenAI's ChatGPT models.
-    
-    This class provides the configuration and functionality needed to interact
-    with OpenAI's GPT models through their chat completions API.
-    """
-    
-    # Basic configuration parameters
-    limit_output_tokens: Optional[int] = 1024
-    temperature: Optional[float] = 0.7
-    top_p: Optional[float] = 1.0
-    frequency_penalty: Optional[float] = 0.0
-    presence_penalty: Optional[float] = 0.0
-    system_prompt: Optional[str] = None
-
-    # Advanced configuration parameters
-    stop_sequences: Optional[List[str]] = Field(default_factory=list)
-    n: Optional[int] = 1  # Number of completions to generate
-    
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    
-    def get_tools(self) -> List[Dict[str, Any]]:
-        """Get the tools available to this model in OpenAI format.
-        
-        Returns:
-            List[Dict[str, Any]]: List of tools in OpenAI format or empty list if none
-        """
-        if not self.mcp_tools:
-            return []
-            
-        return [t.to_openai_tool() for t in self.mcp_tools]
-    
-    def construct_payload(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Construct the payload for the LLM API request.
-
-        Args:
-            messages: The messages to include in the payload
-
-        Returns:
-            Dict[str, Any]: The payload for the API request
-        """
-        return self.openai_construct_payload(messages)

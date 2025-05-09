@@ -6,6 +6,7 @@ import os
 import time
 import unittest
 from typing import Any, Dict, List, Optional, Union
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 import requests
 from typing import Dict, Any
@@ -14,8 +15,9 @@ from .BasicModel import Controller4Basic, Model4Basic, BasicStore
 from .ModelInterface import AbstractVendor
 from .ModelInterface import AbstractLLM
 from .ModelInterface import OpenAIVendor
-from .ModelInterface import OpenAIChatGPT
-
+from .ModelInterface import AbstractGPTModel
+from .ModelInterface import AbstractEmbedding
+    
 class Controller4LLMs:
     class AbstractObjController(Controller4Basic.AbstractObjController):
         pass
@@ -94,6 +96,7 @@ class Controller4LLMs:
                     # try other vendors
                     pass
             raise ValueError(f'not support vendor of {self.model.vendor_id}')
+
     class WorkFlowController(AbstractObjController):
         def __init__(self, store, model):
             super().__init__(store, model)
@@ -175,7 +178,7 @@ class Model4LLMs:
         def get_controller(self)->Controller4LLMs.AbstractVendorController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractVendorController(store,self)        
 
-    class AbstractLLM(AbstractLLM,AbstractObj):
+    class AbstractLLM(AbstractGPTModel,AbstractLLM,AbstractObj):
         _controller: Controller4LLMs.AbstractLLMController = None
         def get_controller(self)->Controller4LLMs.AbstractLLMController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractLLMController(store,self)
@@ -183,10 +186,14 @@ class Model4LLMs:
     class OpenAIVendor(OpenAIVendor, AbstractVendor, AbstractObj):
         pass
 
-    class OpenAIChatGPT(OpenAIChatGPT,AbstractLLM):    
-        pass
+    class ChatGPT(AbstractLLM):
+        def get_tools(self) -> List[Dict[str, Any]]:
+            if not self.mcp_tools:return []            
+            return [t.to_openai_tool() for t in self.mcp_tools]         
+        def construct_payload(self, messages):
+            return self.openai_construct_payload(messages)
 
-    class ChatGPT4o(OpenAIChatGPT):
+    class ChatGPT4o(ChatGPT):
         llm_model_name:str = 'gpt-4o'
         context_window_tokens:int = 128000
         max_output_tokens:int = 4096
@@ -194,7 +201,7 @@ class Model4LLMs:
     class ChatGPT4oMini(ChatGPT4o):
         llm_model_name:str = 'gpt-4o-mini'
 
-    class ChatGPT41(OpenAIChatGPT):
+    class ChatGPT41(ChatGPT):
         llm_model_name:str = 'gpt-4.1'
         context_window_tokens:int = 1047576
         max_output_tokens:int = 32768
@@ -204,8 +211,13 @@ class Model4LLMs:
         
     class ChatGPT41Nano(ChatGPT41):
         llm_model_name:str = 'gpt-4.1-nano'
-        
-    class ChatGPTO3(OpenAIChatGPT):
+
+    class GPT45(ChatGPT):
+        llm_model_name:str = 'gpt-4.5'
+        context_window_tokens:int = 128000
+        max_output_tokens:int = 128000
+
+    class ChatGPTO3(ChatGPT):
         limit_output_tokens: Optional[int] = 2048
         llm_model_name: str = 'o3'
         context_window_tokens: int = 128000
@@ -230,7 +242,7 @@ class Model4LLMs:
         models_endpoint: str = "/v1/models"
         rate_limit: Optional[int] = None  # Example rate limit for xAI
         
-    class DeepSeek(OpenAIChatGPT):
+    class DeepSeek(AbstractLLM):
         llm_model_name:str = 'deepseek-chat'
         context_window_tokens:int = 64000
         max_output_tokens:int = 4096*2
@@ -243,7 +255,7 @@ class Model4LLMs:
         embeddings_endpoint: str = "/v1/embeddings"
         rate_limit: Optional[int] = None  # Example rate limit for xAI
         
-    class Grok(OpenAIChatGPT):
+    class Grok(AbstractLLM):
         llm_model_name:str = 'grok-beta'
         context_window_tokens:int = 128000
         max_output_tokens:int = 4096
@@ -293,6 +305,9 @@ class Model4LLMs:
         default_timeout: int = 30
         rate_limit: Optional[int] = None
 
+        def format_llm_model_name(self,llm_model_name:str) -> str:            
+            return llm_model_name.lower().replace('.','-')
+
         def chat_result(self, response) -> str:
             if "content" in response:
                 return response["content"][0]["text"]
@@ -305,7 +320,7 @@ class Model4LLMs:
             headers.pop("Authorization", None)  # Remove Bearer token
             return headers
     
-    class Claude(OpenAIChatGPT):
+    class Claude(AbstractLLM):
         context_window_tokens: int = 200_000
         max_output_tokens: int = 4096
         
@@ -316,92 +331,51 @@ class Model4LLMs:
             return self.claude_construct_messages(messages)
 
     class Claude35(Claude):
-        llm_model_name: str = "claude-3-5-sonnet-latest"
+        llm_model_name: str = "claude-3.5-sonnet-latest"
         max_output_tokens: int = 8192
 
     class Claude37(Claude):
-        llm_model_name: str = "claude-3-7-sonnet-latest"
+        llm_model_name: str = "claude-3.7-sonnet-latest"
         max_output_tokens: int = 64000
 
     ##################### embedding model #####
-    class AbstractEmbedding(AbstractObj):
-        vendor_id: str = 'auto'                # Vendor identifier (e.g., OpenAI, Google)
-        embedding_model_name: str              # Model name (e.g., "text-embedding-3-small")
-        embedding_dim: int                     # Dimensionality of the embeddings, e.g., 768 or 1024
-        normalize_embeddings: bool = True      # Whether to normalize the embeddings to unit vectors
+    
+    class AbstractEmbedding(AbstractEmbedding, AbstractObj):
         
-        max_input_length: Optional[int] = None     # Optional limit on input length (e.g., max tokens or chars)
-        pooling_strategy: Optional[str] = 'mean'   # Pooling strategy if working with sentence embeddings (e.g., "mean", "max")
-        distance_metric:  Optional[str] = 'cosine' # Metric for comparing embeddings ("cosine", "euclidean", etc.)
-        
-        cache_embeddings: bool = False         # Option to cache embeddings to improve efficiency
-        cache: Optional[dict[str,List[float]]] = None
-        embedding_context: Optional[str] = None # Optional context or description to customize embedding generation
-        additional_features: Optional[List[str]] = None  # Additional features for embeddings, e.g., "entity", "syntax"
-        
-        def __call__(self, input_text: str) -> List[float]:
-            return self.generate_embedding(input_text)
+        def generate_embedding(self, input_text: str) -> np.ndarray:
+            """Generate embedding for the given text."""
+            if not input_text:
+                raise ValueError("Input text cannot be empty")
 
-        def get_vendor(self):
-            return self.get_controller().get_vendor(auto=(self.vendor_id=='auto'))
-        
-        def generate_embedding(self, input_text: str) -> List[float]:
-            raise NotImplementedError("This method should be implemented by subclasses.")
-        
-        def similarity_score(self, embedding1: List[float], embedding2: List[float]) -> float:
-            raise NotImplementedError("This method should be implemented by subclasses.")
+            if self.max_input_length and len(input_text) > self.max_input_length:
+                input_text = input_text[:self.max_input_length]
+            
+            vendor:AbstractVendor = self.get_controller(
+                                        ).get_vendor(auto=(self.vendor_id=='auto'))
 
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
+            # Generate embedding
+            embedding = np.array(vendor.get_embedding(
+                input_text, 
+                model=self.embedding_model_name
+            ))
+
+            # Normalize if specified
+            if self.normalize_embeddings:
+                embedding = self._normalize_embedding(embedding)
+
+            return embedding
+
         _controller: Controller4LLMs.AbstractEmbeddingController = None
         def get_controller(self)->Controller4LLMs.AbstractEmbeddingController: return self._controller
         def init_controller(self,store):self._controller = Controller4LLMs.AbstractEmbeddingController(store,self)
     
-    class TextEmbedding3Small(AbstractEmbedding):
+    class TextEmbedding3Small(AbstractEmbedding, AbstractObj):
         vendor_id: str = "auto"
         embedding_model_name: str = "text-embedding-3-small"
         embedding_dim: int = 1536  # As specified by OpenAI's "text-embedding-3-small" model
         normalize_embeddings: bool = True
         max_input_length: int = 8192  # Default max token length for text-embedding-3-small
         
-        def generate_embedding(self, input_text: str) -> List[float]:
-            # Check for cached result
-            if self.cache_embeddings and input_text in self.cache:
-                return self.cache[input_text]
-            
-            # Generate embedding using OpenAI API
-            embedding = self.get_vendor().get_embedding(input_text, model=self.embedding_model_name)
-            
-            # Normalize if specified
-            if self.normalize_embeddings:
-                embedding = self._normalize_embedding(embedding)
-            
-            # Cache result if caching is enabled
-            if self.cache_embeddings:
-                self.cache[input_text] = embedding
-            
-            return embedding
-
-        def similarity_score(self, embedding1: List[float], embedding2: List[float]) -> float:
-            if self.distance_metric == "cosine":
-                return self._cosine_similarity(embedding1, embedding2)
-            elif self.distance_metric == "euclidean":
-                return self._euclidean_distance(embedding1, embedding2)
-            else:
-                raise ValueError("Unsupported distance metric. Choose 'cosine' or 'euclidean'.")
-
-        def _normalize_embedding(self, embedding: List[float]) -> List[float]:
-            norm = math.sqrt(sum(x * x for x in embedding))
-            return [x / norm for x in embedding] if norm != 0 else embedding
-
-        def _cosine_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
-            dot_product = sum(x * y for x, y in zip(embedding1, embedding2))
-            norm1 = math.sqrt(sum(x * x for x in embedding1))
-            norm2 = math.sqrt(sum(y * y for y in embedding2))
-            return dot_product / (norm1 * norm2) if norm1 != 0 and norm2 != 0 else 0.0
-
-        def _euclidean_distance(self, embedding1: List[float], embedding2: List[float]) -> float:
-            return math.sqrt(sum((x - y) ** 2 for x, y in zip(embedding1, embedding2)))
-
     ##################### utils model #########
     
     class Function(AbstractObj):

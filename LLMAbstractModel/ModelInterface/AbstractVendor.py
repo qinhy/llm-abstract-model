@@ -2,7 +2,7 @@
 import os
 import json
 import requests
-from typing import Dict, Any, Optional, Union, List
+from typing import Dict, Any, Optional
 from pydantic import BaseModel, ConfigDict
 
 class AbstractVendor(BaseModel):
@@ -30,6 +30,11 @@ class AbstractVendor(BaseModel):
     models_endpoint: Optional[str] = None
     embeddings_endpoint: Optional[str] = None
     rate_limit: Optional[int] = None
+
+    cache_embeddings: bool = False
+    # Option to cache embeddings to improve efficiency
+    embeddings_cache: Dict[str, Any] = {}
+
     
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
@@ -186,5 +191,17 @@ class AbstractVendor(BaseModel):
         Returns:
             The embedding vector or error information
         """
+                
+        # Check cache
+        if self.cache_embeddings and text in self.embeddings_cache:
+            return self.embeddings_cache[text]
+        
         payload = {"model": model, "input": text}
-        return self.embedding_request(payload)
+        embedding = self.embedding_request(payload)
+        
+        # Cache result
+        if self.cache_embeddings:
+            self.embeddings_cache[text] = embedding
+        
+        return embedding
+

@@ -30,7 +30,7 @@ print(llm('hi! What is your name?'))
 # push messages
 print(llm([
     {'role':'system','content':'You are a highly skilled professional English translator.'},
-    {'role':'user','content':'"こんにちは！"'}    
+    {'role':'user','content':'"こんにちは！"'}
 ]))
 # -> Hello! I'm an AI language model created by OpenAI, and I don't have a personal name, but you can call me Assistant. How can I help you today?
 # -> "Hello!"
