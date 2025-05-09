@@ -186,14 +186,14 @@ class Model4LLMs:
     class OpenAIVendor(OpenAIVendor, AbstractVendor, AbstractObj):
         pass
 
-    class ChatGPT(AbstractLLM):
+    class AbstractChatGPT(AbstractLLM):
         def get_tools(self) -> List[Dict[str, Any]]:
             if not self.mcp_tools:return []            
             return [t.to_openai_tool() for t in self.mcp_tools]         
         def construct_payload(self, messages):
             return self.openai_construct_payload(messages)
 
-    class ChatGPT4o(ChatGPT):
+    class ChatGPT4o(AbstractChatGPT):
         llm_model_name:str = 'gpt-4o'
         context_window_tokens:int = 128000
         max_output_tokens:int = 4096
@@ -201,7 +201,7 @@ class Model4LLMs:
     class ChatGPT4oMini(ChatGPT4o):
         llm_model_name:str = 'gpt-4o-mini'
 
-    class ChatGPT41(ChatGPT):
+    class ChatGPT41(AbstractChatGPT):
         llm_model_name:str = 'gpt-4.1'
         context_window_tokens:int = 1047576
         max_output_tokens:int = 32768
@@ -212,12 +212,12 @@ class Model4LLMs:
     class ChatGPT41Nano(ChatGPT41):
         llm_model_name:str = 'gpt-4.1-nano'
 
-    class GPT45(ChatGPT):
+    class GPT45(AbstractChatGPT):
         llm_model_name:str = 'gpt-4.5'
         context_window_tokens:int = 128000
         max_output_tokens:int = 128000
 
-    class ChatGPTO3(ChatGPT):
+    class ChatGPTO3(AbstractChatGPT):
         limit_output_tokens: Optional[int] = 2048
         llm_model_name: str = 'o3'
         context_window_tokens: int = 128000
@@ -320,7 +320,7 @@ class Model4LLMs:
             headers.pop("Authorization", None)  # Remove Bearer token
             return headers
     
-    class Claude(AbstractLLM):
+    class AbstractClaude(AbstractLLM):
         context_window_tokens: int = 200_000
         max_output_tokens: int = 4096
         
@@ -330,11 +330,11 @@ class Model4LLMs:
         def construct_messages(self, messages: Optional[List | str]) -> list:
             return self.claude_construct_messages(messages)
 
-    class Claude35(Claude):
+    class Claude35(AbstractClaude):
         llm_model_name: str = "claude-3.5-sonnet-latest"
         max_output_tokens: int = 8192
 
-    class Claude37(Claude):
+    class Claude37(AbstractClaude):
         llm_model_name: str = "claude-3.7-sonnet-latest"
         max_output_tokens: int = 64000
 

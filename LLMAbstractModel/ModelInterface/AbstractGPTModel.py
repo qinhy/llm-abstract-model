@@ -13,15 +13,10 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
     
     # Basic configuration parameters
     limit_output_tokens: Optional[int] = 1024
-    temperature: Optional[float] = 0.7
-    top_p: Optional[float] = 1.0
-    frequency_penalty: Optional[float] = 0.0
-    presence_penalty: Optional[float] = 0.0
-    system_prompt: Optional[str] = None
 
     # Advanced configuration parameters
     stop_sequences: Optional[List[str]] = Field(default_factory=list)
-    n: Optional[int] = 1  # Number of completions to generate
+    n_generations: Optional[int] = 1  # Number of completions to generate
     
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
@@ -66,7 +61,7 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
         payload = super().construct_payload(messages) 
         payload.update({
             "stop": self.stop_sequences, 
-            "n": self.n,
+            "n": self.n_generations,
         })
         
         if self.mcp_tools:
