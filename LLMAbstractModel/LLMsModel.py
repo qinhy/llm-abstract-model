@@ -31,43 +31,34 @@ class Controller4LLMs:
             super().__init__(store, model)
             self.model:Model4LLMs.AbstractLLM = model
             self._store:LLMsStore = store
-        
-        def get_vendor(self,auto=False):
+        def get_vendor(self, auto=False):
             if not auto:
-                vendor:Model4LLMs.AbstractVendor = self._store.find(self.model.vendor_id)
+                vendor = self._store.find(self.model.vendor_id)
                 if vendor is None:
-                    raise ValueError(f'vendor of {self.model.vendor_id} is not exists! Please change_vendor(...)')
+                    raise ValueError(f'Vendor {self.model.vendor_id} does not exist. Please use change_vendor(...)')
                 return vendor
-            else:
-                if 'ChatGPT' in self.model.__class__.__name__:
-                    # try openai vendor
-                    vs = self._store.find_all('OpenAIVendor:*')
-                    if len(vs)==0:raise ValueError(f'auto get endor of OpenAIVendor:* is not exists! Please (add and) change_vendor(...)')
-                    else: return vs[0]
-                    
-                elif 'Claude' in self.model.__class__.__name__:
-                    vs = self._store.find_all('AnthropicVendor:*')
-                    if len(vs)==0:raise ValueError(f'auto get endor of AnthropicVendor:* is not exists! Please (add and) change_vendor(...)')
-                    else: return vs[0]
-
-                elif 'Grok' in self.model.__class__.__name__:
-                    vs = self._store.find_all('XaiVendor:*')
-                    if len(vs)==0:raise ValueError(f'auto get endor of XaiVendor:* is not exists! Please (add and) change_vendor(...)')
-                    else: return vs[0]
-                    
-                elif 'DeepSeek' in self.model.__class__.__name__:
-                    vs = self._store.find_all('DeepSeekVendor:*')
-                    if len(vs)==0:raise ValueError(f'auto get endor of DeepSeekVendor:* is not exists! Please (add and) change_vendor(...)')
-                    else: return vs[0]
-                    
-                elif type(self.model) in [Model4LLMs.Gemma2, Model4LLMs.Phi3, Model4LLMs.Llama ]:
-                    # try ollama vendor
-                    vs = self._store.find_all('OllamaVendor:*')
-                    if len(vs)==0:raise ValueError(f'auto get endor of OllamaVendor:* is not exists! Please (add and) change_vendor(...)')
-                    else: return vs[0]
-                    
-            raise ValueError(f'not support vendor of {self.model.vendor_id}')
-        
+            # Mapping of model types to vendor types
+            vendor_mapping = {
+                'ChatGPT': 'OpenAIVendor:*',
+                'Claude': 'AnthropicVendor:*', 
+                'Grok': 'XaiVendor:*',
+                'DeepSeek': 'DeepSeekVendor:*'
+            }
+            # Check model name against mapping
+            for model_type, vendor_type in vendor_mapping.items():
+                if model_type in self.model.__class__.__name__:
+                    vendors = self._store.find_all(vendor_type)
+                    if not vendors:
+                        raise ValueError(f'No {vendor_type} vendor found. Please add and set vendor.')
+                    return vendors[0]
+            # Special case for Ollama models
+            ollama_models = [Model4LLMs.Gemma2, Model4LLMs.Phi3, Model4LLMs.Llama]
+            if type(self.model) in ollama_models:
+                vendors = self._store.find_all('OllamaVendor:*')
+                if not vendors:
+                    raise ValueError('No OllamaVendor found. Please add and set vendor.')
+                return vendors[0]
+            raise ValueError(f'Unsupported vendor type for model {self.model.vendor_id}')
         def change_vendor(self,vendor_id:str):
             vendor:Model4LLMs.AbstractVendor = self._store.find(vendor_id)
             if vendor is None:
