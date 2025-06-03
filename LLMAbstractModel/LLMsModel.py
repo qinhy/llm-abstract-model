@@ -162,26 +162,57 @@ class Controller4LLMs:
                 else:
                     all_args.append(args_kwargs)
             return all_args, all_kwargs
-        
-# class KeyOrEnv(BaseModel):
-#     key:str
 
-#     def get(self):
-#         return os.getenv(self.key,self.key)
+    class OpenAIVendorController(AbstractVendorController): pass
+    class AbstractChatGPTController(AbstractLLMController): pass
+    class ChatGPT4oController(AbstractLLMController): pass
+    class ChatGPT4oMiniController(AbstractLLMController): pass
+    class ChatGPT41Controller(AbstractLLMController): pass
+    class ChatGPT41MiniController(AbstractLLMController): pass
+    class ChatGPT41NanoController(AbstractLLMController): pass
+    class GPT45Controller(AbstractLLMController): pass
+    class ChatGPTO3Controller(AbstractLLMController): pass
+    class ChatGPTO3MiniController(AbstractLLMController): pass
+    class DeepSeekVendorController(AbstractVendorController): pass
+    class DeepSeekController(AbstractLLMController): pass
+    class XaiVendorController(AbstractVendorController): pass
+    class GrokController(AbstractLLMController): pass
+    class OllamaVendorController(AbstractVendorController): pass
+    class Gemma2Controller(AbstractLLMController): pass
+    class Phi3Controller(AbstractLLMController): pass
+    class LlamaController(AbstractLLMController): pass
+    class AnthropicVendorController(AbstractVendorController): pass
+    class AbstractClaudeController(AbstractLLMController): pass
+    class Claude35Controller(AbstractLLMController): pass
+    class Claude37Controller(AbstractLLMController): pass
+    class TextEmbedding3SmallController(AbstractEmbeddingController): pass
+    class FunctionController(AbstractObjController): pass
+    class ParameterController(AbstractObjController): pass
+    class RequestsFunctionController(AbstractObjController): pass
+    class AsyncCeleryWebApiFunctionController(AbstractObjController): pass
+    class RegxExtractorController(AbstractObjController): pass
+    class StringTemplateController(AbstractObjController): pass
+    class ClassificationTemplateController(AbstractObjController): pass
     
 class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
-        pass
+        
+        def _get_controller_class(self,modelclass=Controller4LLMs):
+            class_type = self.__class__.__name__+'Controller'
+            res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
+            res = res.get(class_type, None)
+            if res is None: 
+                print(f'[warning]: No such class of {class_type}, use Controller4LLMs.AbstractObjController')
+                res = Controller4LLMs.AbstractObjController
+            return res
     
     class AbstractVendor(AbstractVendor,AbstractObj):
-        _controller: Controller4LLMs.AbstractVendorController = None
-        def get_controller(self)->Controller4LLMs.AbstractVendorController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.AbstractVendorController(store,self)        
+        controller: Optional[Controller4LLMs.AbstractVendorController] = None
 
     class AbstractLLM(AbstractGPTModel,AbstractLLM,AbstractObj):
-        _controller: Controller4LLMs.AbstractLLMController = None
-        def get_controller(self)->Controller4LLMs.AbstractLLMController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.AbstractLLMController(store,self)
+        controller: Optional[Controller4LLMs.AbstractLLMController] = None
+        def get_vendor(self)->AbstractVendor:
+            return self.controller.get_vendor(auto=(self.vendor_id=='auto'))
 
     class OpenAIVendor(OpenAIVendor, AbstractVendor, AbstractObj):
         pass
@@ -350,8 +381,7 @@ class Model4LLMs:
             if self.max_input_length and len(input_text) > self.max_input_length:
                 input_text = input_text[:self.max_input_length]
             
-            vendor:AbstractVendor = self.get_controller(
-                                        ).get_vendor(auto=(self.vendor_id=='auto'))
+            vendor:AbstractVendor = self.controller.get_vendor(auto=(self.vendor_id=='auto'))
 
             # Generate embedding
             embedding = np.array(vendor.get_embedding(
@@ -365,9 +395,7 @@ class Model4LLMs:
 
             return embedding
 
-        _controller: Controller4LLMs.AbstractEmbeddingController = None
-        def get_controller(self)->Controller4LLMs.AbstractEmbeddingController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.AbstractEmbeddingController(store,self)
+        controller: Optional[Controller4LLMs.AbstractEmbeddingController] = None
     
     class TextEmbedding3Small(AbstractEmbedding, AbstractObj):
         vendor_id: str = "auto"
@@ -437,9 +465,7 @@ class Model4LLMs:
         def get_description(self):
             return self.model_dump()#exclude=['arguments'])
 
-        _controller: Controller4LLMs.AbstractObjController = None
-        def get_controller(self)->Controller4LLMs.AbstractObjController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.AbstractObjController(store,self)
+        controller: Optional[Controller4LLMs.AbstractObjController] = None
 
     class WorkFlow(AbstractObj):
         tasks: Dict[str, list[str]] # using uuids, task and dependencies
@@ -463,7 +489,7 @@ class Model4LLMs:
                     if '__input__' not in first_task_deps:
                         self.tasks[first_task_id].append('__input__')
                 kwargs['__input__'] = [args,{}]
-            return self.get_controller().run(**kwargs)
+            return self.controller.run(**kwargs)
 
         
         def todo_list(self):
@@ -477,9 +503,7 @@ class Model4LLMs:
             return self.results.get(task_uuid, None)
         
         model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4LLMs.WorkFlowController = None
-        def get_controller(self)->Controller4LLMs.WorkFlowController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.WorkFlowController(store,self)
+        controller: Optional[Controller4LLMs.WorkFlowController] = None
 
     @Function.param_descriptions('Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.',
                                 params='query parameters',

@@ -81,13 +81,13 @@ Remember to be objective, thorough, and consistent in your evaluation. Your goal
 
     def change_llm(self, llm_obj: Model4LLMs.AbstractLLM):
         self.ll_id = llm_obj.get_id()
-        self.get_controller().store()
+        self.controller.store()
         
     def __call__(self, question, debug=False):
         debug_print = lambda msg: print(f'--> [main_agent]: {msg}') if debug else lambda: None
 
-        main_llm: Model4LLMs.AbstractLLM = self.get_controller().storage().find(self.llm_id)
-        eval_agent = self.get_controller().storage().find(self.eval_agent_id)
+        main_llm: Model4LLMs.AbstractLLM = self.controller.storage().find(self.llm_id)
+        eval_agent = self.controller.storage().find(self.eval_agent_id)
 
         main_llm = main_llm.model_copy()
         main_llm.system_prompt = self.system_prompt
@@ -171,7 +171,7 @@ Remember to be thorough, constructive, and professional in your review. Your goa
 
     def change_llm(self,llm_obj:Model4LLMs.AbstractLLM):
         self.ll_id = llm_obj.get_id()
-        self.get_controller().store()
+        self.controller.store()
     
     def __call__(self,question,relevant_concepts,thoughts,process,solution,
                  debug=True):
@@ -183,7 +183,7 @@ Remember to be thorough, constructive, and professional in your review. Your goa
                     '## solution\n{}\n' if solution else '')).format(
                         question,relevant_concepts,thoughts,process,solution)
                 
-        eval_llm:Model4LLMs.AbstractLLM = self.get_controller().storage().find(self.llm_id).model_copy()
+        eval_llm:Model4LLMs.AbstractLLM = self.controller.storage().find(self.llm_id).model_copy()
         eval_llm.system_prompt = self.system_prompt
         debugprint(f'Asking eval_llm with: [{dict(question=question)}]')
         answer = eval_llm(question)

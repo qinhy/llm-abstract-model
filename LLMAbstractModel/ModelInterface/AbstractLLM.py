@@ -2,6 +2,8 @@ import json
 from typing import Dict, List, Any, Optional, Union, Callable
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from .AbstractVendor import AbstractVendor
+
 
 class MCPToolAnnotations(BaseModel):
     """Annotations for MCP tools providing metadata about tool behavior."""
@@ -112,6 +114,8 @@ class AbstractLLM(BaseModel):
     system_prompt: Optional[str] = None
     mcp_tools: Optional[List[MCPTool]] = None
     
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     @field_validator('temperature')
     def validate_temperature(cls, value: float) -> float:
         """Validate that temperature is between 0 and 1."""
@@ -126,13 +130,14 @@ class AbstractLLM(BaseModel):
             raise ValueError("top_p must be between 0 and 1.")
         return value
     
-    def get_vendor(self):
+    def get_vendor(self)->AbstractVendor:
         """Get the vendor for this LLM.
         
         Returns:
             AbstractVendor: The vendor instance for this LLM
         """
-        return self.get_controller().get_vendor(auto=(self.vendor_id=='auto'))
+        raise NotImplementedError()
+        return self.controller.get_vendor(auto=(self.vendor_id=='auto'))
 
     def get_controller(self):
         """Get the controller for this LLM.
@@ -142,7 +147,7 @@ class AbstractLLM(BaseModel):
         Returns:
             AbstractLLMController: The controller for this LLM
         """
-        raise NotImplementedError("Subclasses must implement get_controller()")
+        raise NotImplementedError("Subclasses must implement controller")
 
     def get_usage_limits(self) -> Dict[str, Any]:
         """Get usage limits for this LLM.
@@ -215,7 +220,7 @@ class AbstractLLM(BaseModel):
         if not isinstance(mcp_tools_json, str):
             mcp_tools_json = json.dumps(mcp_tools_json)
         self.mcp_tools = [MCPTool(**tool) for tool in json.loads(mcp_tools_json)]
-        self.get_controller().update(mcp_tools=self.mcp_tools)
+        self.controller.update(mcp_tools=self.mcp_tools)
 
     def get_tools(self) -> List[Dict[str, Any]]:
         """Get the tools available to this LLM in the format expected by the vendor.
@@ -283,5 +288,3 @@ class AbstractLLM(BaseModel):
         payload = self.construct_payload(self.construct_messages(messages))
         vendor = self.get_vendor()
         return vendor.chat_result(vendor.chat_request(payload))
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)

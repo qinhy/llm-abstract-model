@@ -51,13 +51,13 @@ please only reply with the following json in markdown format:
 '''
 
     def change_llm(self,llm_obj:Model4LLMs.AbstractLLM):        
-        self.get_controller().update(french_address_llm_id = llm_obj.get_id())
+        self.controller.update(french_address_llm_id = llm_obj.get_id())
 
     def __call__(self,question='My GPS shows (47.665176, 3.353434), where am I?',
                  debug=False):
         debugprint = lambda msg:print(f'--> [french_address_agent]: {msg}') if debug else lambda:None
         query = question
-        store = self.get_controller().storage()
+        store = self.controller.storage()
         french_address_llm:Model4LLMs.AbstractLLM = store.find(self.french_address_llm_id)
         french_address_llm.system_prompt = self.french_address_system_prompt
         french_address_search_function = store.find(self.french_address_search_function_id)
@@ -100,14 +100,14 @@ french_address_agent
 '''
 
     def change_llm(self,llm_obj:Model4LLMs.AbstractLLM):        
-        self.get_controller().update(french_address_llm_id = llm_obj.get_id())
+        self.controller.update(french_address_llm_id = llm_obj.get_id())
     
     def __call__(self,
                  question='I am in France and My GPS shows (47.665176, 3.353434), where am I?',
                  debug=False):
         debugprint = lambda msg:print(f'--> [triage_agent]: {msg}') if debug else lambda:None
 
-        store = self.get_controller().storage()
+        store = self.controller.storage()
         triage_llm:Model4LLMs.AbstractLLM = store.find(self.triage_llm_id)
         triage_llm.system_prompt = self.triage_system_prompt
         french_address_agent = store.find(self.french_address_agent_id)
