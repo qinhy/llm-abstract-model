@@ -19,7 +19,7 @@ class FibonacciObj(Model4LLMs.AbstractObj):
     n:int=1
 
 ### registeration magic
-store.add_new_obj(FibonacciObj()).get_controller().delete()
+store.add_new_obj(FibonacciObj()).controller.delete()
 
 
 ############################
@@ -51,10 +51,10 @@ class ConstantThreeFunction(Model4LLMs.Function):
         return 3
     
 ### registeration magic
-store.add_new_function(AddFunction()).get_controller().delete()
-store.add_new_function(MultiplyFunction()).get_controller().delete()
-store.add_new_function(ConstantThreeFunction()).get_controller().delete()
-store.add_new_function(ConstantFiveFunction()).get_controller().delete()
+store.add_new_function(AddFunction()).controller.delete()
+store.add_new_function(MultiplyFunction()).controller.delete()
+store.add_new_function(ConstantThreeFunction()).controller.delete()
+store.add_new_function(ConstantFiveFunction()).controller.delete()
 
 
 #######################
@@ -92,15 +92,15 @@ If you want to use an address searching by coordinates, please only reply with t
 
     def change_llm(self,llm_obj:Model4LLMs.AbstractLLM):
         self.french_address_llm_id = llm_obj.get_id()
-        self.get_controller().store()
+        self.controller.store()
 
     def __call__(self,question='I am in France and My GPS shows (47.665176, 3.353434), where am I?',
                  debug=False):
         debugprint = lambda msg:print(f'--> [french_address_agent]: {msg}') if debug else lambda:None
         query = question
-        french_address_llm:Model4LLMs.AbstractLLM = self.get_controller().storage().find(self.french_address_llm_id)
+        french_address_llm:Model4LLMs.AbstractLLM = self.controller.storage().find(self.french_address_llm_id)
         french_address_llm.system_prompt = self.french_address_system_prompt
-        french_address_search_function = self.get_controller().storage().find(self.french_address_search_function_id)
+        french_address_search_function = self.controller.storage().find(self.french_address_search_function_id)
         
         while True:
             debugprint(f'Asking french_address_llm with: [{dict(question=query)}]')
@@ -137,16 +137,16 @@ french_address_agent
 
     def change_llm(self,llm_obj:Model4LLMs.AbstractLLM):
         self.triage_llm_id = llm_obj.get_id()
-        self.get_controller().store()
+        self.controller.store()
     
     def __call__(self,
                  question='I am in France and My GPS shows (47.665176, 3.353434), where am I?',
                  debug=False):
         debugprint = lambda msg:print(f'--> [triage_agent]: {msg}') if debug else lambda:None
 
-        triage_llm:Model4LLMs.AbstractLLM = self.get_controller().storage().find(self.triage_llm_id)
+        triage_llm:Model4LLMs.AbstractLLM = self.controller.storage().find(self.triage_llm_id)
         triage_llm.system_prompt = self.triage_system_prompt
-        french_address_agent = self.get_controller().storage().find(self.french_address_agent_id)
+        french_address_agent = self.controller.storage().find(self.french_address_agent_id)
 
         debugprint(f'Asking triage_llm with: [{dict(question=question)}]')    
         while True:
@@ -161,10 +161,10 @@ french_address_agent
 
             
 ### registeration magic
-store.add_new_obj(FrenchReverseGeocodeFunction()).get_controller().delete()
+store.add_new_obj(FrenchReverseGeocodeFunction()).controller.delete()
 store.add_new_obj(FrenchAddressAgent(french_address_llm_id='',
-                                    french_address_search_function_id='')).get_controller().delete()
-store.add_new_obj(TriageAgent(triage_llm_id='',french_address_agent_id='')).get_controller().delete()
+                                    french_address_search_function_id='')).controller.delete()
+store.add_new_obj(TriageAgent(triage_llm_id='',french_address_agent_id='')).controller.delete()
 
 
 
@@ -655,7 +655,7 @@ class PersonalAssistantAgent(Model4LLMs.Function):
             print()
 
         # Generate a response using the LLM
-        llm:Model4LLMs.AbstractLLM = self.get_controller().storage().find(self.llm_id)
+        llm:Model4LLMs.AbstractLLM = self.controller.storage().find(self.llm_id)
         llm.system_prompt=self.system_prompt
         response = llm(query)
         if '```memory' in response:
@@ -664,9 +664,8 @@ class PersonalAssistantAgent(Model4LLMs.Function):
         return response
 
     def get_memory(self):
-        llm:Model4LLMs.AbstractLLM = self.get_controller().storage().find(self.llm_id)
-        text_embedding:Model4LLMs.AbstractEmbedding = self.get_controller(
-                                            ).storage().find(self.text_embedding_id)
+        llm:Model4LLMs.AbstractLLM = self.controller.storage().find(self.llm_id)
+        text_embedding:Model4LLMs.AbstractEmbedding = self.controller.storage().find(self.text_embedding_id)
         return TextMemoryTree(root=self.memory_root,llm=llm,
                        text_embedding=text_embedding)
         
@@ -710,4 +709,4 @@ def load_memory_agent():
     return agent, store
 
 ### registeration magic
-store.add_new_obj(PersonalAssistantAgent()).get_controller().delete()
+store.add_new_obj(PersonalAssistantAgent()).controller.delete()

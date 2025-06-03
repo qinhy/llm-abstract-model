@@ -5,13 +5,19 @@ import math
 import os
 import time
 import unittest
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 import requests
 from typing import Dict, Any
 
 from .BasicModel import Controller4Basic, Model4Basic, BasicStore
-
+from .ModelInterface import AbstractVendor
+from .ModelInterface import AbstractLLM
+from .ModelInterface import OpenAIVendor
+from .ModelInterface import AbstractGPTModel
+from .ModelInterface import AbstractEmbedding
+    
 class Controller4LLMs:
     class AbstractObjController(Controller4Basic.AbstractObjController):
         pass
@@ -39,6 +45,11 @@ class Controller4LLMs:
                     if len(vs)==0:raise ValueError(f'auto get endor of OpenAIVendor:* is not exists! Please (add and) change_vendor(...)')
                     else: return vs[0]
                     
+                elif 'Claude' in self.model.__class__.__name__:
+                    vs = self._store.find_all('AnthropicVendor:*')
+                    if len(vs)==0:raise ValueError(f'auto get endor of AnthropicVendor:* is not exists! Please (add and) change_vendor(...)')
+                    else: return vs[0]
+
                 elif 'Grok' in self.model.__class__.__name__:
                     vs = self._store.find_all('XaiVendor:*')
                     if len(vs)==0:raise ValueError(f'auto get endor of XaiVendor:* is not exists! Please (add and) change_vendor(...)')
@@ -86,6 +97,7 @@ class Controller4LLMs:
                     pass
             raise ValueError(f'not support vendor of {self.model.vendor_id}')
         
+
     class WorkFlowController(AbstractObjController):
         def __init__(self, store, model):
             super().__init__(store, model)
@@ -151,233 +163,73 @@ class Controller4LLMs:
                 else:
                     all_args.append(args_kwargs)
             return all_args, all_kwargs
-        
 
+    class OpenAIVendorController(AbstractVendorController): pass
+    class AbstractChatGPTController(AbstractLLMController): pass
+    class ChatGPT4oController(AbstractLLMController): pass
+    class ChatGPT4oMiniController(AbstractLLMController): pass
+    class ChatGPT41Controller(AbstractLLMController): pass
+    class ChatGPT41MiniController(AbstractLLMController): pass
+    class ChatGPT41NanoController(AbstractLLMController): pass
+    class ChatGPT45Controller(AbstractLLMController): pass
+    class ChatGPTO3Controller(AbstractLLMController): pass
+    class ChatGPTO3MiniController(AbstractLLMController): pass
+    class DeepSeekVendorController(AbstractVendorController): pass
+    class DeepSeekController(AbstractLLMController): pass
+    class XaiVendorController(AbstractVendorController): pass
+    class GrokController(AbstractLLMController): pass
+    class OllamaVendorController(AbstractVendorController): pass
+    class Gemma2Controller(AbstractLLMController): pass
+    class Phi3Controller(AbstractLLMController): pass
+    class LlamaController(AbstractLLMController): pass
+    class AnthropicVendorController(AbstractVendorController): pass
+    class AbstractClaudeController(AbstractLLMController): pass
+    class Claude35Controller(AbstractLLMController): pass
+    class Claude37Controller(AbstractLLMController): pass
+    class TextEmbedding3SmallController(AbstractEmbeddingController): pass
+    class FunctionController(AbstractObjController): pass
+    class ParameterController(AbstractObjController): pass
+    class RequestsFunctionController(AbstractObjController): pass
+    class AsyncCeleryWebApiFunctionController(AbstractObjController): pass
+    class RegxExtractorController(AbstractObjController): pass
+    class StringTemplateController(AbstractObjController): pass
+    class ClassificationTemplateController(AbstractObjController): pass
+    
 class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
+        
+        def _get_controller_class(self,modelclass=Controller4LLMs):
+            class_type = self.__class__.__name__+'Controller'
+            res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
+            res = res.get(class_type, None)
+            if res is None: 
+                print(f'[warning]: No such class of {class_type}, use Controller4LLMs.AbstractObjController')
+                res = Controller4LLMs.AbstractObjController
+            return res
+    
+    class AbstractVendor(AbstractVendor,AbstractObj):
+        controller: Optional[Controller4LLMs.AbstractVendorController] = None
+
+    class AbstractLLM(AbstractGPTModel,AbstractLLM,AbstractObj):
+        controller: Optional[Controller4LLMs.AbstractLLMController] = None
+        def get_vendor(self)->AbstractVendor:
+            return self.controller.get_vendor(auto=(self.vendor_id=='auto'))
+
+        def set_mcp_tools(self, mcp_tools_json = '{}'):            
+            super().set_mcp_tools(mcp_tools_json)
+            self.controller.update(mcp_tools=self.mcp_tools)
+
+    class OpenAIVendor(OpenAIVendor, AbstractVendor, AbstractObj):
         pass
-    
-    class AbstractVendor(AbstractObj):
-        vendor_name: str  # e.g., 'OpenAI'
-        api_url: str  # e.g., 'https://api.openai.com/v1/'
-        api_key: str = None # API key for authentication, if required
-        timeout: int = 30  # Default timeout for API requests in seconds
-        
-        chat_endpoint:str = None # e.g., '/v1/chat/completions'
-        models_endpoint:str = None # e.g., '/v1/models'
-        embeddings_endpoint:str = None
-        default_timeout: int = 30        # Timeout for API requests in seconds
-        rate_limit: Optional[int] = None # Requests per minute, if applicable
-        
-        def format_llm_model_name(self,llm_model_name:str)->str:
-            return llm_model_name       
-        
-        def get_api_key(self)->str:
-            # return self.api_key#.get()
-            return os.getenv(self.api_key,self.api_key)
 
-        def get_available_models(self) -> Dict[str, Any]:
-            return requests.get(self._build_url(self.models_endpoint),
-                                    headers=self._build_headers(),
-                                    timeout=self.timeout)
+    class AbstractChatGPT(AbstractLLM):
+        def get_tools(self) -> List[Dict[str, Any]]:
+            if not self.mcp_tools:return []            
+            return [t.to_openai_tool() for t in self.mcp_tools]         
+        def construct_payload(self, messages):
+            return self.openai_construct_payload(messages)
 
-        def _build_headers(self) -> Dict[str, str]:
-            headers = {
-                'Content-Type': 'application/json'
-            }
-            if self.api_key:
-                headers['Authorization'] = f'Bearer {self.get_api_key()}'
-            return headers
-
-        def _build_url(self, endpoint: str) -> str:
-            """
-            Construct the full API URL for a given endpoint.
-            :param endpoint: API endpoint to be called.
-            :return: Full API URL.
-            """
-            return f"{self.api_url.rstrip('/')}/{endpoint.lstrip('/')}"
-
-        def chat_request(self,payload={}):
-            url=self._build_url(self.chat_endpoint)
-            headers=self._build_headers()
-            response = requests.post(url=url, data=json.dumps(payload,ensure_ascii=True),
-                                     headers=headers,timeout=self.timeout)
-            try:
-                response = json.loads(response.text,strict=False)
-            except Exception as e:
-                if type(response) is not dict:
-                    return {'error':f'{e}'}
-                else:
-                    return {'error':f'{response}({e})'}
-            return response
-        
-        def chat_result(self,response)->str:
-            return response
-        
-        def embedding_request(self, payload={}) -> Dict[str, Any]:
-            """
-            Method to make embedding requests. Requires the payload to have 'model' and 'input' keys.
-            """
-            if not self.embeddings_endpoint:
-                return {'error': 'Embeddings endpoint not defined for this vendor.'}
-
-            url = self._build_url(self.embeddings_endpoint)
-            headers = self._build_headers()
-            response = requests.post(url=url, data=json.dumps(payload, ensure_ascii=True),
-                                    headers=headers, timeout=self.timeout)
-            try:
-                response = json.loads(response.text, strict=False)['data'][0]['embedding']
-            except Exception as e:
-                return {'error': f'{e}'}
-            return response
-        
-        def get_embedding(self, text: str, model: str) -> Dict[str, Any]:
-            payload = {"model": model,"input": text}
-            return self.embedding_request(payload)
-
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4LLMs.AbstractVendorController = None
-        def get_controller(self)->Controller4LLMs.AbstractVendorController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.AbstractVendorController(store,self)
-
-    class OpenAIVendor(AbstractVendor):
-        vendor_name:str = 'OpenAI'
-        api_url:str = 'https://api.openai.com'
-        chat_endpoint:str = '/v1/chat/completions'
-        models_endpoint:str = '/v1/models'
-        embeddings_endpoint:str = '/v1/embeddings'
-        default_timeout: int = 30               # Timeout for API requests in seconds
-        rate_limit: Optional[int] = None        # Requests per minute, if applicable
-        
-        def get_available_models(self) -> Dict[str, Any]:
-            response = super().get_available_models()
-            return {model['id']: model for model in response.json().get('data', [])}
-
-        def chat_result(self, response) -> str:
-            if not self._try_binary_error(lambda: response['choices'][0]['message']['content']):
-                return self._log_error(ValueError(f'cannot get result from {response}'))
-            return response['choices'][0]['message']['content']
-
-        def get_embedding(self, text: str, model: str='text-embedding-3-small') -> Dict[str, Any]:
-            payload = {"model": model,"input": text}
-            return self.embedding_request(payload)
-
-    class AbstractLLM(AbstractObj):
-        vendor_id:str='auto'
-        llm_model_name:str
-        context_window_tokens:int
-        # Context Window Size: The context window size dictates the total number of tokens the model can handle at once. For example, if a model has a context window of 4096 tokens, it can process up to 4096 tokens of combined input and output.
-        max_output_tokens:int
-        stream:bool = False
-        
-        limit_output_tokens: Optional[int] = None
-        temperature: Optional[float] = 0.7
-        top_p: Optional[float] = 1.0
-        frequency_penalty: Optional[float] = 0.0
-        presence_penalty: Optional[float] = 0.0
-        system_prompt: Optional[str] = None
-        
-        # # field_validator to ensure correct range of temperature
-        # @field_validator('temperature')
-        # def validate_temperature(cls, value):
-        #     if not 0 <= value <= 1:
-        #         raise ValueError("Temperature must be between 0 and 1.")
-        #     return value
-
-        # # field_validator to ensure correct range of top_p
-        # @field_validator('top_p')
-        # def validate_top_p(cls, value):
-        #     if not 0 <= value <= 1:
-        #         raise ValueError("top_p must be between 0 and 1.")
-        #     return value
-        
-        def get_vendor(self):
-            return self.get_controller().get_vendor(auto=(self.vendor_id=='auto'))
-
-        def get_usage_limits(self) -> Dict[str, Any]:
-            """
-            Abstract method to get usage limits, such as rate limits, token limits, etc.
-            """
-            pass
-
-        def validate_input(self, prompt: str) -> bool:
-            """
-            Validate the input prompt based on max input tokens.
-            """
-            if len(prompt) > self.context_window_tokens:
-                raise ValueError(f"Input exceeds the maximum token limit of {self.context_window_tokens}.")
-            return True
-
-        def calculate_cost(self, tokens_used: int) -> float:
-            """
-            Optional method to calculate the cost based on tokens used.
-            Can be overridden by subclasses to implement vendor-specific cost calculation.
-            """
-            return 0.0
-
-        def get_token_count(self, text: str) -> int:
-            """
-            Dummy implementation for token counting. Replace with vendor-specific logic.
-            """
-            return len(text.split())
-        
-        def build_system(self, purpose='...'):
-            return """
-            Dummy implementation for building system prompt
-            """
-
-        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:            
-            payload = {
-                "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
-                "stream": self.stream,
-                "messages": messages,
-                "max_tokens": self.limit_output_tokens,
-                "temperature": self.temperature,
-                "top_p": self.top_p,
-                "frequency_penalty": self.frequency_penalty,
-                "presence_penalty": self.presence_penalty,
-            }
-            return {k: v for k, v in payload.items() if v is not None}
-        
-        def construct_messages(self,messages:Optional[List|str])->list:
-            msgs = []
-            if self.system_prompt:
-                msgs.append({"role":"system","content":self.system_prompt})
-            if type(messages) is str:
-                messages = [{"role":"user","content":messages}]
-            return msgs+messages
-
-        def __call__(self, messages:Optional[List|str], auto_str=True)->str:
-            if not isinstance(messages,list) and not isinstance(messages,str):
-                if auto_str:messages=str(messages)
-            payload = self.construct_payload(self.construct_messages(messages))
-            vendor = self.get_vendor()
-            return vendor.chat_result(vendor.chat_request(payload))
-
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4LLMs.AbstractLLMController = None
-        def get_controller(self)->Controller4LLMs.AbstractLLMController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.AbstractLLMController(store,self)
-    
-    class OpenAIChatGPT(AbstractLLM):
-
-        limit_output_tokens: Optional[int] = 1024
-        temperature: Optional[float] = 0.7
-        top_p: Optional[float] = 1.0
-        frequency_penalty: Optional[float] = 0.0
-        presence_penalty: Optional[float] = 0.0
-        system_prompt: Optional[str] = None
-
-        # New attributes for advanced configurations
-        stop_sequences: Optional[List[str]] = Field(default_factory=list)
-        n: Optional[int] = 1  # Number of completions to generate for each input prompt
-
-        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:
-            payload = super().construct_payload(messages)            
-            payload.update({"stop": self.stop_sequences, "n": self.n,})
-            return {k: v for k, v in payload.items() if v is not None}
-                    
-    class ChatGPT4o(OpenAIChatGPT):
+    class ChatGPT4o(AbstractChatGPT):
         llm_model_name:str = 'gpt-4o'
         context_window_tokens:int = 128000
         max_output_tokens:int = 4096
@@ -385,7 +237,7 @@ class Model4LLMs:
     class ChatGPT4oMini(ChatGPT4o):
         llm_model_name:str = 'gpt-4o-mini'
 
-    class ChatGPT41(OpenAIChatGPT):
+    class ChatGPT41(AbstractChatGPT):
         llm_model_name:str = 'gpt-4.1'
         context_window_tokens:int = 1047576
         max_output_tokens:int = 32768
@@ -395,38 +247,30 @@ class Model4LLMs:
         
     class ChatGPT41Nano(ChatGPT41):
         llm_model_name:str = 'gpt-4.1-nano'
-        
-    class ChatGPTO1(OpenAIChatGPT):
+
+    class ChatGPT45(AbstractChatGPT):
+        llm_model_name:str = 'gpt-4.5'
+        context_window_tokens:int = 128000
+        max_output_tokens:int = 128000
+
+    class ChatGPTO3(AbstractChatGPT):
         limit_output_tokens: Optional[int] = 2048
-        llm_model_name: str = 'o1'
+        llm_model_name: str = 'o3'
         context_window_tokens: int = 128000
         max_output_tokens: int = 32768
         temperature: Optional[float] = 1.0
 
         def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:            
-            payload = {
-                "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
-                "stream": self.stream,
-                "messages": messages,
-                "max_completion_tokens": self.limit_output_tokens,
-                "top_p": self.top_p,
-                "frequency_penalty": self.frequency_penalty,
-                "presence_penalty": self.presence_penalty,
-            }
-            return {k: v for k, v in payload.items() if v is not None}
+            return self.openai_o_models_construct_payload(messages)
             
         def construct_messages(self,messages:Optional[List|str])->list:
-            if type(messages) is str:
-                messages = [{"role":"user","content":messages}]
-            if self.system_prompt:
-                messages[0]["content"] = self.system_prompt+'\n'+messages[0]["content"]
-            return messages
+            return self.openai_o_models_construct_messages(messages)
         
-    class ChatGPTO1Mini(ChatGPTO1):
-        llm_model_name: str = 'o1-mini'
-        context_window_tokens: int = 128000
-        max_output_tokens: int = 65536
-
+    class ChatGPTO3Mini(ChatGPTO3):
+        llm_model_name: str = 'o3-mini'
+        context_window_tokens: int = 1047576
+        max_output_tokens: int = 32768
+        
     class DeepSeekVendor(OpenAIVendor):
         vendor_name: str = "DeepSeek"
         api_url: str = "https://api.deepseek.com"
@@ -434,7 +278,7 @@ class Model4LLMs:
         models_endpoint: str = "/v1/models"
         rate_limit: Optional[int] = None  # Example rate limit for xAI
         
-    class DeepSeek(OpenAIChatGPT):
+    class DeepSeek(AbstractLLM):
         llm_model_name:str = 'deepseek-chat'
         context_window_tokens:int = 64000
         max_output_tokens:int = 4096*2
@@ -447,7 +291,7 @@ class Model4LLMs:
         embeddings_endpoint: str = "/v1/embeddings"
         rate_limit: Optional[int] = None  # Example rate limit for xAI
         
-    class Grok(OpenAIChatGPT):
+    class Grok(AbstractLLM):
         llm_model_name:str = 'grok-beta'
         context_window_tokens:int = 128000
         max_output_tokens:int = 4096
@@ -488,85 +332,83 @@ class Model4LLMs:
     class Llama(AbstractLLM):
         llm_model_name:str = 'llama-3.2-3b'
     
-    ##################### embedding model #####
-    class AbstractEmbedding(AbstractObj):
-        vendor_id: str = 'auto'                # Vendor identifier (e.g., OpenAI, Google)
-        embedding_model_name: str              # Model name (e.g., "text-embedding-3-small")
-        embedding_dim: int                     # Dimensionality of the embeddings, e.g., 768 or 1024
-        normalize_embeddings: bool = True      # Whether to normalize the embeddings to unit vectors
-        
-        max_input_length: Optional[int] = None     # Optional limit on input length (e.g., max tokens or chars)
-        pooling_strategy: Optional[str] = 'mean'   # Pooling strategy if working with sentence embeddings (e.g., "mean", "max")
-        distance_metric:  Optional[str] = 'cosine' # Metric for comparing embeddings ("cosine", "euclidean", etc.)
-        
-        cache_embeddings: bool = False         # Option to cache embeddings to improve efficiency
-        cache: Optional[dict[str,List[float]]] = None
-        embedding_context: Optional[str] = None # Optional context or description to customize embedding generation
-        additional_features: Optional[List[str]] = None  # Additional features for embeddings, e.g., "entity", "syntax"
-        
-        def __call__(self, input_text: str) -> List[float]:
-            return self.generate_embedding(input_text)
+    class AnthropicVendor(AbstractVendor):
+        vendor_name: str = "Anthropic"
+        api_url: str = "https://api.anthropic.com"
+        chat_endpoint: str = "/v1/messages"
+        models_endpoint: str = "/v1/models"
+        embeddings_endpoint: str = "NULL"
+        default_timeout: int = 30
+        rate_limit: Optional[int] = None
 
-        def get_vendor(self):
-            return self.get_controller().get_vendor(auto=(self.vendor_id=='auto'))
-        
-        def generate_embedding(self, input_text: str) -> List[float]:
-            raise NotImplementedError("This method should be implemented by subclasses.")
-        
-        def similarity_score(self, embedding1: List[float], embedding2: List[float]) -> float:
-            raise NotImplementedError("This method should be implemented by subclasses.")
+        def format_llm_model_name(self,llm_model_name:str) -> str:            
+            return llm_model_name.lower().replace('.','-')
 
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4LLMs.AbstractEmbeddingController = None
-        def get_controller(self)->Controller4LLMs.AbstractEmbeddingController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.AbstractEmbeddingController(store,self)
+        def chat_result(self, response) -> str:
+            if "content" in response:
+                return response["content"][0]["text"]
+            return self._log_error(ValueError(f'cannot get result from {response}'))
+
+        def _build_headers(self) -> Dict[str, str]:
+            headers = super()._build_headers()
+            headers["anthropic-version"] = "2023-06-01"
+            headers["x-api-key"] = self.get_api_key()
+            headers.pop("Authorization", None)  # Remove Bearer token
+            return headers
     
-    class TextEmbedding3Small(AbstractEmbedding):
+    class AbstractClaude(AbstractLLM):
+        context_window_tokens: int = 200_000
+        max_output_tokens: int = 4096
+        
+        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:   
+            return self.claude_construct_payload(messages)
+        
+        def construct_messages(self, messages: Optional[List | str]) -> list:
+            return self.claude_construct_messages(messages)
+
+    class Claude35(AbstractClaude):
+        llm_model_name: str = "claude-3.5-sonnet-latest"
+        max_output_tokens: int = 8192
+
+    class Claude37(AbstractClaude):
+        llm_model_name: str = "claude-3.7-sonnet-latest"
+        max_output_tokens: int = 64000
+
+    ##################### embedding model #####
+    
+    class AbstractEmbedding(AbstractEmbedding, AbstractObj):
+        
+        def generate_embedding(self, input_text: str) -> np.ndarray:
+            """Generate embedding for the given text."""
+            if not input_text:
+                raise ValueError("Input text cannot be empty")
+
+            if self.max_input_length and len(input_text) > self.max_input_length:
+                input_text = input_text[:self.max_input_length]
+            
+            vendor:AbstractVendor = self.controller.get_vendor(auto=(self.vendor_id=='auto'))
+
+            # Generate embedding
+            embedding = np.array(vendor.get_embedding(
+                input_text, 
+                model=self.embedding_model_name
+            ))
+
+            # Normalize if specified
+            if self.normalize_embeddings:
+                embedding = self._normalize_embedding(embedding)
+
+            return embedding
+
+        controller: Optional[Controller4LLMs.AbstractEmbeddingController] = None
+    
+    class TextEmbedding3Small(AbstractEmbedding, AbstractObj):
         vendor_id: str = "auto"
         embedding_model_name: str = "text-embedding-3-small"
         embedding_dim: int = 1536  # As specified by OpenAI's "text-embedding-3-small" model
         normalize_embeddings: bool = True
         max_input_length: int = 8192  # Default max token length for text-embedding-3-small
         
-        def generate_embedding(self, input_text: str) -> List[float]:
-            # Check for cached result
-            if self.cache_embeddings and input_text in self.cache:
-                return self.cache[input_text]
-            
-            # Generate embedding using OpenAI API
-            embedding = self.get_vendor().get_embedding(input_text, model=self.embedding_model_name)
-            
-            # Normalize if specified
-            if self.normalize_embeddings:
-                embedding = self._normalize_embedding(embedding)
-            
-            # Cache result if caching is enabled
-            if self.cache_embeddings:
-                self.cache[input_text] = embedding
-            
-            return embedding
-
-        def similarity_score(self, embedding1: List[float], embedding2: List[float]) -> float:
-            if self.distance_metric == "cosine":
-                return self._cosine_similarity(embedding1, embedding2)
-            elif self.distance_metric == "euclidean":
-                return self._euclidean_distance(embedding1, embedding2)
-            else:
-                raise ValueError("Unsupported distance metric. Choose 'cosine' or 'euclidean'.")
-
-        def _normalize_embedding(self, embedding: List[float]) -> List[float]:
-            norm = math.sqrt(sum(x * x for x in embedding))
-            return [x / norm for x in embedding] if norm != 0 else embedding
-
-        def _cosine_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
-            dot_product = sum(x * y for x, y in zip(embedding1, embedding2))
-            norm1 = math.sqrt(sum(x * x for x in embedding1))
-            norm2 = math.sqrt(sum(y * y for y in embedding2))
-            return dot_product / (norm1 * norm2) if norm1 != 0 and norm2 != 0 else 0.0
-
-        def _euclidean_distance(self, embedding1: List[float], embedding2: List[float]) -> float:
-            return math.sqrt(sum((x - y) ** 2 for x, y in zip(embedding1, embedding2)))
-
     ##################### utils model #########
     
     class Function(AbstractObj):
@@ -628,9 +470,7 @@ class Model4LLMs:
         def get_description(self):
             return self.model_dump()#exclude=['arguments'])
 
-        _controller: Controller4LLMs.AbstractObjController = None
-        def get_controller(self)->Controller4LLMs.AbstractObjController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.AbstractObjController(store,self)
+        controller: Optional[Controller4LLMs.AbstractObjController] = None
 
     class WorkFlow(AbstractObj):
         tasks: Dict[str, list[str]] # using uuids, task and dependencies
@@ -654,7 +494,7 @@ class Model4LLMs:
                     if '__input__' not in first_task_deps:
                         self.tasks[first_task_id].append('__input__')
                 kwargs['__input__'] = [args,{}]
-            return self.get_controller().run(**kwargs)
+            return self.controller.run(**kwargs)
 
         
         def todo_list(self):
@@ -668,9 +508,7 @@ class Model4LLMs:
             return self.results.get(task_uuid, None)
         
         model_config = ConfigDict(arbitrary_types_allowed=True)    
-        _controller: Controller4LLMs.WorkFlowController = None
-        def get_controller(self)->Controller4LLMs.WorkFlowController: return self._controller
-        def init_controller(self,store):self._controller = Controller4LLMs.WorkFlowController(store,self)
+        controller: Optional[Controller4LLMs.WorkFlowController] = None
 
     @Function.param_descriptions('Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.',
                                 params='query parameters',
@@ -862,6 +700,25 @@ class LLMsStore(BasicStore):
     
     def find_all_vendors(self)->list[MODEL_CLASS_GROUP.AbstractVendor]:
         return self.find_all('*Vendor:*')
+    
+    def find_all_llms(self) -> list[MODEL_CLASS_GROUP.AbstractLLM]:
+        """Find all concrete LLM model classes (excluding abstract/utility classes)"""
+        llms = []
+        all_llms_item = dict(filter(
+            lambda item: all([
+                '_' not in item[0],
+                'Function' not in item[0], 
+                'WorkFlow' not in item[0],
+                'Vendor' not in item[0],
+                'TextEmbedding' not in item[0],
+                'Abstract' not in item[0],
+                'utils' not in str(item[1])
+            ]),
+            self.MODEL_CLASS_GROUP.__dict__.items()
+        ))
+        for k,v in all_llms_item.items():
+            llms += self.find_all(f'{k}:*')
+        return llms
 
     @staticmethod    
     def chain_dumps(cl:list[Model4Basic.AbstractObj]):
