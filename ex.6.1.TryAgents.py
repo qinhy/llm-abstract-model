@@ -134,16 +134,16 @@ french_address_llm = store.add_new(Model4LLMs.ChatGPT41Nano)(vendor_id='auto')
 triage_llm = store.add_new(Model4LLMs.ChatGPT41Nano)(vendor_id='auto')
 
 # Initialize the French address agent with its required components
-store.add_new_obj(FrenchAddressAgent(   
+french_address_agent = store.add_new_obj(FrenchAddressAgent(   
                                 french_address_llm_id=french_address_llm.get_id(),
                                 french_address_search_function_id=french_address_search_function.get_id()
-                            ),id='FrenchAddressAgent:french_address_agent')
+                            ),id='french_address_agent')
 
 # Initialize the triage agent that coordinates between different specialized agents
 store.add_new_obj(TriageAgent(
                 triage_llm_id=triage_llm.get_id(),
-                french_address_agent_id='FrenchAddressAgent:french_address_agent'
-                ),id='TriageAgent:triage_agent')
+                french_address_agent_id='french_address_agent'
+                ),id='triage_agent')
 
 # Serialize the store state for showing reusability
 data = store.dumps()
@@ -153,7 +153,7 @@ store.clean()
 store.loads(data)
 
 # Test the system with a sample GPS coordinate query
-answer = store.find_all('*triage_agent*')[0](
+answer = store.find_all('*triage_agent')[0](
                 question='My GPS shows (47.665, 3.353), I need a detailed address.',
                 debug=True)
 

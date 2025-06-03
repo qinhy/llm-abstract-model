@@ -220,7 +220,7 @@ class AbstractLLM(BaseModel):
         if not isinstance(mcp_tools_json, str):
             mcp_tools_json = json.dumps(mcp_tools_json)
         self.mcp_tools = [MCPTool(**tool) for tool in json.loads(mcp_tools_json)]
-        self.controller.update(mcp_tools=self.mcp_tools)
+        # self.controller.update(mcp_tools=self.mcp_tools)
 
     def get_tools(self) -> List[Dict[str, Any]]:
         """Get the tools available to this LLM in the format expected by the vendor.

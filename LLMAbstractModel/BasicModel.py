@@ -217,6 +217,13 @@ class BasicStore(SingletonKeyValueStorage):
         if res is None: raise ValueError(f'No such class of {class_type}')
         return res
     
+    def _auto_fix_id(self,obj:MODEL_CLASS_GROUP.AbstractObj, id:str="None"):
+        class_type = id.split(':')[0]
+        obj_class_type = obj.__class__.__name__
+        if class_type != obj_class_type:
+            id = f'{obj_class_type}:{id}'
+        return id
+    
     def _get_as_obj(self,id,data_dict)->MODEL_CLASS_GROUP.AbstractObj:
         obj:Model4Basic.AbstractObj = self._get_class(id)(**data_dict)
         obj.set_id(id).init_controller(self)
@@ -224,6 +231,7 @@ class BasicStore(SingletonKeyValueStorage):
     
     def _add_new_obj(self, obj:MODEL_CLASS_GROUP.AbstractObj, id:str=None):
         id,d = obj.gen_new_id() if id is None else id, obj.model_dump_json_dict()
+        id = self._auto_fix_id(obj,id)
         self.set(id,d)
         return self._get_as_obj(id,d)
     
@@ -250,7 +258,11 @@ class BasicStore(SingletonKeyValueStorage):
     
     def find(self,id:str) -> MODEL_CLASS_GROUP.AbstractObj:
         raw = self.get(id)
-        if raw is None:return None
+        if raw is None:
+            raws = self.find_all(f'*:{id}')
+            if len(raws)==1:
+                return raws[0]
+            return None
         return self._get_as_obj(id,raw)
     
     def find_all(self,id:str=f'AbstractObj:*')->list[MODEL_CLASS_GROUP.AbstractObj]:

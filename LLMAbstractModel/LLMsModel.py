@@ -170,7 +170,7 @@ class Controller4LLMs:
     class ChatGPT41Controller(AbstractLLMController): pass
     class ChatGPT41MiniController(AbstractLLMController): pass
     class ChatGPT41NanoController(AbstractLLMController): pass
-    class GPT45Controller(AbstractLLMController): pass
+    class ChatGPT45Controller(AbstractLLMController): pass
     class ChatGPTO3Controller(AbstractLLMController): pass
     class ChatGPTO3MiniController(AbstractLLMController): pass
     class DeepSeekVendorController(AbstractVendorController): pass
@@ -214,6 +214,10 @@ class Model4LLMs:
         def get_vendor(self)->AbstractVendor:
             return self.controller.get_vendor(auto=(self.vendor_id=='auto'))
 
+        def set_mcp_tools(self, mcp_tools_json = '{}'):            
+            super().set_mcp_tools(mcp_tools_json)
+            self.controller.update(mcp_tools=self.mcp_tools)
+
     class OpenAIVendor(OpenAIVendor, AbstractVendor, AbstractObj):
         pass
 
@@ -243,7 +247,7 @@ class Model4LLMs:
     class ChatGPT41Nano(ChatGPT41):
         llm_model_name:str = 'gpt-4.1-nano'
 
-    class GPT45(AbstractChatGPT):
+    class ChatGPT45(AbstractChatGPT):
         llm_model_name:str = 'gpt-4.5'
         context_window_tokens:int = 128000
         max_output_tokens:int = 128000
