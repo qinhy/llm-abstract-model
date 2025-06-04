@@ -50,6 +50,7 @@ async def openai_call_tools(res):
         tool_call_id = call['id']
         if not tool_data: continue
         tool_name = tool_data['name']
+        print(f'calling func: {tool_name}')
         tool_args = json.loads(tool_data['arguments'])
         results.append({'role': 'tool','name': tool_name,
             'tool_call_id':tool_call_id})
@@ -102,11 +103,11 @@ print(llm('tell me your tools.'))
 print(one_query('How many "r" in "raspberrypi"?',llm))
 
 # ### advance with History in ex.8.TryAgentsAndHistory.py
-# agent = HistoryAssistantAgent(llm=llm)
-# llm.set_mcp_tools(asyncio.run(get_tools()))
-# rres = agent('How many "r" in "raspberrypi"?')
-# fs = asyncio.run(openai_call_tools(rres))
-# [agent.add_funres_history(**i) for i in fs]
-# # agent.print_tree()
-# # agent.prepare_openai_his_messages(agent.history_retrieval(10))
+from ex_8_TryAgentsAndHistory import HistoryAssistantAgent
+agent = HistoryAssistantAgent(llm=llm)
+agent.set_mcp_tools(
+            asyncio.run(get_tools()),
+            lambda rs:asyncio.run(openai_call_tools(rs))
+    )
+print(agent('How many "r" in "raspberrypi"?',auto_tool=True))
 # agent("Please give me the final answer.")

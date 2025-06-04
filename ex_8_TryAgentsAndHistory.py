@@ -90,6 +90,7 @@ class HistoryAssistantAgent(BaseModel):
     # text_embedding: Model4LLMs.AbstractEmbedding = None
     history_root: TextContentNode = TextContentNode()
     history_last: TextContentNode = None
+    _ts_call: Optional[callable] = None
 
     def print_tree(self, node: Optional[TextContentNode] = None, level: int = 0, is_print=True):
         res = ''
@@ -161,13 +162,22 @@ class HistoryAssistantAgent(BaseModel):
                 
         return msgs
 
-    def __call__(self, qustion: str, system_prompt:str=None, last_k: int=4, print_history=True) -> str:
+    def set_mcp_tools(self, ts=[], call_func=None):
+        self.llm.set_mcp_tools(ts)
+        if call_func:
+            self._ts_call = call_func
+
+    def __call__(self, qustion: str, system_prompt:str=None,
+                 last_k: int=4, print_history=True,
+                 auto_tool=False) -> str:
         tmp = self.llm.system_prompt
         self.llm.system_prompt = system_prompt
 
         history = self.history_retrieval(last_k)
         msgs = self.prepare_openai_his_messages(history)
-        msgs.append({'role':'user','content':qustion})
+
+        if qustion:
+            msgs.append({'role':'user','content':qustion})
 
         if print_history:
             print("############ For Debug ##############")
@@ -176,15 +186,24 @@ class HistoryAssistantAgent(BaseModel):
             [print(i) for i in msgs]
             print("#####################################")
 
-        self.add_history(qustion)
+        if qustion:
+            self.add_history(qustion)
+
         response = self.llm(msgs)
         if 'calls' in response:
             self.add_funcalls_history(
                 json.dumps(response['calls']),response['content'])
         else:
-            self.add_history(response,'assistant')        
+            self.add_history(response,'assistant')    
 
         self.llm.system_prompt = tmp
+
+        if auto_tool:
+            if self._ts_call is None:
+                raise ValueError('call method is no set, only has info of tools.')
+            fs = self._ts_call(response)
+            [self.add_funres_history(**i) for i in fs]
+            return self('')
         return response
 
 # Functions for secure data storage and retrieval using RSA key pair
