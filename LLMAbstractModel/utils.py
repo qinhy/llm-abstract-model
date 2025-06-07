@@ -163,20 +163,21 @@ class TextFile(Model4Basic.AbstractObj):
 # text_file.close()
 
 def traverse_files(folder_path, ext='.md', recursive=True):
-    files:list[str] = []
+    ext_files:list[str] = []
 
     if recursive:
         for root, _, files in os.walk(folder_path):
             for file in files:
                 if file.lower().endswith(ext):
-                    files.append(os.path.join(root, file))
+                    ext_files.append(os.path.join(root, file))
     else:
         for file in os.listdir(folder_path):
             full_path = os.path.join(folder_path, file)
             if os.path.isfile(full_path) and file.lower().endswith(ext):
-                files.append(full_path)
+                ext_files.append(full_path)
 
-    return files
+    return ext_files
+
 
 def create_file_forcefully(file_path, content=''):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -197,3 +198,12 @@ def files2files(in_dir,out_dir,ext='.md',transfunc=lambda x:x,overwrite=False):
         op = p.replace(in_dir,out_dir)
         if os.path.exists(op) and not overwrite:continue
         yield file2file(p,op,transfunc)
+
+def files2file(in_dir,out_path,ext='.md',transfunc=lambda x:x,overwrite=False):
+    s = ''
+    for p in traverse_files(in_dir,ext,True):
+        with open(p, 'r', encoding='utf-8') as f: s+=f.read()
+    if os.path.exists(out_path) and not overwrite:return False
+    create_file_forcefully(out_path,transfunc(s))
+    return True
+    
