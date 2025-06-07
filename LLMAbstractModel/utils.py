@@ -55,11 +55,10 @@ class ClassificationTemplate(Model4LLMs.Function):
                 results.append(False)
 
         return results
-    
-store = LLMsStore()
-store.add_new_obj(RegxExtractor(regx='')).get_controller().delete()
-store.add_new_obj(StringTemplate(string='')).get_controller().delete()
-store.add_new_obj(ClassificationTemplate()).get_controller().delete()
+
+LLMsStore().add_new_obj(RegxExtractor(regx='')).controller.delete()
+LLMsStore().add_new_obj(StringTemplate(string='')).controller.delete()
+LLMsStore().add_new_obj(ClassificationTemplate()).controller.delete()
 
 class TextFile(Model4Basic.AbstractObj):
     file_path: str
@@ -164,11 +163,13 @@ class TextFile(Model4Basic.AbstractObj):
 
 def traverse_files(folder_path, ext='.md', recursive=True):
     ext_files:list[str] = []
+    ext_files:list[str] = []
 
     if recursive:
         for root, _, files in os.walk(folder_path):
             for file in files:
                 if file.lower().endswith(ext):
+                    ext_files.append(os.path.join(root, file))
                     ext_files.append(os.path.join(root, file))
     else:
         for file in os.listdir(folder_path):

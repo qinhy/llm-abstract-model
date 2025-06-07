@@ -50,7 +50,7 @@ workflow:Model4LLMs.WorkFlow = store.add_new_obj(
         }))
 
 # Run the workflow
-myprint('workflow.get_controller().run()')
+myprint('workflow.controller.run()')
 ## -> 13
 
 # Retrieve and print the result of each task
@@ -95,8 +95,8 @@ workflow = store.add_new_workflow(
 myprint('workflow(input=[(),dict(text="こんにちは！はじめてのチェーン作りです！")])')
 ## -> Hello! This is my first time making a chain!
 
-workflow.get_controller().delete()
-input_template.get_controller().delete()
+workflow.controller.delete()
+input_template.controller.delete()
 
 # also support seqential list input
 input_template = store.add_new_function(
