@@ -4,7 +4,7 @@ import json
 from typing import Optional
 import unittest
 from uuid import uuid4
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field
 
 try:
@@ -13,7 +13,7 @@ except Exception as e:
     from Storage import SingletonKeyValueStorage
 
 def now_utc():
-    return datetime.now().replace(tzinfo=ZoneInfo("UTC"))
+    return datetime.now(timezone.utc)
 
 class BasicModel(BaseModel):
     def __call__(self, *args, **kwargs):
