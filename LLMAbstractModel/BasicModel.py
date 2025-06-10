@@ -6,11 +6,7 @@ import unittest
 from uuid import uuid4
 from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field
-
-try:
-    from .Storage import SingletonKeyValueStorage
-except Exception as e:
-    from Storage import SingletonKeyValueStorage
+from .Storage import SingletonKeyValueStorage
 
 def now_utc():
     return datetime.now(timezone.utc)
