@@ -1,8 +1,10 @@
 
 import json
+from typing import Optional
+from pydantic import BaseModel, Field
 import requests
 from LLMAbstractModel.utils import RegxExtractor
-from LLMAbstractModel import LLMsStore,Model4LLMs
+from LLMAbstractModel import LLMsStore,Model4LLMs,MermaidWorkflowFunction
 descriptions = Model4LLMs.Function.param_descriptions
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
@@ -10,28 +12,48 @@ def myprint(string):
 store = LLMsStore()
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
 
+class FrenchReverseGeocodeFunction(MermaidWorkflowFunction):
+    description="French reverse geocode coordinates to an address"
+    
+    class Parameters(BaseModel):
+        lon: float = Field(..., description="Longitude")
+        lat: float = Field(..., description="Latitude")
 
-## add French Address Search function
-@descriptions('French reverse geocode coordinates to an address', lon='longitude', lat='latitude')
-class FrenchReverseGeocodeFunction(Model4LLMs.Function):
+    class Returns(BaseModel):
+        address: Optional[dict] = Field(None, description="Geocoded address result from French government API")
+        success: bool = Field(..., description="True if API call was successful")
+        error: Optional[str] = Field(None, description="Error message, if any")
 
-    def __call__(self, lon: float, lat: float, debug=False):
-        debugprint = lambda msg:print(f'--> [french_address_search_function]: {msg}') if debug else lambda:None
-        # Construct the URL with the longitude and latitude parameters
-        url = f"https://api-adresse.data.gouv.fr/reverse/?lon={lon}&lat={lat}"        
-        # Perform the HTTP GET request
-        debugprint(f'Searching address with: [{dict(url=url)}]')
-        response = requests.get(url)        
-        # Check if the request was successful
-        if response.status_code == 200:
-            # Return the JSON data from the response
-            response = response.json()
-        else:
-            # Handle the error case
-            response = {'error': f"Request failed with status code {response.status_code}"}
-        
-        debugprint(f'Got response: [{dict(response=response)}]')
-        return response
+    para: Parameters
+    rets: Optional[Returns] = None
+
+    def __init__(self, para: Parameters, rets: Optional[Returns] = None, debug: bool = False):
+        self.debug = debug
+        super().__init__(para=para, rets=rets)
+        self()
+
+    def __call__(self):
+        def debugprint(msg):
+            if self.debug:
+                print(f'--> [FrenchReverseGeocodeFunction]: {msg}')
+
+        lon, lat = self.para.lon, self.para.lat
+        url = f"https://api-adresse.data.gouv.fr/reverse/?lon={lon}&lat={lat}"
+        debugprint(f"Querying URL: {url}")
+
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+            debugprint(f"Received data: {data}")
+            self.rets = self.Returns(address=data, success=True)
+        except Exception as e:
+            error_msg = f"Request failed: {e}"
+            debugprint(error_msg)
+            self.rets = self.Returns(address=None, success=False, error=error_msg)
+
+        return self.rets
+
 
 
 # Workflow function for querying French address agent and handling responses
