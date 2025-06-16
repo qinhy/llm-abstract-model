@@ -140,7 +140,7 @@ class Model4Basic:
             self.controller.delete()
         
         def __del__(self):
-            if self.auto_del: self.__obj_del__()
+            if hasattr(self,'auto_del') and self.auto_del: self.__obj_del__()
         
         def model_dump_json_dict(self):
             return json.loads(self.model_dump_json())

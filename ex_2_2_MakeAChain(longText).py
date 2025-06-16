@@ -17,7 +17,8 @@ You should reply summarizations only, without any additional information.
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key="OPENAI_API_KEY")#auto check os.environ
 llm = chatgpt = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',system_prompt=system_prompt)
 
-msg_template = store.add_new_function(StringTemplate(string='''
+msg_template = store.add_new_function(StringTemplate(para=dict(
+     string='''
 Please reply summarizations in {}, and should not over {} words.
 ## Text Snippet
 ```text
@@ -26,9 +27,10 @@ Please reply summarizations in {}, and should not over {} words.
 ## Previous Summarizations
 ```summarization
 {}
-```'''))
+```'''
+)))
 
-res_ext = store.add_new_function(RegxExtractor(regx=r"```summarization\s*(.*)\s*\n```"))
+res_ext = store.add_new_function(RegxExtractor(para=dict(regx=r"```summarization\s*(.*)\s*\n```")))
 
 def test_summary(llm = llm,
                  f='The Adventures of Sherlock Holmes.txt',

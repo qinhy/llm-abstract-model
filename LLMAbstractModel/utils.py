@@ -24,9 +24,10 @@ class RegxExtractor(Model4LLMs.MermaidWorkflowFunction):
     args: Args = Args()
     rets: Return = Return()
             
-    def __call__(self):
+    def __call__(self,text:str):
+        self.args.text = text
         self.rets.data = self.extract(self.args.text)
-        return self
+        return self.rets.data
     
     def extract(self,text,only_first=True)->str:
         matches = re.findall(self.para.regx, text, re.DOTALL)        
@@ -44,18 +45,18 @@ class RegxExtractor(Model4LLMs.MermaidWorkflowFunction):
 class StringTemplate(Model4LLMs.MermaidWorkflowFunction): 
     description:str = Field('Extract text by regx pattern')
     
-    class Args(BaseModel):
+    class Param(BaseModel):
         string:str = Field(description='string of f"..."')
 
     class Return(BaseModel):
         data: str = ''
 
-    args: Args
+    para: Param
     rets: Return = Return()
                 
     def __call__(self,*args,**kwargs):
-        self.rets.data = self.args.string.format(*args,**kwargs)
-        return self
+        self.rets.data = self.para.string.format(*args,**kwargs)
+        return self.rets.data
 
 
 # @descriptions('Classification Template for performing conditional checks on a target',

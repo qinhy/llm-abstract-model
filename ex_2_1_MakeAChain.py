@@ -18,10 +18,12 @@ llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',#vendor.get_i
 
 print('############# make a message template')
 translate_template = store.add_new_function(
-    StringTemplate(string='''
+    StringTemplate(para=dict(
+        string='''
 ```text
 {}
-```'''))
+```'''
+    )))
 # the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
 print(translate_template('こんにちは！はじめてのチェーン作りです！'))
 # -> ...
@@ -33,7 +35,7 @@ print(llm( translate_template('こんにちは！はじめてのチェーン作�
 
 store:LLMsStore = store
 print('############# make a "translation" extractor, strings between " ```translation " and " ``` "')
-get_result = store.add_new_function(RegxExtractor(regx=r"```translation\s*(.*)\s*\n```"))
+get_result = store.add_new_function(RegxExtractor(para=dict(regx=r"```translation\s*(.*)\s*\n```")))
 
 # this just a chain like processs
 print(get_result(
@@ -86,10 +88,11 @@ llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto')
 
 # we use raw json to do template
 translate_template = store.add_new_function(
-    StringTemplate(string='''[
+    StringTemplate(para=dict(
+        string='''[
     {{"role":"system","content":"You are an expert in translation text.I will you provide text. Please tranlate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n```translation\\n...\\n```"}},
     {{"role":"user","content":"\\nPlease translate the text in{}.\\n```text\\n{}\\n```"}}
-]'''))
+]''')))
 # the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
 print(translate_template('to English','こんにちは！はじめてのチェーン作りです！'))
 # -> [

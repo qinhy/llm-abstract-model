@@ -40,16 +40,18 @@ llm = store.add_new_llm(Model4LLMs.ChatGPT4o)(
                         vendor_id=vendor.get_id(),system_prompt=system_prompt,limit_output_tokens=2048)
 
 # Please reply refactored code in {}, and should not over {} words.
-msg_template = store.add_new_function(StringTemplate(string='''
+msg_template = store.add_new_function(StringTemplate(para=dict(
+     string='''
 ```Reference
 {}
 ```
 
 ```Refactored
 {}
-```'''))
+```'''
+)))
 
-res_ext = store.add_new_function(RegxExtractor(regx=r"```Continue\s*(.*)\s*\n```"))
+res_ext = store.add_new_function(RegxExtractor(para=dict(regx=r"```Continue\s*(.*)\s*\n```")))
 
 ############# make a custom chain 
 from functools import reduce

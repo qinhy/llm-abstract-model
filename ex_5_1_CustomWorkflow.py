@@ -1,36 +1,52 @@
 
 import json
+from typing import Optional
+
+from pydantic import BaseModel, Field
 from LLMAbstractModel.utils import StringTemplate, RegxExtractor
 from LLMAbstractModel import LLMsStore,Model4LLMs
-descriptions = Model4LLMs.Function.param_descriptions
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
 store = LLMsStore()
 
 ## add custom function
-@descriptions('Add two numbers', x='first number', y='second number')
 class AddFunction(Model4LLMs.Function):
+    description:str = 'Add two numbers'
+    class Args(BaseModel):
+         x:int=Field(description='first number')
+         y:int=Field(description='second number')
+    class Return(BaseModel):
+         n:int=Field(description='Added result')
+    args:Args
+    rets:Optional[Return]=None
     def __call__(self, x: int, y: int):
-        return x + y
+        self.args.x,self.args.y = x,y
+        self.rets.n = x+y
+        return self.rets.n
 
-@descriptions('Multiply a number by 2', x='number to multiply')
 class MultiplyFunction(Model4LLMs.Function):
+    description:str = 'Multiply a number by 2',
+    class Args(BaseModel):
+         x:int=Field(description='number to multiply')
     def __call__(self, x: int):
         return x * 2
 
-@descriptions('Subtract second number from first', x='first number', y='second number')
 class SubtractFunction(Model4LLMs.Function):
+    description:str = 'Subtract second number from first'
+    class Args(BaseModel):
+         x:int=Field(description='first number')
+         y:int=Field(description='second number')
     def __call__(self, x: int, y: int):
         return x - y
 
-@descriptions('Return a constant value of 5')
 class ConstantFiveFunction(Model4LLMs.Function):
+    description:str = 'Return a constant value of 5'
     def __call__(self):
         return 5
 
-@descriptions('Return a constant value of 3')
 class ConstantThreeFunction(Model4LLMs.Function):
+    description:str = 'Return a constant value of 3'
     def __call__(self):
         return 3
 
