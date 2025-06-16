@@ -403,9 +403,23 @@ class Model4LLMs:
         
     ##################### utils model #########
     class MermaidWorkflowFunction(MWFFunction, AbstractObj):
+        description: str = Field(..., description="description of this function.")
+        class Param(BaseModel):
+            """Static parameters that configure the function behavior."""
+            pass
+        class Args(BaseModel):
+            """Input arguments received from predecessor nodes."""
+            pass
+        class Return(BaseModel):
+            """Output values passed to successor nodes."""
+            pass
+
+        para: Optional[Param] = None
+        args: Optional[Args] = None
+        rets: Optional[Return] = None
         run_at_init:bool = False
 
-        def model_post_init(self):
+        def model_post_init(self, context: Any, /) -> None:
             if self.run_at_init:
                 self()
 

@@ -17,9 +17,9 @@ vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
 #     description=t.model_fields['description'].default)
 
 class FrenchReverseGeocodeFunction(Model4LLMs.MermaidWorkflowFunction):
-    description:str = Field("French reverse geocode coordinates to an address")
-    
-    class Parameters(BaseModel):
+    description:str = "French reverse geocode coordinates to an address"
+
+    class Args(BaseModel):
         lon: float = Field(..., description="Longitude")
         lat: float = Field(..., description="Latitude")
 
@@ -28,20 +28,16 @@ class FrenchReverseGeocodeFunction(Model4LLMs.MermaidWorkflowFunction):
         success: bool = Field(..., description="True if API call was successful")
         error: Optional[str] = Field(None, description="Error message, if any")
 
-    para: Parameters
+    args: Optional[Args] = None
     rets: Optional[Returns] = None
-
-    def __init__(self, para: Parameters, rets: Optional[Returns] = None, debug: bool = False):
-        self.debug = debug
-        super().__init__(para=para, rets=rets)
-        self()
+    debug: bool = False
 
     def __call__(self):
         def debugprint(msg):
             if self.debug:
                 print(f'--> [FrenchReverseGeocodeFunction]: {msg}')
 
-        lon, lat = self.para.lon, self.para.lat
+        lon, lat = self.args.lon, self.args.lat
         url = f"https://api-adresse.data.gouv.fr/reverse/?lon={lon}&lat={lat}"
         debugprint(f"Querying URL: {url}")
 
@@ -87,7 +83,7 @@ please only reply with the following json in markdown format:
         store = self.controller.storage()
         french_address_llm:Model4LLMs.AbstractLLM = store.find(self.french_address_llm_id)
         french_address_llm.system_prompt = self.french_address_system_prompt
-        french_address_search_function = store.find(self.french_address_search_function_id)
+        french_address_search_function:FrenchReverseGeocodeFunction = store.find(self.french_address_search_function_id)
         
         while True:
             debugprint(f'Asking french_address_llm with: [{dict(question=query)}]')
@@ -98,9 +94,11 @@ please only reply with the following json in markdown format:
                 coord_or_query = json.loads(coord_or_query)
             
             # If the response contains coordinates, perform a reverse geocode search
-            if isinstance(coord_or_query, dict) and "lon" in coord_or_query and "lat" in coord_or_query:
+            if isinstance(coord_or_query, dict):
+                french_address_search_function.args = FrenchReverseGeocodeFunction.Args.model_validate(coord_or_query)
+                french_address_search_function.debug=debug
                 debugprint(f'[french_address_search_function]: Searching address with coordinates: [{coord_or_query}]')
-                query = french_address_search_function(**coord_or_query,debug=debug)
+                query = french_address_search_function()
                 query = f'\n## Question\n{question}\n## Information\n```\n{query}\n```\n'
             else:
                 # Return the final response if no coordinates were found
@@ -114,7 +112,7 @@ class TriageAgent(Model4LLMs.MermaidWorkflowFunction):
 
     triage_llm_id:str
     french_address_agent_id:str
-    agent_extract:RegxExtractor = RegxExtractor(regx=r"```agent\s*(.*)\s*\n```")
+    agent_extract:RegxExtractor = RegxExtractor(para=dict(regx=r"```agent\s*(.*)\s*\n```"))
     triage_system_prompt:str='''
 You are a professional guide who can connect the asker to the correct agent.
 Additionally, you are a skilled leader who can respond to questions using the agents' answer.

@@ -8,10 +8,10 @@ from .BasicModel import Model4Basic
 from .LLMsModel import LLMsStore, Model4LLMs
 
 class RegxExtractor(Model4LLMs.MermaidWorkflowFunction):    
-    description:str = 'Extract text by regx pattern'
+    description:str = Field('Extract text by regx pattern')
     
     class Param(BaseModel):            
-        regx:str = Field(...,description='regx pattern')
+        regx:str = Field(..., description='regx pattern')
         is_json:bool=False
 
     class Args(BaseModel):
@@ -21,7 +21,7 @@ class RegxExtractor(Model4LLMs.MermaidWorkflowFunction):
         data: Optional[str|dict|list[dict]] = None
 
     para: Param
-    args: Args = Args
+    args: Args = Args()
     rets: Return = Return()
             
     def __call__(self):
