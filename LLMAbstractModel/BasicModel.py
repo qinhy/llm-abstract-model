@@ -1,7 +1,7 @@
 # from https://github.com/qinhy/singleton-key-value-storage.git
 from datetime import datetime
 import json
-from typing import Optional
+from typing import Optional, Type
 import unittest
 from uuid import uuid4
 from datetime import datetime, timezone
@@ -230,6 +230,10 @@ class BasicStore(SingletonKeyValueStorage):
         id = self._auto_fix_id(obj,id)
         self.set(id,d)
         return self._get_as_obj(id,d)
+    
+    def add_new_class(self,obj_class_type:Type[MODEL_CLASS_GROUP.AbstractObj]):
+        if not hasattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__):
+            setattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__,obj_class_type)
     
     def add_new(self, obj_class_type=MODEL_CLASS_GROUP.AbstractObj,id:str=None):#, id:str=None)->MODEL_CLASS_GROUP.AbstractObj:
         obj_name = obj_class_type.__name__

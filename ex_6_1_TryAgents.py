@@ -4,16 +4,20 @@ from typing import Optional
 from pydantic import BaseModel, Field
 import requests
 from LLMAbstractModel.utils import RegxExtractor
-from LLMAbstractModel import LLMsStore,Model4LLMs,MermaidWorkflowFunction
-descriptions = Model4LLMs.Function.param_descriptions
+from LLMAbstractModel import LLMsStore,Model4LLMs
+
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
 store = LLMsStore()
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
 
-class FrenchReverseGeocodeFunction(MermaidWorkflowFunction):
-    description="French reverse geocode coordinates to an address"
+# def add_tool(t:Type[MermaidWorkflowFunction]):        
+#     mcp.add_tool(t, 
+#     description=t.model_fields['description'].default)
+
+class FrenchReverseGeocodeFunction(Model4LLMs.MermaidWorkflowFunction):
+    description:str = Field("French reverse geocode coordinates to an address")
     
     class Parameters(BaseModel):
         lon: float = Field(..., description="Longitude")
@@ -55,12 +59,13 @@ class FrenchReverseGeocodeFunction(MermaidWorkflowFunction):
         return self.rets
 
 
-
 # Workflow function for querying French address agent and handling responses
-@descriptions('Workflow function of querying French address agent', question='The question to ask the LLM')
-class FrenchAddressAgent(Model4LLMs.Function):
+class FrenchAddressAgent(Model4LLMs.MermaidWorkflowFunction):
+    description:str = Field('Workflow function of querying French address agent')
+    # question:str = Field(...,description='The question to ask the LLM')
+    
     french_address_llm_id:str
-    first_json_extract:RegxExtractor = RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True)
+    first_json_extract:RegxExtractor = RegxExtractor(para=dict(regx=r"```json\s*(.*)\s*\n```", is_json=True))
     french_address_search_function_id:str
     french_address_system_prompt:str='''
 You are familiar with France and speak English.
@@ -104,8 +109,9 @@ please only reply with the following json in markdown format:
                 return answer
 
 # Workflow for handling triage queries and routing to the appropriate agent
-@descriptions('Workflow function of triage queries and routing to the appropriate agent', question='The question to ask the LLM')
-class TriageAgent(Model4LLMs.Function):
+class TriageAgent(Model4LLMs.MermaidWorkflowFunction):
+    description:str = Field('Workflow function of triage queries and routing to the appropriate agent')
+
     triage_llm_id:str
     french_address_agent_id:str
     agent_extract:RegxExtractor = RegxExtractor(regx=r"```agent\s*(.*)\s*\n```")

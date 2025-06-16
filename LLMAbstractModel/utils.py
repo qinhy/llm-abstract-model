@@ -1,64 +1,85 @@
 import json
 import os
 import re
-from pydantic import Field
+from pydantic import BaseModel, Field
 from typing import Any, Callable, Optional, List
 
 from .BasicModel import Model4Basic
 from .LLMsModel import LLMsStore, Model4LLMs
 
-descriptions = Model4LLMs.Function.param_descriptions
-@descriptions('Extract text by regx pattern',
-              text='input text')
-class RegxExtractor(Model4LLMs.Function):
-    regx:str = Field(description='regx pattern')
-    is_json:bool=False
-    def __call__(self,text:str):
-        return self.extract(text)
+class RegxExtractor(Model4LLMs.MermaidWorkflowFunction):    
+    description:str = 'Extract text by regx pattern'
+    
+    class Param(BaseModel):            
+        regx:str = Field(...,description='regx pattern')
+        is_json:bool=False
+
+    class Args(BaseModel):
+        text:str = ''
+
+    class Return(BaseModel):
+        data: Optional[str|dict|list[dict]] = None
+
+    para: Param
+    args: Args = Args
+    rets: Return = Return()
+            
+    def __call__(self):
+        self.rets.data = self.extract(self.args.text)
+        return self
     
     def extract(self,text,only_first=True)->str:
-        matches = re.findall(self.regx, text, re.DOTALL)        
+        matches = re.findall(self.para.regx, text, re.DOTALL)        
         if not self._try_binary_error(lambda:matches[0]):
-            self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
+            self._log_error(ValueError(f'cannot match {self.para.regx} at {text}'))
             return text
         if only_first:
             m = matches[0]
-            if self.is_json:return json.loads(m)
+            if self.para.is_json:return json.loads(m)
             return m
         else:
-            if self.is_json:return [json.loads(m) for m in matches]
+            if self.para.is_json:return [json.loads(m) for m in matches]
             return matches
 
-@descriptions('String Template for format function',
-              args='string.format args')
-class StringTemplate(Model4LLMs.Function):
-    string:str = Field(description='string of f"..."')
+class StringTemplate(Model4LLMs.MermaidWorkflowFunction): 
+    description:str = Field('Extract text by regx pattern')
+    
+    class Args(BaseModel):
+        string:str = Field(description='string of f"..."')
+
+    class Return(BaseModel):
+        data: str = ''
+
+    args: Args
+    rets: Return = Return()
+                
     def __call__(self,*args,**kwargs):
-        return self.string.format(*args,**kwargs)
+        self.rets.data = self.args.string.format(*args,**kwargs)
+        return self
 
 
-@descriptions('Classification Template for performing conditional checks on a target',
-              target='The object or value to be classified',
-              condition_funcs='List of condition functions to evaluate the target')
-class ClassificationTemplate(Model4LLMs.Function):
-    def __call__(self, target: Any, condition_funcs: List[Callable[[Any], Any]] = []) -> List[bool]:
-        # Initialize an empty result list
-        results = []
-        for idx, func in enumerate(condition_funcs):
-            try:
-                # Attempt to apply the function to the target and ensure it's a boolean result
-                result = bool(func(target))
-                results.append(result)
-            except Exception as e:
-                # Log the error gracefully and append False as a default failure value
-                print(f"Error in condition function {idx} for target {target}: {e}")
-                results.append(False)
+# @descriptions('Classification Template for performing conditional checks on a target',
+#               target='The object or value to be classified',
+#               condition_funcs='List of condition functions to evaluate the target')
+# class ClassificationTemplate(Model4LLMs.Function):
+#     def __call__(self, target: Any, condition_funcs: List[Callable[[Any], Any]] = []) -> List[bool]:
+#         # Initialize an empty result list
+#         results = []
+#         for idx, func in enumerate(condition_funcs):
+#             try:
+#                 # Attempt to apply the function to the target and ensure it's a boolean result
+#                 result = bool(func(target))
+#                 results.append(result)
+#             except Exception as e:
+#                 # Log the error gracefully and append False as a default failure value
+#                 print(f"Error in condition function {idx} for target {target}: {e}")
+#                 results.append(False)
 
-        return results
+#         return results
 
-LLMsStore().add_new_obj(RegxExtractor(regx='')).controller.delete()
-LLMsStore().add_new_obj(StringTemplate(string='')).controller.delete()
-LLMsStore().add_new_obj(ClassificationTemplate()).controller.delete()
+LLMsStore().add_new_class(RegxExtractor)
+LLMsStore().add_new_class(StringTemplate)
+# LLMsStore().add_new_obj(ClassificationTemplate()).controller.delete()
 
 class TextFile(Model4Basic.AbstractObj):
     file_path: str
