@@ -1,22 +1,31 @@
 # https://github.com/qinhy/mermaid-workflow-python
 
-from collections import defaultdict
-from graphlib import TopologicalSorter
-from pydantic import BaseModel, create_model
-from typing import (
-    Any, 
-    Annotated,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    Union
-)
 import json
 import re
+from collections import defaultdict
+from graphlib import TopologicalSorter
+from typing import Any, Callable, DefaultDict, Dict, List, Optional, Tuple, Type, Union
 
+from pydantic import BaseModel, Field, create_model
+
+class GraphNode(BaseModel):
+    prev: List[str] = Field(default_factory=list)
+    next: List[str] = Field(default_factory=list)
+    config: Dict[str, dict] = Field(default_factory=dict)
+    maps: Dict[str, dict] = Field(default_factory=dict)
+
+Graph = DefaultDict[str, GraphNode]
+
+def mermaid_protocol()->str:
+    return '''
+### 📌 Mermaid Graph Protocol (for beginners):
+* `graph TD` → Start of a top-down Mermaid flowchart
+* `NodeName[_optionalID]["{{...}}"]` (e.g., `ResizeImage_01`) → Define a node with initialization parameters in JSON-like format
+* The initialization parameters **must not contain mapping information** — only raw valid values (e.g., numbers, strings, booleans)
+* `A --> B` → Connect node A to node B (no field mapping)
+* `A -- "{{'x':'y'}}" --> B` → Map output field `'x'` from A to input field `'y'` of B
+* Use **valid field names** from each tool's input/output schema
+'''
 
 def parse_mermaid(mermaid_text: str="""
 graph TD
@@ -30,21 +39,14 @@ graph TD
     ResizeImage_01 --> BlurImage
     BlurImage --> BlurImage_2
     BlurImage_2 --> ResizeImage
-                  
-%% ### 📌 Mermaid Graph Protocol (for beginners):
-%% * `graph TD` → Start of a top-down Mermaid flowchart
-%% * `NodeName[_optionalID]["{{...}}"]` (e.g., `ResizeImage_01`) → Define a node with initialization parameters in JSON-like format
-%% * The initialization parameters **must not contain mapping information** — only raw valid values (e.g., numbers, strings, booleans)
-%% * `A --> B` → Connect node A to node B (no field mapping)
-%% * `A -- "{{'x':'y'}}" --> B` → Map output field `'x'` from A to input field `'y'` of B
-%% * Use **valid field names** from each tool's input/output schema
-""") -> dict:
+"""):
     
     lines = [l.strip() for l in mermaid_text.strip().splitlines()]
     lines = [l for l in lines if ('["{' in l) or ('--' in l)]
     lines = [l for l in lines if '["{}"]' not in l]
     lines = [l for l in lines if not l.startswith('%%')]
-    graph = defaultdict(lambda: {"prev": [], "next": [], "config": {}, "maps": {}})
+    # graph = defaultdict(lambda: {"prev": [], "next": [], "config": {}, "maps": {}})
+    graph: Graph = defaultdict(GraphNode)
 
     node_pattern = re.compile(r'^([\w-]+)\s*\[\s*"(.+)"\s*\]$')
     map_pattern = re.compile(r'^([\w-]+)\s*--\s*"(.*?)"\s*-->\s*([\w-]+)$')
@@ -65,22 +67,22 @@ graph TD
             node, cfg = m.groups()
             parsed = parse_json(cfg)
             if parsed is not None:
-                graph[node]["config"] = parsed
+                graph[node].config = parsed
             continue
         m = map_pattern.match(l)
         if m:
             src, cfg, dst = m.groups()
-            graph[src]["next"].append(dst)
-            graph[dst]["prev"].append(src)
+            graph[src].next.append(dst)
+            graph[dst].prev.append(src)
             parsed = parse_json(cfg)
             if parsed is not None:
-                graph[src]["maps"][dst] = parsed
+                graph[src].maps[dst] = parsed
             continue
         m = simple_pattern.match(l)
         if m:
             src, dst = m.groups()
-            graph[src]["next"].append(dst)
-            graph[dst]["prev"].append(src)
+            graph[src].next.append(dst)
+            graph[dst].prev.append(src)
             continue
         raise ValueError(f"Invalid Mermaid syntax: {l}")
     return dict(graph)
@@ -118,141 +120,223 @@ def validate_dep_multi(needs: List[str], multi_provided: Dict[str, List[str]]) -
     return is_valid, dict(field_sources), missing
 
 
+class MermaidWorkflowFunctionTemplate(BaseModel):
+    para: Optional[dict] = Field(None,description="Parameter")
+    args: Optional[dict] = Field(None,description="Arguments")
+    rets: Optional[dict] = Field(None,description="Returness")
+    
+    @staticmethod
+    def keys():
+        return list(MermaidWorkflowFunctionTemplate.model_fields.keys())
+    
+    @staticmethod
+    def values():
+        return list(map(lambda x:x.description, MermaidWorkflowFunctionTemplate.model_fields.values()))
+
 class MermaidWorkflowFunction(BaseModel):
     """Base class for workflow function nodes with parameters, arguments and returns."""
     
-    class Parameters(BaseModel):
+    class Parameter(BaseModel):
         """Static parameters that configure the function behavior."""
         pass
 
     class Arguments(BaseModel):
-        """Input arguments received from predecessor nodes."""
+        """Input arguments received for function behavior."""
         pass
 
-    class Returns(BaseModel):
-        """Output values passed to successor nodes."""
+    class Returness(BaseModel):
+        """Output values of function."""
         pass
 
-    para: Optional[Parameters] = None
-    args: Optional[Arguments] = None
-    rets: Optional[Returns] = None
+    # should not define just for comment
+    para: Optional[Parameter|dict] = None
+    args: Optional[Arguments|dict] = None
+    rets: Optional[Returness|dict] = None
 
-    def __call__(self) -> Returns:
-        """Execute the workflow function and return results.
-        
-        Returns:
-            Returns: Output values to be passed to successor nodes
-        """
+    run_at_init:bool = False
+
+    def model_post_init(self,context):
+        if self.run_at_init: self()
+
+    def __call__(self) -> Returness:
         raise NotImplementedError("Workflow functions must implement __call__")
 
-    def update_para(self, data: dict) -> None:
-        # data must has key of "para"
-        if not data or "para" not in data : return
-        para = self.para.model_dump()
-        para.update(data["para"])
-        self.para = self.Parameters(**para)
+    def update(self, data: dict) -> None:
+        """Update para, args, and rets fields from the given data dict."""
+        try:
+            m:MermaidWorkflowFunctionTemplate = MermaidWorkflowFunctionTemplate.model_validate(data)
+        except Exception as e:
+            print(e)
+            return
 
-    def update_args(self, data: dict) -> None:
-        # data must has key of "args"
-        if not data or "args" not in data : return
-        args = self.args.model_dump()
-        args.update(data["args"])
-        self.args = self.Arguments(**args)
+        if m.para and self.para:
+            current = self.para.model_dump()
+            current.update(**m.para)
+            self.para = self.Parameter(**current)
 
-    def update_rets(self, data: dict) -> None:
-        # data must has key of "rets"
-        if not data or "rets" not in data : return
-        rets = self.rets.model_dump()
-        rets.update(data["rets"])
-        self.rets = self.Returns(**rets)
+        if m.args and self.args:
+            current = self.args.model_dump()
+            current.update(**m.args)
+            self.args = self.Arguments(**current)
+
+        if m.rets and self.rets:
+            current = self.rets.model_dump()
+            current.update(**m.rets)
+            self.rets = self.Returness(**current)
 
     @classmethod
-    def from_mcp(cls, name: str, mcp_single_func_data: dict) -> 'MermaidWorkflowFunction':
-        # Helper: build model with proper type annotations
-        def build_model_from_properties(name: str, props: Dict[str, Any], required: list) -> Type[BaseModel]:
+    def from_json_schema(cls, schema: Dict[str, Any]) -> Type[BaseModel]:
+        def resolve_ref(schema: Dict[str, Any], ref: str) -> Dict[str, Any]:
+            """Resolve local JSON Pointer like '#/$defs/Order/$defs/Item'."""
+            if not ref.startswith("#/"):
+                raise ValueError(f"Only local refs are supported: {ref}")
+            parts = ref.lstrip("#/").split("/")
+            result = schema
+            for part in parts:
+                if part not in result:
+                    raise KeyError(f"Could not resolve ref path '{ref}' at '{part}'")
+                result = result[part]
+            return result
+
+        def json_schema_type_to_python(json_type: str) -> Any:
+            return {
+                "string": str,
+                "integer": int,
+                "number": float,
+                "boolean": bool,
+                "object": Dict[str, Any],
+                "array": List[Any],
+                "null": type(None),
+                "any": Any
+            }.get(json_type, Any)
+
+        def build_model_from_properties(
+            name: str,
+            props: Dict[str, dict],
+            required: List[str],
+            root_schema: Dict[str, Any],
+            known_models: Dict[str, Type[BaseModel]]
+        ) -> Type[BaseModel]:
             fields: Dict[str, Tuple[Any, Any]] = {}
             for key, spec in props.items():
-                # Handle anyOf case for union types
+                # Handle $ref
+                if "$ref" in spec:
+                    ref = spec["$ref"]
+                    ref_schema = resolve_ref(root_schema, ref)
+                    ref_name = "_".join(ref.strip("#/").split("/"))  # unique model name
+
+                    if ref_name not in known_models:
+                        submodel = build_model_from_properties(
+                            ref_name,
+                            ref_schema.get("properties", {}),
+                            ref_schema.get("required", []),
+                            root_schema,
+                            known_models
+                        )
+                        known_models[ref_name] = submodel
+
+                    field_type = known_models[ref_name]
+                    if key not in required:
+                        field_type = Optional[field_type]
+                    fields[key] = (field_type, ... if key in required else None)
+                    continue
+
+                # Handle anyOf (union types)
                 if "anyOf" in spec:
                     types = []
                     for type_spec in spec["anyOf"]:
-                        if type_spec.get("type") == "integer":
-                            types.append(int)
-                        elif type_spec.get("type") == "number":
-                            types.append(float)
-                        elif type_spec.get("type") == "string":
-                            types.append(str)
-                        elif type_spec.get("type") == "boolean":
-                            types.append(bool)
-                        elif type_spec.get("type") == "null":
-                            types.append(type(None))
-                    field_type = Annotated[Union[tuple(types)], ...]
-                    fields[key] = (field_type, ...)
-                    continue
-
-                # Handle regular type specifications
-                try:
-                    type_str = spec["type"]
-                except KeyError:                    
-                    print(f"Processing field '{key}' with spec: {spec}")
-                    continue
-
-                match type_str:
-                    case "integer":
-                        field_type = Annotated[int, ...] if key in required else Annotated[int | None, None]
-                    case "number":
-                        field_type = Annotated[float, ...] if key in required else Annotated[float | None, None]
-                    case "string":
-                        field_type = Annotated[str, ...] if key in required else Annotated[str | None, None]
-                    case "boolean":
-                        field_type = Annotated[bool, ...] if key in required else Annotated[bool | None, None]
-                    case "array":
-                        item_type = spec.get("items", {}).get("type", "any")
-                        if item_type == "integer":
-                            field_type = Annotated[List[int], ...] if key in required else Annotated[List[int] | None, None]
-                        elif item_type == "number":
-                            field_type = Annotated[List[float], ...] if key in required else Annotated[List[float] | None, None]
-                        elif item_type == "string":
-                            field_type = Annotated[List[str], ...] if key in required else Annotated[List[str] | None, None]
-                        elif item_type == "boolean":
-                            field_type = Annotated[List[bool], ...] if key in required else Annotated[List[bool] | None, None]
+                        if "$ref" in type_spec:
+                            ref = type_spec["$ref"]
+                            ref_schema = resolve_ref(root_schema, ref)
+                            ref_name = "_".join(ref.strip("#/").split("/"))
+                            if ref_name not in known_models:
+                                known_models[ref_name] = build_model_from_properties(
+                                    ref_name,
+                                    ref_schema.get("properties", {}),
+                                    ref_schema.get("required", []),
+                                    root_schema,
+                                    known_models
+                                )
+                            types.append(known_models[ref_name])
                         else:
-                            field_type = Annotated[List[Any], ...] if key in required else Annotated[List[Any] | None, None]
-                    case "object":
-                        field_type = Annotated[Dict[str, Any], ...] if key in required else Annotated[Dict[str, Any] | None, None]
-                    case _:
-                        raise NotImplementedError(f"Type '{type_str}' not supported yet.")
-                fields[key] = (field_type, ...)
-            return create_model(name, **fields)
+                            json_type = type_spec.get("type")
+                            types.append(json_schema_type_to_python(json_type))
+                    field_type = Union[tuple(types)]
+                    if key not in required:
+                        field_type = Optional[field_type]
+                    fields[key] = (field_type, ... if key in required else None)
+                    continue
 
-        defs = mcp_single_func_data["inputSchema"]["$defs"]
-        model_creation_args = {}
-        if "Parameters" in defs:
-            param_def = defs["Parameters"]
-            Parameters = build_model_from_properties("Parameters", param_def["properties"], param_def.get("required", []))
-            model_creation_args["para"] = (Parameters,...)
+                # Inline object
+                if spec.get("type") == "object" and "properties" in spec:
+                    submodel_name = f"{name}_{key.capitalize()}"
+                    submodel = build_model_from_properties(
+                        submodel_name,
+                        spec["properties"],
+                        spec.get("required", []),
+                        root_schema,
+                        known_models
+                    )
+                    known_models[submodel_name] = submodel
+                    field_type = submodel
+                    if key not in required:
+                        field_type = Optional[field_type]
+                    fields[key] = (field_type, ... if key in required else None)
+                    continue
 
-        if "Arguments" in defs:
-            arg_def = defs["Arguments"]
-            Arguments = build_model_from_properties("Arguments", arg_def["properties"], arg_def.get("required", []))
-            model_creation_args["args"] = (Arguments,...)
+                # Array type
+                if spec.get("type") == "array":
+                    items = spec.get("items", {})
+                    if "$ref" in items:
+                        item_ref:str = items["$ref"]
+                        ref_schema = resolve_ref(root_schema, item_ref)
+                        ref_name = "_".join(item_ref.strip("#/").split("/"))
+                        if ref_name not in known_models:
+                            known_models[ref_name] = build_model_from_properties(
+                                ref_name,
+                                ref_schema.get("properties", {}),
+                                ref_schema.get("required", []),
+                                root_schema,
+                                known_models
+                            )
+                        item_type = known_models[ref_name]
+                    else:
+                        item_type = json_schema_type_to_python(items.get("type", "any"))
+                    field_type = List[item_type]
+                    if key not in required:
+                        field_type = Optional[field_type]
+                    fields[key] = (field_type, ... if key in required else None)
+                    continue
 
-        if "Returns" in defs:
-            arg_def = defs["Returns"]
-            Returns = build_model_from_properties("Returns", arg_def["properties"], arg_def.get("required", []))
-            # model_creation_args["rets"] = (Returns,...)
-            
-        model_cls = create_model(name, **model_creation_args,__base__=MermaidWorkflowFunction)
-        if "Parameters" in defs:model_cls.Parameters = Parameters
-        if "Arguments" in defs:model_cls.Arguments = Arguments
-        if "Returns" in defs:model_cls.Returns = Returns
+                # Primitive types
+                json_type = spec.get("type", "any")
+                field_type = json_schema_type_to_python(json_type)
+                if key not in required:
+                    field_type = Optional[field_type]
+                fields[key] = (field_type, ... if key in required else None)
 
-        return model_cls
+            return create_model(name, __module__=__name__, **fields, __base__=MermaidWorkflowFunction)
+
+        known_models: Dict[str, Type[BaseModel]] = {}
+        model_name = schema.get('title', 'GeneratedModel')
+        return build_model_from_properties(
+            model_name,
+            schema.get("properties", {}),
+            schema.get("required", []),
+            schema,
+            known_models
+        )
+    
+    @classmethod
+    def from_mcp(cls, mcp_single_func_data: dict) -> 'MermaidWorkflowFunction':
+        defs = mcp_single_func_data["inputSchema"]
+        defs['title'] = mcp_single_func_data['name']
+        return MermaidWorkflowFunction.from_json_schema(defs)
 
     @classmethod
     def get_para_class_name(cls) -> str:
-        """Get the name of the Parameters class."""
-        return cls.Parameters.__name__
+        """Get the name of the Parameter class."""
+        return cls.Parameter.__name__
 
     @classmethod
     def get_args_class_name(cls) -> str:
@@ -261,22 +345,22 @@ class MermaidWorkflowFunction(BaseModel):
 
     @classmethod
     def get_rets_class_name(cls) -> str:
-        """Get the name of the Returns class."""
-        return cls.Returns.__name__ 
+        """Get the name of the Returness class."""
+        return cls.Returness.__name__ 
 
     @classmethod
     def get_model_fields(cls, model_name: str) -> list[str]:
         """Get field names from a specified model class.
         
         Args:
-            model_name: Name of the model class ('Parameters', 'Arguments', or 'Returns')
+            model_name: Name of the model class ('Parameter', 'Arguments', or 'Returness')
             
-        Returns:
+        Returness:
             List of field names defined in the model
         """
         if not hasattr(cls, model_name):
             return []
-        model_cls:BaseModel = getattr(cls, model_name)
+        model_cls:Type[BaseModel] = getattr(cls, model_name)
         if not hasattr(model_cls, "model_fields"):
             return []
         return list(model_cls.model_fields.keys())
@@ -291,18 +375,21 @@ class MermaidWorkflowFunction(BaseModel):
         """Get names of all return value fields."""
         return cls.get_model_fields(cls.get_rets_class_name())
     
-class MermaidWorkflowEngine:
-    def __init__(self, model_registry: Dict[Type, str]):
+class MermaidWorkflowEngine(BaseModel):
+    protocol:str = Field(mermaid_protocol(),description='mermaid workflow protocol')
+    mermaid_text:str = Field('',description='mermaid workflow text')
+    _graph: dict[str, GraphNode] = {}
+    _results: Dict[str, Any] = {}
+
+    def model_register(self, model_registry: Dict[Type, str]):
         self.mermaid_text = ""
-        self.model_registry = model_registry
-        self.name_to_class = [(k,v) if type(k) is str else (v,k) for k, v in model_registry.items()]
-        self.name_to_class_dict = {k:v for k,v in self.name_to_class}
-        for k,v in self.name_to_class:
+        self._name_to_class = [(k,v) if type(k) is str else (v,k) for k, v in model_registry.items()]
+        name_to_class_dict = {k:v for k,v in self._name_to_class}
+        
+        for k,v in self._name_to_class:
             if type(v) is dict:
-                self.name_to_class_dict[k] = MermaidWorkflowFunction.from_mcp(k,v)
-        self.name_to_class = self.name_to_class_dict
-        self.graph = {}
-        self.results: Dict[str, Any] = {}
+                name_to_class_dict[k] = MermaidWorkflowFunction.from_mcp(v)
+        self._name_to_class = name_to_class_dict
 
     def extract_mermaid_text(self, text: str) -> str:
         """Extract Mermaid flowchart text from a given text."""
@@ -313,8 +400,7 @@ class MermaidWorkflowEngine:
         return ""
 
     def parse_mermaid(self, mermaid_text:str) -> Dict[str, Dict[str, Any]]:
-        self.mermaid_text = mermaid_text
-        return parse_mermaid(self.mermaid_text)
+        return parse_mermaid(mermaid_text)
     
     def _collect_args_from_deps(self, node_name: str, args_fields: List[str], deps: List[str]) -> Dict[str, Any]:
         args_data = {}
@@ -322,14 +408,14 @@ class MermaidWorkflowEngine:
         field_source_map = defaultdict(list)
 
         for dep in deps:
-            dep_result = self.results.get(dep, {})
+            dep_result = self._results.get(dep, {})
             for key in dep_result:
                 field_source_map[dep].append(key)
 
         for field in args_fields:
             found = False
             for dep in deps:
-                dep_result = self.results.get(dep, {})
+                dep_result = self._results.get(dep, {})
                 if field in dep_result:
                     args_data[field] = dep_result[field]
                     used_fields.add(field)
@@ -347,7 +433,7 @@ class MermaidWorkflowEngine:
     
     def node_get(self, node_name: str):
         node_name = node_name.split('_')[0]
-        cls:MermaidWorkflowFunction = self.name_to_class.get(node_name)
+        cls:Type[MermaidWorkflowFunction] = self._name_to_class.get(node_name)
         return cls
     
     def node_args_fields(self, node_name: str):
@@ -359,17 +445,31 @@ class MermaidWorkflowEngine:
     def validate_io(self) -> bool:
         print("\n🔍 Validating workflow I/O with mapping support...")
 
-        unknown = set([n.split("_")[0] for n in list(self.graph.keys())]) - set(self.name_to_class)
+        unknown = set([n.split("_")[0] for n in list(self._graph.keys())]) - set(self._name_to_class)
         if unknown:
             print(f"❌ Unknown classes found: {unknown}")
             return False
 
         all_valid = True
 
-        for node, meta in self.graph.items():
-            deps = meta.get("prev", [])
-            node_cfg = meta.get("config", {})
-            required = set(self.node_args_fields(node))
+        def get_required_fields(node:Type[BaseModel],target:str='args'):
+            args_annotation = node.model_fields[target].annotation
+            if hasattr(args_annotation,'__args__'):
+                args_item_type:Type[BaseModel] = args_annotation.__args__[0]
+            elif hasattr(args_annotation,'model_fields'):
+                args_item_type:Type[BaseModel] = args_annotation
+            else:
+                raise ValueError(f'unknow type of {args_annotation}')
+            return set([
+                name for name, field in args_item_type.model_fields.items()
+                if field.is_required()
+            ])
+
+        for node_name, meta in self._graph.items():
+            deps = meta.prev
+            node_cfg = meta.config
+            node = self.node_get(node_name)
+            required = get_required_fields(node)
             provided_fields = defaultdict(list)
 
             # No dependencies — check config directly
@@ -377,16 +477,16 @@ class MermaidWorkflowEngine:
                 config_args = set(node_cfg.get('args', {}).keys())
                 is_valid, missing = validate_dep_single(list(required), list(config_args))
                 if not is_valid:
-                    print(f"❌ Node '{node}' has no dependencies but requires inputs: {missing}")
+                    print(f"❌ Node '{node_name}' has no dependencies but requires inputs: {missing}")
                     all_valid = False
                 else:
-                    print(f"⚠️ Node '{node}' has no dependencies and no required inputs.")
+                    print(f"⚠️ Node '{node_name}' has no dependencies and no required inputs.")
                 continue
 
             # Build provided fields from dependencies
             for dep in deps:
-                dep_outputs = set(self.node_rets_fields(dep))
-                dep_map = self.graph[dep].get("maps", {}).get(node, {})
+                dep_outputs = get_required_fields(self.node_get(dep),'rets')
+                dep_map = self._graph[dep].maps.get(node_name, {})
 
                 # — 1. Validate explicit mappings
                 bad_srcs = set(dep_map) - dep_outputs
@@ -396,11 +496,11 @@ class MermaidWorkflowEngine:
 
                 bad_dsts = set(dep_map.values()) - required
                 for dst in bad_dsts:
-                    print(f"⚠️ Mapping to '{dst}' ignored—it's not required by '{node}'")
+                    print(f"⚠️ Mapping to '{dst}' ignored—it's not required by '{node_name}'")
 
                 for src, dst in dep_map.items():
                     if src == dst and dst in required:
-                        print(f"⚠️ Redundant explicit mapping '{src}→{dst}' for '{node}'")
+                        print(f"⚠️ Redundant explicit mapping '{src}→{dst}' for '{node_name}'")
 
                 # — 2. Apply explicit mappings
                 for src, dst in dep_map.items():
@@ -416,7 +516,7 @@ class MermaidWorkflowEngine:
                 used_outputs = set(dep_map.keys()).union(unmapped_defaults)
                 unused = dep_outputs - used_outputs
                 if unused:
-                    print(f"⚠️ Outputs from '{dep}' to '{node}' never used: {sorted(unused)}")
+                    print(f"⚠️ Outputs from '{dep}' to '{node_name}' never used: {sorted(unused)}")
 
             # — 5. Validate with validate_dep_multi
             multi_provided = defaultdict(list)
@@ -427,7 +527,7 @@ class MermaidWorkflowEngine:
             is_valid, field_sources, missing = validate_dep_multi(list(required), multi_provided)
             if not is_valid:
                 for field in missing:
-                    print(f"❌ Missing field '{field}' for node '{node}' from dependencies: {deps}")
+                    print(f"❌ Missing field '{field}' for node '{node_name}' from dependencies: {deps}")
                 all_valid = False
 
         if all_valid:
@@ -441,27 +541,27 @@ class MermaidWorkflowEngine:
         if ignite_func is None:
             ignite_func = lambda obj, args: obj()
 
-        self.graph = self.parse_mermaid(mermaid_text)
+        self._graph = self.parse_mermaid(mermaid_text)
 
         if not self.validate_io():
             print("❌ Workflow validation failed. Exiting.")
             return {}
 
         # Build the dependency graph for topological sorting
-        ts_graph = {node: meta["prev"] for node, meta in self.graph.items()}
+        ts_graph = {node: meta.prev for node, meta in self._graph.items()}
         sorter = TopologicalSorter(ts_graph)
         execution_order = list(sorter.static_order())
 
         for node_name in execution_order:
-            self.results[node_name] = {}
-            cls:MermaidWorkflowFunction = self.node_get(node_name)
+            self._results[node_name] = {}
+            cls:Type[MermaidWorkflowFunction] = self.node_get(node_name)
 
             # Collect inputs from dependencies
             args_data = {}
-            deps = self.graph[node_name]["prev"]
+            deps = self._graph[node_name].prev
             for dep in deps:
-                dep_results = self.results.get(dep, {})
-                map_config:dict = self.graph[dep].get("maps", {})
+                dep_results = self._results.get(dep, {})
+                map_config:dict = self._graph[dep].maps
                 map_config:dict = map_config.get(node_name, {})
 
                 # Default direct field matching
@@ -475,42 +575,43 @@ class MermaidWorkflowEngine:
                         args_data[dst_field] = dep_results[src_field]
 
             # Merge static config
-            conf = self.graph[node_name].get("config", {}) or {}
+            conf = self._graph[node_name].config
             para_data = conf.get("para", {})
             args_data.update(conf.get("args", {}))
 
             cls_data = {}
             try:
-                if hasattr(cls, "Parameters") and len(cls.Parameters.model_fields) > 0:
-                    cls_data['para'] = cls.Parameters(**para_data)
-                if hasattr(cls, "Arguments") and len(cls.Arguments.model_fields) > 0:
-                    cls_data['args'] = cls.Arguments(**args_data)
+                if hasattr(cls, "Parameter"):
+                    cls_data['para'] = {**para_data}
+                if hasattr(cls, "Arguments"):
+                    cls_data['args'] = {**args_data}
             except Exception as e:
                 print(f"❌ Error validating config for '{node_name}': {e}")
-                continue
+                raise e
 
-            print(f"\n🔄 Executing node '{node_name}' with para: {para_data}")
-            print(f"\n🔄 Executing node '{node_name}' with args: {args_data}")
-
+            print(f"\n🔄 Executing node '{node_name}' with : {cls_data}")
             try:
                 instance:MermaidWorkflowFunction = cls(**cls_data)
+                cls_data['run_at_init'] = True
                 res = ignite_func(instance, cls_data)
+                print(f"\n✅ Executing node '{node_name}' got res: {res}")
 
                 # Extract return values
                 if hasattr(instance, "rets") and hasattr(instance.rets, "model_dump"):
-                    self.results[node_name] = instance.rets.model_dump()
+                    self._results[node_name] = instance.rets.model_dump()
                 elif isinstance(res, dict) and "rets" in res:
-                    self.results[node_name] = res["rets"]
+                    self._results[node_name] = res["rets"]
 
             except Exception as e:
-                print(f"❌ Error executing node '{node_name}': {e}")
-                continue
+                print(f"❌ Error executing node '{node_name}':")
+                print(e)
+                raise e
 
         print("\n✅ Final outputs:")
-        for step_name, output in self.results.items():
+        for step_name, output in self._results.items():
             print(f"{step_name}: {output}")
 
-        return self.results
+        return self._results
 
 
 

@@ -5,7 +5,27 @@ import requests
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, ConfigDict
 
-class AbstractVendor(BaseModel):
+class BasicModel(BaseModel):
+    def __call__(self, *args, **kwargs):
+        raise NotImplementedError('This method should be implemented by subclasses.')
+    
+    def _log_error(self, e):
+        return f"[{self.__class__.__name__}] Error: {str(e)}"
+    
+    def _try_error(self, func, default_value=('NULL',None)):
+        try:
+            return (True,func())
+        except Exception as e:
+            self._log_error(e)
+            return (False,default_value)
+        
+    def _try_binary_error(self, func):
+        return self._try_error(func)[0]
+    
+    def _try_obj_error(self, func, default_value=('NULL',None)):
+        return self._try_error(func,default_value)[1]
+    
+class AbstractVendor(BasicModel):
     """Base class for LLM vendor API integrations.
     
     This abstract class provides a common interface for interacting with

@@ -10,19 +10,19 @@ from .LLMsModel import LLMsStore, Model4LLMs
 class RegxExtractor(Model4LLMs.MermaidWorkflowFunction):    
     description:str = Field('Extract text by regx pattern')
     
-    class Param(BaseModel):            
+    class Parameter(BaseModel):            
         regx:str = Field(..., description='regx pattern')
         is_json:bool=False
 
-    class Args(BaseModel):
+    class Arguments(BaseModel):
         text:str = ''
 
-    class Return(BaseModel):
+    class Returness(BaseModel):
         data: Optional[str|dict|list[dict]] = None
 
-    para: Param
-    args: Args = Args()
-    rets: Return = Return()
+    para: Parameter
+    args: Arguments = Arguments()
+    rets: Returness = Returness()
             
     def __call__(self,text:str):
         self.args.text = text
@@ -45,14 +45,14 @@ class RegxExtractor(Model4LLMs.MermaidWorkflowFunction):
 class StringTemplate(Model4LLMs.MermaidWorkflowFunction): 
     description:str = Field('Extract text by regx pattern')
     
-    class Param(BaseModel):
+    class Parameter(BaseModel):
         string:str = Field(description='string of f"..."')
 
-    class Return(BaseModel):
+    class Returness(BaseModel):
         data: str = ''
 
-    para: Param
-    rets: Return = Return()
+    para: Parameter
+    rets: Returness = Returness()
                 
     def __call__(self,*args,**kwargs):
         self.rets.data = self.para.string.format(*args,**kwargs)
@@ -159,7 +159,7 @@ class TextFile(Model4Basic.AbstractObj):
 
     def __next__(self) -> List[str]:
         """
-        Return the next chunk of lines.
+        Returness the next chunk of lines.
         """
         if not self._current_chunk:
             self._current_chunk = self.read_chunk()

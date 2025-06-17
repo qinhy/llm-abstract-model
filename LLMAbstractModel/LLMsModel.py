@@ -17,7 +17,8 @@ from .ModelInterface import AbstractLLM
 from .ModelInterface import OpenAIVendor
 from .ModelInterface import AbstractGPTModel
 from .ModelInterface import AbstractEmbedding    
-from .MermaidWorkflowEngine import MermaidWorkflowFunction as MWFFunction
+from .MermaidWorkflowEngine import GraphNode, MermaidWorkflowFunction as MWFFunction
+from .MermaidWorkflowEngine import MermaidWorkflowEngine
 
 class Controller4LLMs:
     class AbstractObjController(Controller4Basic.AbstractObjController):
@@ -186,6 +187,7 @@ class Controller4LLMs:
     class StringTemplateController(AbstractObjController): pass
     class ClassificationTemplateController(AbstractObjController): pass
     class MermaidWorkflowFunctionController(AbstractObjController): pass
+    class MermaidWorkflowWorkFlowController(AbstractObjController): pass
     
 class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
@@ -403,47 +405,50 @@ class Model4LLMs:
         
     ##################### utils model #########
     class MermaidWorkflowFunction(MWFFunction, AbstractObj):
-        description: str = Field(..., description="description of this function.")
-        class Param(BaseModel):
-            """Static parameters that configure the function behavior."""
-            pass
-        class Args(BaseModel):
-            """Input arguments received from predecessor nodes."""
-            pass
-        class Return(BaseModel):
-            """Output values passed to successor nodes."""
-            pass
-
-        para: Optional[Param] = None
-        args: Optional[Args] = None
-        rets: Optional[Return] = None
-        run_at_init:bool = False
-
-        def model_post_init(self, context: Any, /) -> None:
-            if self.run_at_init:
-                self()
-
+        description: str = Field(..., description="description of this function.")        
         controller: Optional[Controller4LLMs.MermaidWorkflowFunctionController] = None
-            
+    class MermaidWorkflowWorkFlow(MermaidWorkflowEngine, AbstractObj):
+        def parse_mermaid(self, mermaid_text: str=None) -> Dict[str, Dict[str, Any]]:
+            if mermaid_text is None:
+                mermaid_text = self.mermaid_text
+            mermaid_text_lines = list(map(lambda l:l.replace(':','__of__',1),mermaid_text.split('\n')))
+            mermaid_text_lines = [l for l in mermaid_text_lines if len(l)>0]
+            mermaid_text_lines = [l.split('-->',1) for l in mermaid_text_lines]
+            mermaid_text_lines = [[l[0],l[1].replace(':','__of__',1)] if len(l)>1 else l for l in mermaid_text_lines]
+            mermaid_text_lines = [l[0]+'-->'+l[1] if len(l)>1 else l[0] for l in mermaid_text_lines]
+            mermaid_text = '\n'.join(mermaid_text_lines)
+            res:dict[str,GraphNode] = super().parse_mermaid(mermaid_text)
+            for k,v in res.items():
+                res[k] = v.model_dump()
+            res = json.loads(json.dumps(res).replace('__of__',':'))
+            model_registry = {}
+            for k,v in res.items():
+                func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)
+                model_registry[k] = func
+                res[k] = GraphNode(**v)
+            self.model_register(model_registry)
+            self.mermaid_text = mermaid_text
+            return res
+        controller: Optional[Controller4LLMs.MermaidWorkflowWorkFlowController] = None
     class RequestsFunction(MermaidWorkflowFunction):
         description:str = Field('Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.')
         
-        class Param(BaseModel):            
+        class Parameter(BaseModel):            
             method: str = 'GET'
             url: str
             headers: Dict[str, str] = {}
 
-        class Args(BaseModel):
+        class Arguments(BaseModel):
             params: Optional[Dict[str, Any]] = Field(...,description='query parameters'),
             data:   Optional[Dict[str, Any]] = Field(...,description='form data'),
-            json:   Optional[Dict[str, Any]] = Field(...,description='JSON payload'),
+            json_payload:   Optional[Dict[str, Any]] = Field(...,description='JSON payload'),
 
-        class Return(BaseModel):
+        class Returness(BaseModel):
             data: dict = {}
 
-        para: Param
-        args: Args
-        rets: Return = Return()
+        para: Parameter
+        args: Arguments
+        rets: Returness = Returness()
                 
         def __call__(self,
                      debug=False,
@@ -453,7 +458,7 @@ class Model4LLMs:
                 response = requests.request(
                     method=self.para.method,url=self.para.url,
                     headers=self.para.headers,params=self.args.params,
-                    data=self.args.data,json=self.args.json,
+                    data=self.args.data,json=self.args.json_payload,
                 )
                 response.raise_for_status()
                 try:
