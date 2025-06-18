@@ -408,7 +408,26 @@ class Model4LLMs:
         description: str = Field(..., description="description of this function.")        
         controller: Optional[Controller4LLMs.MermaidWorkflowFunctionController] = None
     class MermaidWorkflowWorkFlow(MermaidWorkflowEngine, AbstractObj):
+        results: Dict[str, dict] = {}
+        
+        def run(self) -> Dict[str, dict]:
+            def ignite_func(instance, cls_data:dict):
+                # Get parameters of the __call__ method (excluding 'self')
+                parameters = inspect.signature(instance.__call__).parameters
+                if len(parameters) == 0 or list(parameters.keys()) == ['self']:
+                    return instance()
+                else:
+                    try:
+                        return instance(**cls_data.get('args',{}))  # Correct: unpack kwargs
+                    except Exception as e:
+                        print("Error:", e)
+                        print("Expected parameters:", parameters)
+
+            self.results = super().run(ignite_func=ignite_func)
+            return self.results
+
         def parse_mermaid(self, mermaid_text: str=None) -> Dict[str, Dict[str, Any]]:
+            self._graph = {}
             if mermaid_text is None:
                 mermaid_text = self.mermaid_text
             mermaid_text_lines = list(map(lambda l:l.replace(':','__of__',1),mermaid_text.split('\n')))
@@ -424,10 +443,11 @@ class Model4LLMs:
             model_registry = {}
             for k,v in res.items():
                 func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)
-                model_registry[k] = func
+                model_registry[k] = func.__class__
                 res[k] = GraphNode(**v)
             self.model_register(model_registry)
             self.mermaid_text = mermaid_text
+            self._graph = res
             return res
         controller: Optional[Controller4LLMs.MermaidWorkflowWorkFlowController] = None
     class RequestsFunction(MermaidWorkflowFunction):

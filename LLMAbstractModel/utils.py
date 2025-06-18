@@ -3,6 +3,7 @@ import os
 import re
 from pydantic import BaseModel, Field
 from typing import Any, Callable, Optional, List
+from typing_extensions import LiteralString
 
 from .BasicModel import Model4Basic
 from .LLMsModel import LLMsStore, Model4LLMs
@@ -47,15 +48,22 @@ class StringTemplate(Model4LLMs.MermaidWorkflowFunction):
     
     class Parameter(BaseModel):
         string:str = Field(description='string of f"..."')
+        
+    class Arguments(BaseModel):
+        args:list = []
+        kwargs:dict = {}
 
     class Returness(BaseModel):
         data: str = ''
 
     para: Parameter
+    args: Arguments = Arguments()
     rets: Returness = Returness()
                 
-    def __call__(self,*args,**kwargs):
-        self.rets.data = self.para.string.format(*args,**kwargs)
+    def __call__(self, *args, **kwargs):
+        if len(args)>0 or len(kwargs)>0:
+            self.args = self.Arguments(args,kwargs)
+        self.rets.data = self.para.string.format(*self.args.args,**self.args.kwargs)
         return self.rets.data
 
 

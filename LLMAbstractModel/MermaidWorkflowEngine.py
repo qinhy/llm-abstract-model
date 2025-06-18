@@ -8,6 +8,9 @@ from typing import Any, Callable, DefaultDict, Dict, List, Optional, Tuple, Type
 
 from pydantic import BaseModel, Field, create_model
 
+logger = print
+logger = lambda *args,**kwargs: None
+
 class GraphNode(BaseModel):
     prev: List[str] = Field(default_factory=list)
     next: List[str] = Field(default_factory=list)
@@ -56,7 +59,7 @@ graph TD
         try:
             return json.loads(s.replace("'", '"'))
         except Exception as e:
-            print(s)
+            logger(f"❌ Error parsing JSON: {e}")
             raise e
 
     for l in lines:
@@ -90,10 +93,10 @@ graph TD
 def validate_dep_single(needs: list[str], provided: list[str]) -> tuple[bool, list[str]]:
     missing = list(set(needs) - set(provided))
     if missing:
-        print(f"❌ Missing required fields: {missing}")
+        logger(f"❌ Missing required fields: {missing}")
         return False, missing
 
-    # print("✅ All required fields are satisfied.")
+    # logger("✅ All required fields are satisfied.")
     return True, []
 
 def validate_dep_multi(needs: List[str], multi_provided: Dict[str, List[str]]) -> Tuple[bool, Dict[str, List[str]], List[str]]:
@@ -113,9 +116,9 @@ def validate_dep_multi(needs: List[str], multi_provided: Dict[str, List[str]]) -
     # Diagnostics
     for field, sources in field_sources.items():
         if len(sources) > 1:
-            print(f"⚠️ Field '{field}' is provided by multiple sources: {sources}")
+            logger(f"⚠️ Field '{field}' is provided by multiple sources: {sources}")
         else:
-            print(f"✅ Field '{field}' is provided by: {sources[0]}")
+            logger(f"✅ Field '{field}' is provided by: {sources[0]}")
 
     return is_valid, dict(field_sources), missing
 
@@ -166,7 +169,7 @@ class MermaidWorkflowFunction(BaseModel):
         try:
             m:MermaidWorkflowFunctionTemplate = MermaidWorkflowFunctionTemplate.model_validate(data)
         except Exception as e:
-            print(e)
+            logger(f"❌ Error validating data: {e}")
             return
 
         if m.para and self.para:
@@ -422,12 +425,12 @@ class MermaidWorkflowEngine(BaseModel):
                     found = True
                     break
             if not found:
-                print(f"⚠️ Warning: Field '{field}' required by '{node_name}' not found in dependencies: {deps}")
+                logger(f"⚠️ Warning: Field '{field}' required by '{node_name}' not found in dependencies: {deps}")
 
         for dep, fields in field_source_map.items():
             unused = set(fields) - used_fields
             if unused:
-                print(f"ℹ️ Info: Fields from '{dep}' not used by '{node_name}': {sorted(unused)}")
+                logger(f"ℹ️ Info: Fields from '{dep}' not used by '{node_name}': {sorted(unused)}")
 
         return args_data
     
@@ -443,33 +446,39 @@ class MermaidWorkflowEngine(BaseModel):
         return self.node_get(node_name).get_return_fields()
 
     def validate_io(self) -> bool:
-        print("\n🔍 Validating workflow I/O with mapping support...")
+        logger("🔍 Validating workflow I/O with mapping support...")
 
         unknown = set([n.split("_")[0] for n in list(self._graph.keys())]) - set(self._name_to_class)
         if unknown:
-            print(f"❌ Unknown classes found: {unknown}")
+            logger(f"❌ Unknown classes found: {unknown}")
             return False
 
         all_valid = True
 
-        def get_required_fields(node:Type[BaseModel],target:str='args'):
-            args_annotation = node.model_fields[target].annotation
-            if hasattr(args_annotation,'__args__'):
-                args_item_type:Type[BaseModel] = args_annotation.__args__[0]
-            elif hasattr(args_annotation,'model_fields'):
-                args_item_type:Type[BaseModel] = args_annotation
+        def get_fields(node:Type[BaseModel],target:str='args',required=True):
+            target_annotation = node.model_fields[target].annotation
+            if hasattr(target_annotation,'__args__'):
+                target_item_type:Type[BaseModel] = target_annotation.__args__[0]
+            elif hasattr(target_annotation,'model_fields'):
+                target_item_type:Type[BaseModel] = target_annotation
             else:
-                raise ValueError(f'unknow type of {args_annotation}')
-            return set([
-                name for name, field in args_item_type.model_fields.items()
-                if field.is_required()
-            ])
+                raise ValueError(f'unknow type of {target_annotation}')
+            if required:
+                return set([
+                    name for name, field in target_item_type.model_fields.items()
+                    if field.is_required()
+                ])
+            else:
+                return set([
+                    name for name, field in target_item_type.model_fields.items()
+                ])
+
 
         for node_name, meta in self._graph.items():
             deps = meta.prev
             node_cfg = meta.config
             node = self.node_get(node_name)
-            required = get_required_fields(node)
+            required = get_fields(node,'args',required=True)
             provided_fields = defaultdict(list)
 
             # No dependencies — check config directly
@@ -477,30 +486,31 @@ class MermaidWorkflowEngine(BaseModel):
                 config_args = set(node_cfg.get('args', {}).keys())
                 is_valid, missing = validate_dep_single(list(required), list(config_args))
                 if not is_valid:
-                    print(f"❌ Node '{node_name}' has no dependencies but requires inputs: {missing}")
+                    logger(f"❌ Node '{node_name}' has no dependencies but requires inputs: {missing}")
                     all_valid = False
                 else:
-                    print(f"⚠️ Node '{node_name}' has no dependencies and no required inputs.")
+                    logger(f"⚠️ Node '{node_name}' has no dependencies and no required inputs.")
                 continue
 
             # Build provided fields from dependencies
             for dep in deps:
-                dep_outputs = get_required_fields(self.node_get(dep),'rets')
+                dep_node = self.node_get(dep)          
+                dep_outputs = get_fields(dep_node,'rets',required=False)
                 dep_map = self._graph[dep].maps.get(node_name, {})
 
                 # — 1. Validate explicit mappings
                 bad_srcs = set(dep_map) - dep_outputs
                 for src in bad_srcs:
-                    print(f"❌ Field '{src}' not found in outputs of '{dep}'")
+                    logger(f"❌ Field '{src}' not found in outputs of '{dep}'(has {[*dep_outputs]})")
                     all_valid = False
 
                 bad_dsts = set(dep_map.values()) - required
                 for dst in bad_dsts:
-                    print(f"⚠️ Mapping to '{dst}' ignored—it's not required by '{node_name}'")
+                    logger(f"⚠️ Mapping to '{dst}' ignored—it's not required by '{node_name}'")
 
                 for src, dst in dep_map.items():
                     if src == dst and dst in required:
-                        print(f"⚠️ Redundant explicit mapping '{src}→{dst}' for '{node_name}'")
+                        logger(f"⚠️ Redundant explicit mapping '{src}→{dst}' for '{node_name}'")
 
                 # — 2. Apply explicit mappings
                 for src, dst in dep_map.items():
@@ -516,7 +526,7 @@ class MermaidWorkflowEngine(BaseModel):
                 used_outputs = set(dep_map.keys()).union(unmapped_defaults)
                 unused = dep_outputs - used_outputs
                 if unused:
-                    print(f"⚠️ Outputs from '{dep}' to '{node_name}' never used: {sorted(unused)}")
+                    logger(f"⚠️ Outputs from '{dep}' to '{node_name}' never used: {sorted(unused)}")
 
             # — 5. Validate with validate_dep_multi
             multi_provided = defaultdict(list)
@@ -527,24 +537,23 @@ class MermaidWorkflowEngine(BaseModel):
             is_valid, field_sources, missing = validate_dep_multi(list(required), multi_provided)
             if not is_valid:
                 for field in missing:
-                    print(f"❌ Missing field '{field}' for node '{node_name}' from dependencies: {deps}")
+                    logger(f"❌ Missing field '{field}' for node '{node_name}' from dependencies: {deps}")
                 all_valid = False
 
         if all_valid:
-            print("\n✅ Workflow validation passed: All inputs are satisfied.")
+            logger("✅ Workflow validation passed: All inputs are satisfied.")
         else:
-            print("\n❌ Workflow validation failed. See messages above.")
+            logger("❌ Workflow validation failed. See messages above.")
 
         return all_valid
 
-    def run(self, mermaid_text: str, ignite_func: Optional[Callable] = None) -> Dict[str, Any]:
+    def run(self, mermaid_text: str = None, ignite_func: Optional[Callable] = None) -> Dict[str, Any]:
         if ignite_func is None:
             ignite_func = lambda obj, args: obj()
-
-        self._graph = self.parse_mermaid(mermaid_text)
-
+        if mermaid_text is not None:
+            self._graph = self.parse_mermaid(mermaid_text)            
         if not self.validate_io():
-            print("❌ Workflow validation failed. Exiting.")
+            logger("❌ Workflow validation failed. Exiting.")
             return {}
 
         # Build the dependency graph for topological sorting
@@ -581,20 +590,20 @@ class MermaidWorkflowEngine(BaseModel):
 
             cls_data = {}
             try:
-                if hasattr(cls, "Parameter"):
+                if 'para' in cls.model_fields:
                     cls_data['para'] = {**para_data}
-                if hasattr(cls, "Arguments"):
+                if 'args' in cls.model_fields:
                     cls_data['args'] = {**args_data}
             except Exception as e:
-                print(f"❌ Error validating config for '{node_name}': {e}")
+                logger(f"❌ Error validating config for '{node_name}': {e}")
                 raise e
 
-            print(f"\n🔄 Executing node '{node_name}' with : {cls_data}")
+            logger(f"🔄 Executing node '{node_name}' with : {cls_data}")
             try:
                 instance:MermaidWorkflowFunction = cls(**cls_data)
                 cls_data['run_at_init'] = True
                 res = ignite_func(instance, cls_data)
-                print(f"\n✅ Executing node '{node_name}' got res: {res}")
+                logger(f"✅ Executing node '{node_name}' got res: {res}")
 
                 # Extract return values
                 if hasattr(instance, "rets") and hasattr(instance.rets, "model_dump"):
@@ -603,14 +612,12 @@ class MermaidWorkflowEngine(BaseModel):
                     self._results[node_name] = res["rets"]
 
             except Exception as e:
-                print(f"❌ Error executing node '{node_name}':")
-                print(e)
+                logger(f"❌ Error executing node '{node_name}':")
+                logger(e)
                 raise e
 
-        print("\n✅ Final outputs:")
-        for step_name, output in self._results.items():
-            print(f"{step_name}: {output}")
-
+        self._results['final'] = self._results[node_name]
+        logger(f"✅ Final outputs:\n{json.dumps(self._results,indent=4)}")
         return self._results
 
 

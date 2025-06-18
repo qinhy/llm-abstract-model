@@ -69,10 +69,10 @@ class ConstantThreeFunction(Model4LLMs.MermaidWorkflowFunction):
         return self.rets.n
 
 
-task_add            = store.add_new_function(AddFunction())
-task_multiply       = store.add_new_function(MultiplyFunction())
-task_constant_three = store.add_new_function(ConstantThreeFunction())
-task_constant_five  = store.add_new_function(ConstantFiveFunction())
+task_add            = store.add_new_obj(AddFunction())
+task_multiply       = store.add_new_obj(MultiplyFunction())
+task_constant_three = store.add_new_obj(ConstantThreeFunction())
+task_constant_five  = store.add_new_obj(ConstantFiveFunction())
 
 
 # Create a new WorkFlow instance
@@ -84,68 +84,61 @@ graph TD
     {task_constant_three.get_id()} -- "{{'n':'x'}}" --> {task_add.get_id()}
     {task_multiply.get_id()} -- "{{'n':'y'}}" --> {task_add.get_id()}
 '''))
-print(workflow._id)
-print(workflow.mermaid_text)
-print(workflow.parse_mermaid())
-print(workflow.mermaid_text)
-#         #     Model4LLMs.MermaidWorkflowWorkFlow(tasks = {
-#         #             task_add.get_id()           : [task_multiply.get_id(), task_constant_three.get_id()],
-#         #             task_multiply.get_id()      : [task_constant_five.get_id()],             
-#         #             task_constant_three.get_id(): [],                         
-#         #             task_constant_five.get_id() : []                          
-#         # }))
-
-# # Run the workflow
-# myprint('workflow.controller.run()')
-# ## -> 13
+# parse_mermaid the workflow
+myprint('workflow.parse_mermaid()')
+## -> 13
+# Run the workflow
+myprint('workflow.run()')
+## -> 13
 
 # # Retrieve and print the result of each task
-# myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
-# ## -> ...
+myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
+## -> ...
 
-# store.clean()
+store.clean()
 
 # ###############
-# system_prompt = '''
-# You are an expert in English translation.
-# I will provide you with the text. Please translate it.
-# You should reply with translations only, without any additional information.
-# ## Your Reply Format Example
-# ```translation
-# ...
-# ```
-# '''.strip()
+system_prompt = '''
+You are an expert in English translation.
+I will provide you with the text. Please translate it.
+You should reply with translations only, without any additional information.
+## Your Reply Format Example
+```translation
+...
+```
+'''.strip()
 
 
-# vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
-# llm = chatgpt = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',system_prompt=system_prompt)
+vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
+llm = chatgpt = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',system_prompt=system_prompt)
 
-# # Create template and extractor tasks
-# input_template = store.add_new_function(
-#     StringTemplate(string='''
-# ```text
-# {text}
-# ```
-# '''.strip()))
+# Create template and extractor tasks
+input_template = store.add_new_obj(
+    StringTemplate(para=dict(string='''
+```text
+{text}
+```
+'''.strip())))
 
-# extract_result = store.add_new_function(RegxExtractor(regx=r"```translation\s*(.*)\s*\n```"))
+extract_result = store.add_new_obj(RegxExtractor(para=dict(regx=r"```translation\s*(.*)\s*\n```")))
 
-# # Define the workflow with tasks
-# workflow = store.add_new_workflow(
-#     tasks={
-#         input_template.get_id()   : ['input'],
-#         llm.get_id()              : [input_template.get_id()],
-#         extract_result.get_id()   : [llm.get_id()]
-#     })
+# Define the workflow with tasks
+# workflow:Model4LLMs.MermaidWorkflowWorkFlow = store.add_new_obj(
+#     Model4LLMs.MermaidWorkflowWorkFlow(
+#         mermaid_text=f'''
+# graph TD
+#     {input_template.get_id()} -- "{{'n':'x'}}" --> {llm.get_id()}
+#     {llm.get_id()} -- "{{'n':'x'}}" --> {extract_result.get_id()}
+# '''))
 # # input=[args,kwargs]
 # myprint('workflow(input=[(),dict(text="こんにちは！はじめてのチェーン作りです！")])')
-# ## -> Hello! This is my first time making a chain!
+## -> Hello! This is my first time making a chain!
 
 # workflow.controller.delete()
 # input_template.controller.delete()
 
 # # also support seqential list input
-# input_template = store.add_new_function(
+# input_template = store.add_new_obj(
 #     StringTemplate(string='''
 # ```text
 # {}
