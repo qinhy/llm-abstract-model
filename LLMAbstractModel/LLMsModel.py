@@ -407,7 +407,7 @@ class Model4LLMs:
     class MermaidWorkflowFunction(MWFFunction, AbstractObj):
         description: str = Field(..., description="description of this function.")        
         controller: Optional[Controller4LLMs.MermaidWorkflowFunctionController] = None
-    class MermaidWorkflowWorkFlow(MermaidWorkflowEngine, AbstractObj):
+    class MermaidWorkflow(MermaidWorkflowEngine, AbstractObj):
         results: Dict[str, dict] = {}
         
         def run(self, *first_node_args, **first_node_kwargs) -> Dict[str, dict]:

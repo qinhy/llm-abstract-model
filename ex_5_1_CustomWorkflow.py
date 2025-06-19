@@ -76,8 +76,8 @@ task_constant_five  = store.add_new_obj(ConstantFiveFunction())
 
 
 # Create a new WorkFlow instance
-workflow:Model4LLMs.MermaidWorkflowWorkFlow = store.add_new_obj(
-    Model4LLMs.MermaidWorkflowWorkFlow(
+workflow:Model4LLMs.MermaidWorkflow = store.add_new_obj(
+    Model4LLMs.MermaidWorkflow(
         mermaid_text=f'''
 graph TD
     {task_constant_five.get_id()} -- "{{'n':'x'}}" --> {task_multiply.get_id()}
@@ -123,41 +123,22 @@ input_template = store.add_new_obj(
 extract_result = store.add_new_obj(RegxExtractor(para=dict(regx=r"```translation\s*(.*)\s*\n```")))
 
 # Define the workflow with tasks
-workflow:Model4LLMs.MermaidWorkflowWorkFlow = store.add_new_obj(
-    Model4LLMs.MermaidWorkflowWorkFlow(
+workflow:Model4LLMs.MermaidWorkflow = store.add_new_obj(
+    Model4LLMs.MermaidWorkflow(
         mermaid_text=f'''
 graph TD
     {input_template.get_id()} -- "{{'data':'messages'}}" --> {llm.get_id()}
     {llm.get_id()} -- "{{'data':'text'}}" --> {extract_result.get_id()}
 '''))
 workflow.parse_mermaid()
-print(workflow._graph)
-myprint('workflow.run(text="こんにちは！はじめてのチェーン作りです！")')
-# -> Hello! This is my first time making a chain!
+myprint('workflow.run(text="こんにちは！はじめてのチェーン作りです！")["final"]')
+# -> {'data': 'Hello! This is my first time making a chain!'}
 
-# workflow.controller.delete()
-# input_template.controller.delete()
-
-# # also support seqential list input
-# input_template = store.add_new_obj(
-#     StringTemplate(string='''
-# ```text
-# {}
-# ```'''))
-# workflow = store.add_new_workflow(
-#     tasks=[
-#         input_template.get_id(),#   : [],
-#         llm.get_id(),#              : [input_template.get_id()],
-#         extract_result.get_id(),#   : [llm.get_id()]
-#     ])
-# # You can reuse the workflow by setting a new input
-# myprint('workflow("常識とは、18歳までに身に付けた偏見のコレクションである。")')
-# ## -> Common sense is a collection of prejudices acquired by the age of 18.
-
-# # save and load workflow
-# data = store.dumps()
-# store.clean()
-# store.loads(data)
-# workflow = store.find_all('WorkFlow:*')[0]
-# myprint('workflow("为政以德，譬如北辰，居其所而众星共之。")')
-# ## -> Governing with virtue is like the North Star, which occupies its position while all the other stars revolve around it.
+# save and load workflow
+data = store.dumps()
+store.clean()
+store.loads(data)
+workflow = store.find_all('*WorkFlow*')[0]
+workflow.parse_mermaid()
+myprint('workflow.run(text="为政以德，譬如北辰，居其所而众星共之。")["final"]')
+## -> {'data': 'Governing with virtue is like the North Star, remaining in its place while all other stars revolve around it.'}
