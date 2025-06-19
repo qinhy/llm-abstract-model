@@ -62,7 +62,7 @@ class StringTemplate(Model4LLMs.MermaidWorkflowFunction):
                 
     def __call__(self, *args, **kwargs):
         if len(args)>0 or len(kwargs)>0:
-            self.args = self.Arguments(args,kwargs)
+            self.args = self.Arguments(args=args,kwargs=kwargs)
         self.rets.data = self.para.string.format(*self.args.args,**self.args.kwargs)
         return self.rets.data
 

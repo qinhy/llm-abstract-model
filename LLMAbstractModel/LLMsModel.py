@@ -5,7 +5,7 @@ import math
 import os
 import time
 import unittest
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, Union
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 import requests
@@ -410,15 +410,31 @@ class Model4LLMs:
     class MermaidWorkflowWorkFlow(MermaidWorkflowEngine, AbstractObj):
         results: Dict[str, dict] = {}
         
-        def run(self) -> Dict[str, dict]:
-            def ignite_func(instance, cls_data:dict):
+        def run(self, *first_node_args, **first_node_kwargs) -> Dict[str, dict]:
+            first_node_cls = None
+                
+            if len(first_node_args)>0 or len(first_node_kwargs)>0:
+                ts_graph = {node: meta.prev for node, meta in self._graph.items()}
+                sorter = TopologicalSorter(ts_graph)
+                execution_order = list(sorter.static_order())
+                first_node_name = execution_order[0]
+                first_node_cls = self.node_get(first_node_name)
+                
+            def ignite_func(instance:MWFFunction, cls_data:dict,
+                            first_node_cls:Type[MWFFunction]=first_node_cls,
+                            first_node_args=first_node_args,
+                            first_node_kwargs=first_node_kwargs):
+                
+                if first_node_cls==instance.__class__:
+                    return instance(*first_node_args, **first_node_kwargs)
+                
                 # Get parameters of the __call__ method (excluding 'self')
                 parameters = inspect.signature(instance.__call__).parameters
                 if len(parameters) == 0 or list(parameters.keys()) == ['self']:
                     return instance()
                 else:
                     try:
-                        return instance(**cls_data.get('args',{}))  # Correct: unpack kwargs
+                        return instance(**cls_data.get('args',{}))
                     except Exception as e:
                         print("Error:", e)
                         print("Expected parameters:", parameters)
@@ -443,7 +459,7 @@ class Model4LLMs:
             model_registry = {}
             for k,v in res.items():
                 func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)
-                model_registry[k] = func.__class__
+                model_registry[k] = (func.__class__,func)
                 res[k] = GraphNode(**v)
             self.model_register(model_registry)
             self.mermaid_text = mermaid_text

@@ -123,16 +123,17 @@ input_template = store.add_new_obj(
 extract_result = store.add_new_obj(RegxExtractor(para=dict(regx=r"```translation\s*(.*)\s*\n```")))
 
 # Define the workflow with tasks
-# workflow:Model4LLMs.MermaidWorkflowWorkFlow = store.add_new_obj(
-#     Model4LLMs.MermaidWorkflowWorkFlow(
-#         mermaid_text=f'''
-# graph TD
-#     {input_template.get_id()} -- "{{'n':'x'}}" --> {llm.get_id()}
-#     {llm.get_id()} -- "{{'n':'x'}}" --> {extract_result.get_id()}
-# '''))
-# # input=[args,kwargs]
-# myprint('workflow(input=[(),dict(text="こんにちは！はじめてのチェーン作りです！")])')
-## -> Hello! This is my first time making a chain!
+workflow:Model4LLMs.MermaidWorkflowWorkFlow = store.add_new_obj(
+    Model4LLMs.MermaidWorkflowWorkFlow(
+        mermaid_text=f'''
+graph TD
+    {input_template.get_id()} -- "{{'data':'messages'}}" --> {llm.get_id()}
+    {llm.get_id()} -- "{{'data':'text'}}" --> {extract_result.get_id()}
+'''))
+workflow.parse_mermaid()
+print(workflow._graph)
+myprint('workflow.run(text="こんにちは！はじめてのチェーン作りです！")')
+# -> Hello! This is my first time making a chain!
 
 # workflow.controller.delete()
 # input_template.controller.delete()
