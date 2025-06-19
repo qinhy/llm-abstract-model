@@ -8,7 +8,7 @@ from typing import Any, Callable, DefaultDict, Dict, List, Optional, Tuple, Type
 from pydantic import BaseModel, Field, create_model
 
 logger = print
-logger = lambda *args,**kwargs: None
+# logger = lambda *args,**kwargs: None
 
 class GraphNode(BaseModel):
     prev: List[str] = Field(default_factory=list)
@@ -160,8 +160,8 @@ class MermaidWorkflowFunction(BaseModel):
     def model_post_init(self,context):
         if self.run_at_init: self()
 
-    def __call__(self) -> Returness:
-        raise NotImplementedError("Workflow functions must implement __call__")
+    # def __call__(self) -> Returness:
+    #     raise NotImplementedError("Workflow functions must implement __call__")
 
     def update(self, data: dict) -> None:
         """Update para, args, and rets fields from the given data dict."""
@@ -593,6 +593,7 @@ class MermaidWorkflowEngine(BaseModel):
         ts_graph = {node: meta.prev for node, meta in self._graph.items()}
         sorter = TopologicalSorter(ts_graph)
         execution_order = list(sorter.static_order())
+        print(execution_order)
 
         for node_name in execution_order:
             self._results[node_name] = {}

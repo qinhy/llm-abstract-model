@@ -1,7 +1,8 @@
 import json
 import os
 import re
-from pydantic import BaseModel, Field
+from types import MethodType
+from pydantic import BaseModel, Field, create_model
 from typing import Any, Callable, Optional, List
 from typing_extensions import LiteralString
 
@@ -49,23 +50,55 @@ class StringTemplate(Model4LLMs.MermaidWorkflowFunction):
     class Parameter(BaseModel):
         string:str = Field(description='string of f"..."')
         
-    class Arguments(BaseModel):
-        args:list = []
-        kwargs:dict = {}
-
     class Returness(BaseModel):
         data: str = ''
 
     para: Parameter
-    args: Arguments = Arguments()
     rets: Returness = Returness()
                 
     def __call__(self, *args, **kwargs):
-        if len(args)>0 or len(kwargs)>0:
-            self.args = self.Arguments(args=args,kwargs=kwargs)
-        self.rets.data = self.para.string.format(*self.args.args,**self.args.kwargs)
+        self.rets.data = self.para.string.format(*args,**kwargs)
         return self.rets.data
 
+class StringTemplate(Model4LLMs.MermaidWorkflowFunction):
+    description: str = Field(default='Dynamic templated string callable')
+    
+    class Parameter(BaseModel):
+        string:str = Field(description='string of f"..."')
+        
+    class Returness(BaseModel):
+        data: str = ''
+
+    para: Parameter
+    rets: Returness = Returness()
+    
+    def build(self):
+        self._create_dynamic_call()
+        return self
+
+    def _extract_placeholders(self) -> list[str]:
+        string = self.para.string.replace(r'{{','')
+        string = string.replace(r'}}','')
+        return re.findall(r'{(.*?)}', string)
+
+    def _create_dynamic_call(self):
+        fields = self._extract_placeholders()
+        arg_str = ', '.join(fields)
+        format_args = ', '.join([f'{f}={f}' for f in fields])
+
+        func_code = f"""
+def __call__(self, {arg_str}):
+    self.rets.data = self.para.string.format({format_args})
+    return self.rets.data
+"""
+
+        local_vars = {}
+        exec(func_code, {}, local_vars)
+        dynamic_call = local_vars['__call__']
+        # Assign to the class so the object becomes callable
+        dynamic_cls = create_model(f'StringTemplateDynamic{id(self)}', __base__=StringTemplate)
+        self.__class__ = dynamic_cls
+        setattr(self.__class__, '__call__', dynamic_call)
 
 # @descriptions('Classification Template for performing conditional checks on a target',
 #               target='The object or value to be classified',

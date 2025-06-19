@@ -43,22 +43,24 @@ llm = store.add_new_llm(Model4LLMs.ChatGPT4o)(
 msg_template = store.add_new_function(StringTemplate(para=dict(
      string='''
 ```Reference
-{}
+{ref}
 ```
 
 ```Refactored
-{}
+{rfa}
 ```'''
-)))
+))).build()
 
 res_ext = store.add_new_function(RegxExtractor(para=dict(regx=r"```Continue\s*(.*)\s*\n```")))
 
 ############# make a custom chain 
-from functools import reduce
 def compose(*funcs):
-    def chained_function(*args, **kwargs):
-        return reduce(lambda acc, f: f(*acc if isinstance(acc, tuple) else (acc,), **kwargs), funcs, args)
-    return chained_function
+    def composed(*args, **kwargs):
+        result = funcs[0](*args, **kwargs)  # start with last (innermost) function
+        for f in funcs[1:]:
+            result = f(result)
+        return result
+    return composed
 
 chain_list = [msg_template, llm, res_ext]
 chain = compose(*chain_list)
@@ -68,11 +70,11 @@ chain = compose(*chain_list)
 pre_code = '# -*- coding: utf-8 -*-'
 for i,chunk_lines in enumerate(TextFile(file_path='./LLMAbstractModel/RSA.py',
                                   chunk_lines=100, overlap_lines=30)):
-        print(msg_template(''.join(chunk_lines),pre_code))
-        code = chain(''.join(chunk_lines),pre_code)
+        print(msg_template(ref=''.join(chunk_lines),rfa=pre_code))
+        code = chain(ref=''.join(chunk_lines),rfa=pre_code)
         with open('./tmp/RSA.py','a') as f:
              f.write('\n'+code)
         print('#########################')
         print(code)
         pre_code = code
-        # break
+        break

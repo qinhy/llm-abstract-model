@@ -426,6 +426,8 @@ class Model4LLMs:
                             first_node_kwargs=first_node_kwargs):
                 
                 if first_node_cls==instance.__class__:
+                    if not callable(instance) and hasattr(instance,'build'):
+                        instance = instance.build()
                     return instance(*first_node_args, **first_node_kwargs)
                 
                 # Get parameters of the __call__ method (excluding 'self')

@@ -118,7 +118,7 @@ input_template = store.add_new_obj(
 ```text
 {text}
 ```
-'''.strip())))
+'''.strip()))).build()
 
 extract_result = store.add_new_obj(RegxExtractor(para=dict(regx=r"```translation\s*(.*)\s*\n```")))
 

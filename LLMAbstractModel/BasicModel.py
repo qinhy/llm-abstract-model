@@ -12,8 +12,8 @@ def now_utc():
     return datetime.now(timezone.utc)
 
 class BasicModel(BaseModel):
-    def __call__(self, *args, **kwargs):
-        raise NotImplementedError('This method should be implemented by subclasses.')
+    # def __call__(self, *args, **kwargs):
+    #     raise NotImplementedError('This method should be implemented by subclasses.')
     
     def _log_error(self, e):
         return f"[{self.__class__.__name__}] Error: {str(e)}"
