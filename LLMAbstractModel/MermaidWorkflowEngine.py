@@ -381,18 +381,20 @@ class MermaidWorkflowFunction(BaseModel):
 class MermaidWorkflowEngine(BaseModel):
     protocol:str = Field(mermaid_protocol(),description='mermaid workflow protocol')
     mermaid_text:str = Field('',description='mermaid workflow text')
+
+    _name_to_class: Dict[str, Any] = {}
     _graph: dict[str, GraphNode] = {}
     _results: Dict[str, Any] = {}
 
-    def model_register(self, model_registry: Dict[Type, str]):
+    def model_register(self, model_registry: Dict[Type, str])->'MermaidWorkflowEngine':
         self.mermaid_text = ""
-        self._name_to_class = [(k,v) if type(k) is str else (v,k) for k, v in model_registry.items()]
-        name_to_class_dict = {k:v for k,v in self._name_to_class}
+        model_registry = [(k,v) if type(k) is str else (v,k) for k, v in model_registry.items()]
+        self._name_to_class = {k:v for k,v in model_registry}
         
-        for k,v in self._name_to_class:
+        for k,v in model_registry:
             if type(v) is dict:
-                name_to_class_dict[k] = MermaidWorkflowFunction.from_mcp(v)
-        self._name_to_class = name_to_class_dict
+                self._name_to_class[k] = MermaidWorkflowFunction.from_mcp(v)
+        return self
 
     def extract_mermaid_text(self, text: str) -> str:
         """Extract Mermaid flowchart text from a given text."""
@@ -551,7 +553,7 @@ class MermaidWorkflowEngine(BaseModel):
         if ignite_func is None:
             ignite_func = lambda obj, args: obj()
         if mermaid_text is not None:
-            self._graph = self.parse_mermaid(mermaid_text)            
+            self._graph = self.parse_mermaid(mermaid_text)
         if not self.validate_io():
             logger("❌ Workflow validation failed. Exiting.")
             return {}
@@ -625,4 +627,4 @@ class MermaidWorkflowEngine(BaseModel):
 
 
 
-    
+
