@@ -83,11 +83,13 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
     process_errors_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 3:.+?\n(.*?)(?=Step\s\d+:|$)")))
     overall_assessment_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 4:.+?\n(.*?)(?=Step\s\d+:|$)")))
     
-    question_plain:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string='**{text}**')))
+    question_plain:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string='**{text}**'))).build()
+    question_plain2 = store.add_new_obj(StringTemplate(para=dict(string='**{text2}**')))
     # question_tmp:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string=
     #     'Please provide a better answer to the following question based on the previous process and review.\n\nQuestion:\n{}\n\nPrevious process:\n{}\n\nPrevious solution review:\n{}')))
-    review_tmp:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string=
-        'Question\n{qu}\n\nRelevant concepts\n{rc}\n\nThoughts\n{th}\n\nProcess\n{pr}\n\nSolution\n{sl}')))
+    review_tmp:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string=                                                                           
+        'Question\n{qu}\n\nRelevant concepts\n{rc}')))
+        # 'Question\n{qu}\n\nRelevant concepts\n{rc}\n\nThoughts\n{th}\n\nProcess\n{pr}\n\nSolution\n{sl}')))
 
     solve_and_review_1:Model4LLMs.MermaidWorkflow = store.add_new_obj(
         Model4LLMs.MermaidWorkflow(
@@ -95,13 +97,11 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
     graph TD
         {question_plain.get_id()} -- "{{'data':'qu'}}" --> {review_tmp.get_id()}
         {question_plain.get_id()} -- "{{'data':'rc'}}" --> {review_tmp.get_id()}
-        {question_plain.get_id()} -- "{{'data':'th'}}" --> {review_tmp.get_id()}
-        {question_plain.get_id()} -- "{{'data':'pr'}}" --> {review_tmp.get_id()}
-        {question_plain.get_id()} -- "{{'data':'sl'}}" --> {review_tmp.get_id()}
     '''))
     solve_and_review_1.parse_mermaid()
-    print(solve_and_review_1._graph)
-    print(solve_and_review_1.run(text='!!!Hi!!!'))
+    # print(solve_and_review_1._graph)
+    print(solve_and_review_1.validate_io())
+    # print(solve_and_review_1.run(text='!!!Hi!!!'))
     # print(store.find(question_plain.get_id()))
 
 #     solve_and_review_1 = store.add_new_workflow(

@@ -411,23 +411,20 @@ class Model4LLMs:
         results: Dict[str, dict] = {}
         
         def run(self, *first_node_args, **first_node_kwargs) -> Dict[str, dict]:
-            first_node_cls = None
+            first_node_id = None
                 
             if len(first_node_args)>0 or len(first_node_kwargs)>0:
                 ts_graph = {node: meta.prev for node, meta in self._graph.items()}
                 sorter = TopologicalSorter(ts_graph)
                 execution_order = list(sorter.static_order())
-                first_node_name = execution_order[0]
-                first_node_cls = self.node_get(first_node_name)
+                first_node_id = execution_order[0]
                 
             def ignite_func(instance:MWFFunction, cls_data:dict,
-                            first_node_cls:Type[MWFFunction]=first_node_cls,
+                            first_node_id:str=first_node_id,
                             first_node_args=first_node_args,
                             first_node_kwargs=first_node_kwargs):
-                
-                if first_node_cls==instance.__class__:
-                    if not callable(instance) and hasattr(instance,'build'):
-                        instance = instance.build()
+
+                if first_node_id==instance._id:
                     return instance(*first_node_args, **first_node_kwargs)
                 
                 # Get parameters of the __call__ method (excluding 'self')
@@ -460,7 +457,9 @@ class Model4LLMs:
             res = json.loads(json.dumps(res).replace('__of__',':'))
             model_registry = {}
             for k,v in res.items():
-                func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)
+                func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)                
+                if not callable(func) and hasattr(func,'build'):
+                    func:MWFFunction = func.build()
                 model_registry[k] = (func.__class__,func)
                 res[k] = GraphNode(**v)
             self.model_register(model_registry)

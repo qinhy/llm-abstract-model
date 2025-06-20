@@ -83,7 +83,7 @@ class StringTemplate(Model4LLMs.MermaidWorkflowFunction):
 
     def _create_dynamic_call(self):
         fields = self._extract_placeholders()
-        arg_str = ', '.join(fields)
+        arg_str = ', '.join([f'{f}:str' for f in fields])
         format_args = ', '.join([f'{f}={f}' for f in fields])
 
         func_code = f"""

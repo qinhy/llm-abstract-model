@@ -147,6 +147,11 @@ class Model4Basic:
 
         def class_name(self): return self.__class__.__name__
 
+        def model_copy(self, *, update = None, deep = False):
+            res = super().model_copy(update=update, deep=deep)
+            res._id = None
+            return res
+
         def set_id(self,id:str):
             assert self._id is None, 'this obj is been setted! can not set again!'
             self._id = id

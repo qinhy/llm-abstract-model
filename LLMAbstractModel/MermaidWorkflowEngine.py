@@ -10,15 +10,11 @@ from pydantic import BaseModel, Field, create_model
 logger = print
 # logger = lambda *args,**kwargs: None
 
-class GraphNode(BaseModel):
-    prev: List[str] = Field(default_factory=list)
-    next: List[str] = Field(default_factory=list)
-    config: Dict[str, dict] = Field(default_factory=dict)
-    maps: Dict[str, dict] = Field(default_factory=dict)
+# ------------------------------
+# Mermaid Protocol Documentation
+# ------------------------------
 
-Graph = DefaultDict[str, GraphNode]
-
-def mermaid_protocol()->str:
+def mermaid_protocol() -> str:
     return '''
 ### 📌 Mermaid Graph Protocol (for beginners):
 * `graph TD` → Start of a top-down Mermaid flowchart
@@ -29,7 +25,98 @@ def mermaid_protocol()->str:
 * Use **valid field names** from each tool's input/output schema
 '''
 
-def parse_mermaid(mermaid_text: str="""
+# ------------------------------
+# Data Structures
+# ------------------------------
+
+class GraphNode(BaseModel):
+    prev: List[str] = Field(default_factory=list)
+    next: List[str] = Field(default_factory=list)
+    config: Dict[str, dict] = Field(default_factory=dict)
+    maps: List[Tuple[str, str]] = Field(default_factory=list)  # (source_field, destination_field)
+
+Graph = DefaultDict[str, GraphNode]
+
+# ------------------------------
+# Parser
+# ------------------------------
+
+def parse_mermaid(mermaid_text: str = """
+graph TD
+    LoadImage["{'para': {'path': './tmp/input.jpg'}}"]
+    BlurImage["{'para': {'radius': 2}}"]
+    BlurImage_2["{'para': {'radius': 5}}"]
+    ResizeImage_01["{'para': {'width': 512, 'height': 512}}"]
+    ResizeImage["{'para': {'width': 1024, 'height': 1024}}"]
+
+    LoadImage -- "{'path':'path'}" --> ResizeImage_01
+    ResizeImage_01 --> BlurImage
+    BlurImage --> BlurImage_2
+    BlurImage_2 --> ResizeImage
+""") -> Dict[str, GraphNode]:
+# Got
+# {'LoadImage': GraphNode(prev=[], next=['ResizeImage_01'], config={'para': {'path': './tmp/input.jpg'}}, 
+#                                   maps=[('LoadImage::path', 'ResizeImage_01::path')]),
+#  'BlurImage': GraphNode(prev=['ResizeImage_01'], next=['BlurImage_2'], config={'para': {'radius': 2}}, maps=[]),
+#  'BlurImage_2': GraphNode(prev=['BlurImage'], next=['ResizeImage'], config={'para': {'radius': 5}}, maps=[]),
+#  'ResizeImage_01': GraphNode(prev=['LoadImage'], next=['BlurImage'], config={'para': {'width': 512, 'height': 512}}, maps=[]),
+#  'ResizeImage': GraphNode(prev=['BlurImage_2'], next=[], config={'para': {'width': 1024, 'height': 1024}}, maps=[])}
+
+    lines = [l.strip() for l in mermaid_text.strip().splitlines()]
+    lines = [l for l in lines if ('["{' in l) or ('--' in l)]
+    lines = [l for l in lines if '["{}"]' not in l and not l.startswith('%%')]
+
+    graph: Graph = defaultdict(GraphNode)
+
+    node_pattern = re.compile(r'^([\w-]+)\s*\[\s*"(.+)"\s*\]$')
+    map_pattern = re.compile(r'^([\w-]+)\s*--\s*"(.*?)"\s*-->\s*([\w-]+)$')
+    simple_pattern = re.compile(r'^([\w-]+)\s*-->\s*([\w-]+)$')
+
+    def parse_json(s: str) -> Any:
+        try:
+            return json.loads(s.replace("'", '"'))
+        except Exception as e:
+            raise ValueError(f"❌ Error parsing JSON content: {s} → {e}")
+
+    for l in lines:
+        if not l or l.startswith("graph"):
+            continue
+
+        # Node definition
+        m = node_pattern.match(l)
+        if m:
+            node, cfg = m.groups()
+            parsed = parse_json(cfg)
+            if parsed is not None:
+                graph[node].config = parsed
+            continue
+
+        # Mapped edge
+        m = map_pattern.match(l)
+        if m:
+            src, cfg, dst = m.groups()
+            graph[src].next.append(dst)
+            graph[dst].prev.append(src)
+            parsed = parse_json(cfg)
+            print(parsed)
+            if parsed is not None:
+                for src_field, dst_field in parsed.items():
+                    graph[src].maps.append((f"{src}::{src_field}", f"{dst}::{dst_field}"))
+            continue
+
+        # Simple edge
+        m = simple_pattern.match(l)
+        if m:
+            src, dst = m.groups()
+            graph[src].next.append(dst)
+            graph[dst].prev.append(src)
+            continue
+
+        raise ValueError(f"❌ Invalid Mermaid syntax: {l}")
+
+    return dict(graph)
+
+def parse_mermaid_old(mermaid_text: str="""
 graph TD
     LoadImage["{'para': {'path': './tmp/input.jpg'}}"]
     BlurImage["{'para': {'radius': 2}}"]
@@ -138,22 +225,22 @@ class MermaidWorkflowFunctionTemplate(BaseModel):
 class MermaidWorkflowFunction(BaseModel):
     """Base class for workflow function nodes with parameters, arguments and returns."""
     
-    class Parameter(BaseModel):
-        """Static parameters that configure the function behavior."""
-        pass
+    # class Parameter(BaseModel):
+    #     """Static parameters that configure the function behavior."""
+    #     pass
 
-    class Arguments(BaseModel):
-        """Input arguments received for function behavior."""
-        pass
+    # class Arguments(BaseModel):
+    #     """Input arguments received for function behavior."""
+    #     pass
 
-    class Returness(BaseModel):
-        """Output values of function."""
-        pass
+    # class Returness(BaseModel):
+    #     """Output values of function."""
+    #     pass
 
     # should not define just for comment
-    para: Optional[Parameter|dict] = None
-    args: Optional[Arguments|dict] = None
-    rets: Optional[Returness|dict] = None
+    # para: Optional[Parameter|dict] = None
+    # args: Optional[Arguments|dict] = None
+    # rets: Optional[Returness|dict] = None
 
     run_at_init:bool = False
 
@@ -471,6 +558,7 @@ class MermaidWorkflowEngine(BaseModel):
         return Returness
 
     def get_fields(self, node:Type[BaseModel],target:str='args',required=True)->set[str]:
+
         if target in node.model_fields:
             target_annotation = node.model_fields[target].annotation
             if hasattr(target_annotation,'__args__'):
@@ -479,6 +567,7 @@ class MermaidWorkflowEngine(BaseModel):
                 target_item_type:Type[BaseModel] = target_annotation
             else:
                 raise ValueError(f'unknow type of {target_annotation}')
+            
         elif hasattr(node,'__call__'):
             if target == 'args':
                 target_item_type = self.create_Arguments_model_by__call__(node)
@@ -486,7 +575,7 @@ class MermaidWorkflowEngine(BaseModel):
                 target_item_type = self.create_Returness_model_by__call__(node)
         else:
             raise ValueError(f'unknow type of {node}')
-
+        
         if required:
             return set([
                 name for name, field in target_item_type.model_fields.items()
@@ -526,42 +615,47 @@ class MermaidWorkflowEngine(BaseModel):
                 continue
 
             # Build provided fields from dependencies
+            required =  set([f'{node_name}::{d}' for d in required])
             for dep in deps:
                 dep_node = self.node_get(dep)          
-                dep_outputs = self.get_fields(dep_node,'rets',required=False)
-                dep_map = self._graph[dep].maps.get(node_name, {})
+                dep_node_outputs = self.get_fields(dep_node,'rets',required=False)
+                dep_node_outputs = set([f'{dep}::{d}' for d in dep_node_outputs])
+                dep_node_maps = [d[0] for d in self._graph[dep].maps]
+                dep_node_maps_to = [d[1] for d in self._graph[dep].maps]
 
                 # — 1. Validate explicit mappings
-                bad_srcs = set(dep_map) - dep_outputs
+                bad_srcs = set(dep_node_maps) - dep_node_outputs
                 for src in bad_srcs:
-                    logger(f"❌ Field '{src}' not found in outputs of '{dep}'(has {[*dep_outputs]})")
+                    logger(f"❌ Field '{src}' not found in outputs of '{dep}'(has {[*dep_node_outputs]})")
                     all_valid = False
 
-                bad_dsts = set(dep_map.values()) - required
+                bad_dsts = set(dep_node_maps_to) - required
                 for dst in bad_dsts:
                     logger(f"⚠️ Mapping to '{dst}' ignored—it's not required by '{node_name}'")
 
-                for src, dst in dep_map.items():
+                for src, dst in zip(dep_node_maps,dep_node_maps_to):
                     if src == dst and dst in required:
                         logger(f"⚠️ Redundant explicit mapping '{src}→{dst}' for '{node_name}'")
 
                 # — 2. Apply explicit mappings
-                for src, dst in dep_map.items():
-                    if src in dep_outputs and dst in required:
-                        provided_fields[dst].append(dep)
+                for src, dst in zip(dep_node_maps,dep_node_maps_to):
+                    print(node_name, src, dst)
+                    if src in dep_node_outputs and dst in required:
+                        provided_fields[dst].append(src)
 
                 # — 3. Default 1:1 mappings
-                unmapped_defaults = (dep_outputs & required) - set(dep_map.values())
-                for field in unmapped_defaults:
-                    provided_fields[field].append(dep)
+                # unmapped_defaults = (dep_node_outputs & required) - set(dep_node_maps_to)
+                # for field in unmapped_defaults:
+                #     provided_fields[field].append(dep)
 
                 # — 4. Warn unused outputs
-                used_outputs = set(dep_map.keys()).union(unmapped_defaults)
-                unused = dep_outputs - used_outputs
-                if unused:
-                    logger(f"⚠️ Outputs from '{dep}' to '{node_name}' never used: {sorted(unused)}")
+                # used_outputs = set(dep_node_maps).union(unmapped_defaults)
+                # unused = dep_node_outputs - used_outputs
+                # if unused:
+                #     logger(f"⚠️ Outputs from '{dep}' to '{node_name}' never used: {sorted(unused)}")
 
             # — 5. Validate with validate_dep_multi
+            print(provided_fields)
             multi_provided = defaultdict(list)
             for field, sources in provided_fields.items():
                 for src in sources:
