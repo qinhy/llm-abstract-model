@@ -8,7 +8,7 @@ from typing import Any, Callable, DefaultDict, Dict, List, Optional, Tuple, Type
 from pydantic import BaseModel, Field, create_model
 
 logger = print
-# logger = lambda *args,**kwargs: None
+logger = lambda *args,**kwargs: None
 
 # ------------------------------
 # Mermaid Protocol Documentation
