@@ -100,8 +100,8 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
     '''))
     solve_and_review_1.parse_mermaid()
     # print(solve_and_review_1._graph)
-    print(solve_and_review_1.validate_io())
-    # print(solve_and_review_1.run(text='!!!Hi!!!'))
+    print(solve_and_review_1.validate_io(dict(text='!!!Hi!!!')))
+    print(solve_and_review_1.run(text='!!!Hi!!!'))
     # print(store.find(question_plain.get_id()))
 
 #     solve_and_review_1 = store.add_new_workflow(

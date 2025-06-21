@@ -407,25 +407,13 @@ class Model4LLMs:
     class MermaidWorkflowFunction(MWFFunction, AbstractObj):
         description: str = Field(..., description="description of this function.")        
         controller: Optional[Controller4LLMs.MermaidWorkflowFunctionController] = None
+
     class MermaidWorkflow(MermaidWorkflowEngine, AbstractObj):
         results: Dict[str, dict] = {}
         
-        def run(self, *first_node_args, **first_node_kwargs) -> Dict[str, dict]:
-            first_node_id = None
+        def run(self, **initial_args) -> Dict[str, dict]:
                 
-            if len(first_node_args)>0 or len(first_node_kwargs)>0:
-                ts_graph = {node: meta.prev for node, meta in self._graph.items()}
-                sorter = TopologicalSorter(ts_graph)
-                execution_order = list(sorter.static_order())
-                first_node_id = execution_order[0]
-                
-            def ignite_func(instance:MWFFunction, cls_data:dict,
-                            first_node_id:str=first_node_id,
-                            first_node_args=first_node_args,
-                            first_node_kwargs=first_node_kwargs):
-
-                if first_node_id==instance._id:
-                    return instance(*first_node_args, **first_node_kwargs)
+            def ignite_func(instance:MWFFunction, cls_data:dict):
                 
                 # Get parameters of the __call__ method (excluding 'self')
                 parameters = inspect.signature(instance.__call__).parameters
@@ -438,7 +426,7 @@ class Model4LLMs:
                         print("Error:", e)
                         print("Expected parameters:", parameters)
 
-            self.results = super().run(ignite_func=ignite_func)
+            self.results = super().run(ignite_func=ignite_func,initial_args=initial_args)
             return self.results
 
         def parse_mermaid(self, mermaid_text: str=None) -> Dict[str, Dict[str, Any]]:
