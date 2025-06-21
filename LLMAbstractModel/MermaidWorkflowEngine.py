@@ -98,7 +98,6 @@ graph TD
             graph[src].next.append(dst)
             graph[dst].prev.append(src)
             parsed = parse_json(cfg)
-            print(parsed)
             if parsed is not None:
                 for src_field, dst_field in parsed.items():
                     graph[src].maps.append((f"{src}::{src_field}", f"{dst}::{dst_field}"))
@@ -669,8 +668,9 @@ class MermaidWorkflowEngine(BaseModel):
 
                 # Apply mappings
                 for src, dst in dep_mappings:
+                    src, dst = src.split("::", 1)[1], dst.split("::", 1)[1]
                     if src in dep_result:
-                        args_data[dst] = dep_result[src]
+                        args_data[dst] = dep_result[src]                
 
                 # Implicit match
                 for field in dep_result:
@@ -684,6 +684,7 @@ class MermaidWorkflowEngine(BaseModel):
             
             if i == 0 and initial_args:
                 args_data.update(initial_args)
+            
 
             cls_data = {}
             if para_data:
