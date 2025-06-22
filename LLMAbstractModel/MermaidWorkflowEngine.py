@@ -8,7 +8,7 @@ from typing import Any, Callable, DefaultDict, Dict, List, Optional, Tuple, Type
 from pydantic import BaseModel, Field, create_model
 
 logger = print
-logger = lambda *args,**kwargs: None
+# logger = lambda *args,**kwargs: None
 
 # ------------------------------
 # Mermaid Protocol Documentation
@@ -532,33 +532,35 @@ class MermaidWorkflowEngine(BaseModel):
         return Returness
 
     def get_fields(self, node:Type[BaseModel],target:str='args',required=True)->set[str]:
-
-        if target in node.model_fields:
-            target_annotation = node.model_fields[target].annotation
-            if hasattr(target_annotation,'__args__'):
-                target_item_type:Type[BaseModel] = target_annotation.__args__[0]
-            elif hasattr(target_annotation,'model_fields'):
-                target_item_type:Type[BaseModel] = target_annotation
+        try:
+            if target in node.model_fields:
+                target_annotation = node.model_fields[target].annotation
+                if hasattr(target_annotation,'__args__'):
+                    target_item_type:Type[BaseModel] = target_annotation.__args__[0]
+                elif hasattr(target_annotation,'model_fields'):
+                    target_item_type:Type[BaseModel] = target_annotation
+                else:
+                    raise ValueError(f'unknow type of {target_annotation}')
+                
+            elif hasattr(node,'__call__'):
+                if target == 'args':
+                    target_item_type = self.create_Arguments_model_by__call__(node)
+                elif target == 'rets':
+                    target_item_type = self.create_Returness_model_by__call__(node)
             else:
-                raise ValueError(f'unknow type of {target_annotation}')
+                raise ValueError(f'unknow type of {node}')
             
-        elif hasattr(node,'__call__'):
-            if target == 'args':
-                target_item_type = self.create_Arguments_model_by__call__(node)
-            elif target == 'rets':
-                target_item_type = self.create_Returness_model_by__call__(node)
-        else:
-            raise ValueError(f'unknow type of {node}')
-        
-        if required:
-            return set([
-                name for name, field in target_item_type.model_fields.items()
-                if field.is_required()
-            ])
-        else:
-            return set([
-                name for name, _ in target_item_type.model_fields.items()
-            ])
+            if required:
+                return set([
+                    name for name, field in target_item_type.model_fields.items()
+                    if field.is_required()
+                ])
+            else:
+                return set([
+                    name for name, _ in target_item_type.model_fields.items()
+                ])
+        except Exception as e:
+            raise ValueError(f"❌ Error getting fields for {node.__name__} ({target}): {e}")
         
     def validate_io(self, initial_args: Dict[str, Any] = {}) -> bool:
         logger("🔍 Validating workflow I/O with mapping support...")
@@ -714,8 +716,7 @@ class MermaidWorkflowEngine(BaseModel):
                     raise ValueError(f"Node '{node_name}' must return dict with 'rets' or have a 'rets' attribute.")
 
             except Exception as e:
-                logger(f"❌ Error executing node '{node_name}': {e}")
-                raise
+                raise ValueError(f"❌ Error executing node '{node_name}': {e}")
 
         self._results['final'] = self._results.get(node_name, {})
         logger(f"✅ Final outputs:\n{json.dumps(self._results, indent=4)}")

@@ -7,7 +7,7 @@ import time
 import unittest
 from typing import Any, Dict, List, Optional, Type, Union
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, create_model
 import requests
 from typing import Dict, Any
 
@@ -410,21 +410,45 @@ class Model4LLMs:
 
     class MermaidWorkflow(MermaidWorkflowEngine, AbstractObj):
         results: Dict[str, dict] = {}
-        
+
+        # def __call__(self, *args, **kwargs):
+        #     return self.run(*args, **kwargs)['final']
+        def build(self, **kwargs):
+            fields = kwargs.keys()
+            arg_str = ', '.join(fields)
+            format_args = ', '.join([f"{key}= {repr(value)}" for key, value in kwargs.items()])
+
+            # Dynamically generate a callable method with correct argument signature
+            func_code = f"""
+from typing import Any, Dict
+def __call__(self, {arg_str})->Dict[str, Any]:
+    res = self.run({format_args})
+    return res
+"""
+            # Compile the function
+            local_vars = {}
+            exec(func_code, {}, local_vars)
+            dynamic_call = local_vars['__call__']
+
+            # Dynamically create a subclass and assign the new __call__ method
+            dynamic_cls = create_model(f'MermaidWorkflowTemplateDynamic{id(self)}', __base__=Model4LLMs.MermaidWorkflow)
+            self.__class__ = dynamic_cls
+            setattr(self.__class__, '__call__', dynamic_call)
+            return self
+
         def run(self, **initial_args) -> Dict[str, dict]:
                 
             def ignite_func(instance:MWFFunction, cls_data:dict):
                 
                 # Get parameters of the __call__ method (excluding 'self')
                 parameters = inspect.signature(instance.__call__).parameters
-                if len(parameters) == 0 or list(parameters.keys()) == ['self']:
-                    return instance()
-                else:
-                    try:
+                try:
+                    if len(parameters) == 0 or list(parameters.keys()) == ['self']:
+                        return instance()
+                    else:
                         return instance(**cls_data.get('args',{}))
-                    except Exception as e:
-                        print("Error:", e)
-                        print("Expected parameters:", parameters)
+                except Exception as e:
+                    print("Error:", e)
 
             self.results = super().run(ignite_func=ignite_func,initial_args=initial_args)
             return self.results

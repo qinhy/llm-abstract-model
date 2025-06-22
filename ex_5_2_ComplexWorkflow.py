@@ -83,58 +83,50 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
     process_errors_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 3:.+?\n(.*?)(?=Step\s\d+:|$)")))
     overall_assessment_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 4:.+?\n(.*?)(?=Step\s\d+:|$)")))
     
-    question_plain:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string='{text}'))).build()
+    question_plain:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string='{text}')))
     question_tmplt:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string=
         'Please provide a better answer to the following question based on the previous process and review.\n\nQuestion:\n{qu}\n\nPrevious process:\n{pp}\n\nPrevious solution review:\n{ps}')))
     review_tmp:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string=                                                                           
         'Question\n{qu}\n\nRelevant concepts\n{rc}\n\nThoughts\n{th}\n\nProcess\n{pr}\n\nSolution\n{sl}')))
-
+    
     solve_and_review_1:Model4LLMs.MermaidWorkflow = store.add_new_obj(
         Model4LLMs.MermaidWorkflow(
             mermaid_text=f'''
     graph TD
+        {question_plain.get_id()} -- "{{'data':'messages'}}" --> {solver.get_id()}
+
+        {solver.get_id()} -- "{{'data':'text'}}" --> {relevant_concepts_extract.get_id()}
+        {solver.get_id()} -- "{{'data':'text'}}" --> {thoughts_extract.get_id()}
+        {solver.get_id()} -- "{{'data':'text'}}" --> {process_extract.get_id()}
+        {solver.get_id()} -- "{{'data':'text'}}" --> {solution_extract.get_id()}
+
         {question_plain.get_id()} -- "{{'data':'qu'}}" --> {review_tmp.get_id()}
-        {question_plain.get_id()} -- "{{'data':'rc'}}" --> {review_tmp.get_id()}
-        {question_plain.get_id()} -- "{{'data':'th'}}" --> {review_tmp.get_id()}
-        {question_plain.get_id()} -- "{{'data':'pr'}}" --> {review_tmp.get_id()}
-        {question_plain.get_id()} -- "{{'data':'sl'}}" --> {review_tmp.get_id()}
+        {relevant_concepts_extract.get_id()} -- "{{'data':'rc'}}" --> {review_tmp.get_id()}
+        {thoughts_extract.get_id()} -- "{{'data':'th'}}" --> {review_tmp.get_id()}
+        {process_extract.get_id()} -- "{{'data':'pr'}}" --> {review_tmp.get_id()}
+        {solution_extract.get_id()} -- "{{'data':'sl'}}" --> {review_tmp.get_id()}
 
-        {question_plain.get_id()} -- "{{'data':'qu'}}" --> {question_tmplt.get_id()}
-        {question_plain.get_id()} -- "{{'data':'pp'}}" --> {question_tmplt.get_id()}
-        {question_plain.get_id()} -- "{{'data':'ps'}}" --> {question_tmplt.get_id()}
-    '''))
+        {review_tmp.get_id()} -- "{{'data':'messages'}}" --> {reviewer.get_id()}
+    '''),id='solveAndReview1')
     solve_and_review_1.parse_mermaid()
-    print(solve_and_review_1.run(text='!!!Hi!!!'))
+    solve_and_review_1.build(text='')
+    # print(solve_and_review_1(text='What is Apple?')['data'])
 
-#     solve_and_review_1 = store.add_new_workflow(
-#         tasks={
-#             question_plain.get_id():['__input__'],
+    
+    solve_and_review_2:Model4LLMs.MermaidWorkflow = store.add_new_obj(
+        Model4LLMs.MermaidWorkflow(
+            mermaid_text=f'''
+    graph TD
+        {solve_and_review_1.get_id()} -- "{{'data':'text'}}" --> {question_plain.get_id()}
 
-#             question_tmplt.get_id()  :['__input__'],
-#             solver.get_id()        :[question_tmplt.get_id()],
+    '''),id='solveAndReview2')
+    solve_and_review_2.parse_mermaid()
+    print(solve_and_review_2.build(text='What is Apple?')(text='What is Apple?')['data'])
+    # print(solve_and_review_1.run(text='What is Apple?')['final']['data'])
+    # print(solve_and_review_2.run(text='What is Apple?'))
 
-#             relevant_concepts_extract.get_id() :[solver.get_id()],
-#             thoughts_extract.get_id()          :[solver.get_id()],
-#             process_extract.get_id()           :[solver.get_id()],
-#             solution_extract.get_id()          :[solver.get_id()],
-
-#             review_tmp.get_id():[question_plain.get_id(),relevant_concepts_extract.get_id(),
-#                                 thoughts_extract.get_id(),process_extract.get_id(),solution_extract.get_id()],
-            
-#             reviewer.get_id():[review_tmp.get_id()],
-
-#             # initial_review_extract.get_id():[reviewer.get_id()],
-#             # reasoning_feedback_extract.get_id():[reviewer.get_id()],
-#             # process_errors_extract.get_id():[reviewer.get_id()],
-#             # overall_assessment_extract.get_id():[reviewer.get_id()],
-
-#             'final':[question_plain.get_id(),process_extract.get_id(),
-#                      reviewer.get_id(),solution_extract.get_id()],
-#         }
-#     )
-
-#     solve_and_review_2 = store.add_new_obj(solve_and_review_1.model_copy(update={'_id':None}))
-#     solve_and_review_3 = store.add_new_obj(solve_and_review_1.model_copy(update={'_id':None}))
+    # solve_and_review_2 = store.add_new_obj(solve_and_review_1.model_copy())
+    # solve_and_review_3 = store.add_new_obj(solve_and_review_1.model_copy())
 
 #     store.add_new_workflow(
 #         tasks=[
