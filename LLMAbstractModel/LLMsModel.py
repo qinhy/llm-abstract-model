@@ -187,7 +187,7 @@ class Controller4LLMs:
     class StringTemplateController(AbstractObjController): pass
     class ClassificationTemplateController(AbstractObjController): pass
     class MermaidWorkflowFunctionController(AbstractObjController): pass
-    class MermaidWorkflowWorkFlowController(AbstractObjController): pass
+    class MermaidWorkflowController(AbstractObjController): pass
     
 class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
@@ -410,10 +410,13 @@ class Model4LLMs:
 
     class MermaidWorkflow(MermaidWorkflowEngine, AbstractObj):
         results: Dict[str, dict] = {}
+        builds: str = r'{}'
 
         # def __call__(self, *args, **kwargs):
         #     return self.run(*args, **kwargs)['final']
+
         def build(self, **kwargs):
+            self.controller.update(builds=json.dumps(kwargs))
             fields = kwargs.keys()
             arg_str = ', '.join(fields)
             format_args = ', '.join([f"{key}= {repr(value)}" for key, value in kwargs.items()])
@@ -423,7 +426,7 @@ class Model4LLMs:
 from typing import Any, Dict
 def __call__(self, {arg_str})->Dict[str, Any]:
     res = self.run({format_args})
-    return res
+    return res['final']
 """
             # Compile the function
             local_vars = {}
@@ -437,19 +440,15 @@ def __call__(self, {arg_str})->Dict[str, Any]:
             return self
 
         def run(self, **initial_args) -> Dict[str, dict]:
-                
-            def ignite_func(instance:MWFFunction, cls_data:dict):
-                
+            # import pdb; pdb.set_trace()
+            def ignite_func(instance:MWFFunction, cls_data:dict, self=self):                
                 # Get parameters of the __call__ method (excluding 'self')
                 parameters = inspect.signature(instance.__call__).parameters
-                try:
-                    if len(parameters) == 0 or list(parameters.keys()) == ['self']:
-                        return instance()
-                    else:
-                        return instance(**cls_data.get('args',{}))
-                except Exception as e:
-                    print("Error:", e)
-
+                if len(parameters) == 0 or list(parameters.keys()) == ['self']:
+                    return instance()
+                else:
+                    return instance(**cls_data.get('args',{}))
+                
             self.results = super().run(ignite_func=ignite_func,initial_args=initial_args)
             return self.results
 
@@ -469,16 +468,23 @@ def __call__(self, {arg_str})->Dict[str, Any]:
             res = json.loads(json.dumps(res).replace('__of__',':'))
             model_registry = {}
             for k,v in res.items():
-                func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)                
-                if not callable(func) and hasattr(func,'build'):
-                    func:MWFFunction = func.build()
+                func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)       
+
+                if not callable(func) and hasattr(func,'build') and not hasattr(func,'builds'):
+                    func:MWFFunction = func.build()          
+
+                elif hasattr(func,'builds') and func.builds and hasattr(func,'build'):
+                    func:MWFFunction = func.build(**json.loads(func.builds))
+
                 model_registry[k] = (func.__class__,func)
                 res[k] = GraphNode(**v)
             self.model_register(model_registry)
             self.mermaid_text = mermaid_text
             self._graph = res
             return res
-        controller: Optional[Controller4LLMs.MermaidWorkflowWorkFlowController] = None
+        
+        controller: Optional[Controller4LLMs.MermaidWorkflowController] = None
+
     class RequestsFunction(MermaidWorkflowFunction):
         description:str = Field('Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.')
         

@@ -110,9 +110,9 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
     '''),id='solveAndReview1')
     solve_and_review_1.parse_mermaid()
     solve_and_review_1.build(text='')
+    solve_and_review_1.controller.update(builds=solve_and_review_1.builds)
     # print(solve_and_review_1(text='What is Apple?')['data'])
 
-    
     solve_and_review_2:Model4LLMs.MermaidWorkflow = store.add_new_obj(
         Model4LLMs.MermaidWorkflow(
             mermaid_text=f'''
@@ -121,8 +121,9 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
 
     '''),id='solveAndReview2')
     solve_and_review_2.parse_mermaid()
-    print(solve_and_review_2.build(text='What is Apple?')(text='What is Apple?')['data'])
-    # print(solve_and_review_1.run(text='What is Apple?')['final']['data'])
+    solve_and_review_2.build(text='What is Apple?')
+    print(solve_and_review_2(text='What is Apple?')['data'])
+    # print(solve_and_review_1.run(text='What is Apple?')['data'])
     # print(solve_and_review_2.run(text='What is Apple?'))
 
     # solve_and_review_2 = store.add_new_obj(solve_and_review_1.model_copy())

@@ -16,14 +16,14 @@ chatgpt = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',system_pr
 class FibonacciFunction(Model4LLMs.MermaidWorkflowFunction):
     description:str = 'generate Fibonacci sequence up to n-th number'
     
-    class Args(BaseModel):
+    class Parameter(BaseModel):
         n:int = 0
 
-    class Return(BaseModel):
+    class Returness(BaseModel):
         n: int = 0
 
-    args: Args = Args()
-    rets: Return = Return()
+    args: Parameter = Parameter()
+    rets: Returness = Returness()
 
     def __call__(self, n: int):
         self.args.n = n

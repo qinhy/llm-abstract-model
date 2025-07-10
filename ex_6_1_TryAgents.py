@@ -19,7 +19,7 @@ vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
 class FrenchReverseGeocodeFunction(Model4LLMs.MermaidWorkflowFunction):
     description:str = "French reverse geocode coordinates to an address"
 
-    class Args(BaseModel):
+    class Parameter(BaseModel):
         lon: float = Field(..., description="Longitude")
         lat: float = Field(..., description="Latitude")
 
