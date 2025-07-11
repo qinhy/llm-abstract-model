@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -60,6 +61,44 @@ class StringTemplate(Model4LLMs.MermaidWorkflowFunction):
         self.rets.data = self.para.string.format(*args,**kwargs)
         return self.rets.data
 
+class StringToBase64Encoder(Model4LLMs.MermaidWorkflowFunction): 
+    description:str = Field('StringToBase64Encoder')
+
+    class Arguments(BaseModel):
+        plain: str = Field(description="Plain text string to encode")
+    
+    class Returness(BaseModel):
+        encoded: str = Field(default="", description="Base64 encoded string")
+    
+    args: Optional[Arguments] = None
+    rets: Returness = Returness()
+    
+    def __call__(self,plain:str=''):
+        self.args = self.Arguments(plain=plain)
+        string_bytes = self.args.plain.encode('utf-8')
+        base64_bytes = base64.b64encode(string_bytes)
+        self.rets.encoded = base64_bytes.decode('utf-8')
+        return self.rets.encoded
+    
+class Base64ToStringDecoder(Model4LLMs.MermaidWorkflowFunction): 
+    description:str = Field('Base64ToStringDecoder')
+
+    class Arguments(BaseModel):
+        encoded: str = Field(description="Base64 string to decode")
+    
+    class Returness(BaseModel):
+        plain: str = Field(default="", description="Decoded plain text string")
+    
+    args: Optional[Arguments] = None
+    rets: Returness = Returness()    
+        
+    def __call__(self,encoded:str=''):
+        self.args = self.Arguments(encoded=encoded)
+        base64_bytes = self.args.encoded.encode('utf-8')
+        string_bytes = base64.b64decode(base64_bytes)
+        self.rets.plain = string_bytes.decode('utf-8')
+        return self.rets.plain
+    
 class StringTemplate(Model4LLMs.MermaidWorkflowFunction):
     description: str = Field(default='Dynamic templated string callable')
     

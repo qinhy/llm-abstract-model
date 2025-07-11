@@ -1,7 +1,6 @@
-
-import json
-from LLMAbstractModel.utils import StringTemplate, RegxExtractor
+from LLMAbstractModel.utils import Base64ToStringDecoder, StringTemplate, RegxExtractor, StringToBase64Encoder
 from LLMAbstractModel import LLMsStore,Model4LLMs
+
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
@@ -83,67 +82,56 @@ Key: Be objective, consistent, and thorough. Choose the solution with the best r
     process_errors_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 3:.+?\n(.*?)(?=Step\s\d+:|$)")))
     overall_assessment_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 4:.+?\n(.*?)(?=Step\s\d+:|$)")))
     
-    question_plain:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string='{text}')))
+    b642str: Base64ToStringDecoder = store.add_new_obj(Base64ToStringDecoder())
+
     question_tmplt:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string=
         'Please provide a better answer to the following question based on the previous process and review.\n\nQuestion:\n{qu}\n\nPrevious process:\n{pp}\n\nPrevious solution review:\n{ps}')))
     review_tmp:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string=                                                                           
         'Question\n{qu}\n\nRelevant concepts\n{rc}\n\nThoughts\n{th}\n\nProcess\n{pr}\n\nSolution\n{sl}')))
     
-    solve_and_review_1:Model4LLMs.MermaidWorkflow = store.add_new_obj(
+    store.add_new_obj(
         Model4LLMs.MermaidWorkflow(
             mermaid_text=f'''
     graph TD
-        {question_plain.get_id()} -- "{{'data':'messages'}}" --> {solver.get_id()}
+        {b642str.get_id()}["{{'args': {{'encoded': 'THE_QUESTION'}} }}"]
 
+        {b642str.get_id()} -- "{{'plain':'messages'}}" --> {solver.get_id()}
         {solver.get_id()} -- "{{'data':'text'}}" --> {relevant_concepts_extract.get_id()}
         {solver.get_id()} -- "{{'data':'text'}}" --> {thoughts_extract.get_id()}
         {solver.get_id()} -- "{{'data':'text'}}" --> {process_extract.get_id()}
         {solver.get_id()} -- "{{'data':'text'}}" --> {solution_extract.get_id()}
 
-        {question_plain.get_id()} -- "{{'data':'qu'}}" --> {review_tmp.get_id()}
+        {b642str.get_id()} -- "{{'plain':'qu'}}" --> {review_tmp.get_id()}
         {relevant_concepts_extract.get_id()} -- "{{'data':'rc'}}" --> {review_tmp.get_id()}
         {thoughts_extract.get_id()} -- "{{'data':'th'}}" --> {review_tmp.get_id()}
         {process_extract.get_id()} -- "{{'data':'pr'}}" --> {review_tmp.get_id()}
         {solution_extract.get_id()} -- "{{'data':'sl'}}" --> {review_tmp.get_id()}
-
         {review_tmp.get_id()} -- "{{'data':'messages'}}" --> {reviewer.get_id()}
-    '''),id='solveAndReview1')
-    solve_and_review_1.parse_mermaid()
-    solve_and_review_1.build(text='')
-    solve_and_review_1.controller.update(builds=solve_and_review_1.builds)
-    # print(solve_and_review_1(text='What is Apple?')['data'])
 
-    solve_and_review_2:Model4LLMs.MermaidWorkflow = store.add_new_obj(
-        Model4LLMs.MermaidWorkflow(
-            mermaid_text=f'''
-    graph TD
-        {solve_and_review_1.get_id()} -- "{{'data':'text'}}" --> {question_plain.get_id()}
+        {reviewer.get_id()} -- "{{'data':'text'}}" --> {initial_review_extract.get_id()}
+        {reviewer.get_id()} -- "{{'data':'text'}}" --> {reasoning_feedback_extract.get_id()}
+        {reviewer.get_id()} -- "{{'data':'text'}}" --> {process_errors_extract.get_id()}
+        {reviewer.get_id()} -- "{{'data':'text'}}" --> {overall_assessment_extract.get_id()}
 
-    '''),id='solveAndReview2')
-    solve_and_review_2.parse_mermaid()
-    solve_and_review_2.build(text='What is Apple?')
-    print(solve_and_review_2(text='What is Apple?')['data'])
-    # print(solve_and_review_1.run(text='What is Apple?')['data'])
-    # print(solve_and_review_2.run(text='What is Apple?'))
+        {b642str.get_id()} -- "{{'plain':'qu'}}" --> {question_tmplt.get_id()}
+        {process_extract.get_id()} -- "{{'data':'pp'}}" --> {question_tmplt.get_id()}
+        {reviewer.get_id()} -- "{{'data':'ps'}}" --> {question_tmplt.get_id()}
 
-    # solve_and_review_2 = store.add_new_obj(solve_and_review_1.model_copy())
-    # solve_and_review_3 = store.add_new_obj(solve_and_review_1.model_copy())
-
-#     store.add_new_workflow(
-#         tasks=[
-#             solve_and_review_1.get_id(),
-#             solve_and_review_2.get_id(),
-#             solve_and_review_3.get_id(),
-#         ],id='WorkFlow:solve_and_review_3_times')
+    '''),id='solveAndReview')
     
     return store    
 
 store = init()
-# data = store.dumps()
+data = store.dumps()
 
-# store.clean()
-# store.loads(data)
+store.clean()
+store.loads(data)
 
-# res = store.find('WorkFlow:solve_and_review_3_times'
-#            )('How many characters of the letter "r" in "rarspberrrry"?','no process','no review','no solution')
-# print(res)
+solve_and_review:Model4LLMs.MermaidWorkflow = store.find('solveAndReview')
+solve_and_review.b64_placeholder('How many characters of the letter "r" in "rarspberrrry"?','THE_QUESTION')
+for i in range(3):
+    res = solve_and_review()
+    solve_and_review.b64_placeholder(res,'THE_QUESTION')
+    qu = res
+print('######## final answer #######')
+print(res)

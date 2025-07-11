@@ -1,3 +1,4 @@
+import base64
 from graphlib import TopologicalSorter
 import inspect
 import json
@@ -185,6 +186,8 @@ class Controller4LLMs:
     class AsyncCeleryWebApiFunctionController(AbstractObjController): pass
     class RegxExtractorController(AbstractObjController): pass
     class StringTemplateController(AbstractObjController): pass
+    class StringToBase64EncoderController(AbstractObjController): pass
+    class Base64ToStringDecoderController(AbstractObjController): pass
     class ClassificationTemplateController(AbstractObjController): pass
     class MermaidWorkflowFunctionController(AbstractObjController): pass
     class MermaidWorkflowController(AbstractObjController): pass
@@ -410,34 +413,33 @@ class Model4LLMs:
 
     class MermaidWorkflow(MermaidWorkflowEngine, AbstractObj):
         results: Dict[str, dict] = {}
-        builds: str = r'{}'
+        placeholder:list[tuple[str, str]] = []
 
-        # def __call__(self, *args, **kwargs):
-        #     return self.run(*args, **kwargs)['final']
+        def __call__(self)->str:
+            self.parse_mermaid()
+            res = self.run()['final']
+            while self.placeholder:
+                p,t = self.placeholder.pop()
+                self.mermaid_text = self.mermaid_text.replace(t,p)
 
-        def build(self, **kwargs):
-            self.controller.update(builds=json.dumps(kwargs))
-            fields = kwargs.keys()
-            arg_str = ', '.join(fields)
-            format_args = ', '.join([f"{key}= {repr(value)}" for key, value in kwargs.items()])
+            return str(res) if 'data' not in res else str(res['data'])
 
-            # Dynamically generate a callable method with correct argument signature
-            func_code = f"""
-from typing import Any, Dict
-def __call__(self, {arg_str})->Dict[str, Any]:
-    res = self.run({format_args})
-    return res['final']
-"""
-            # Compile the function
-            local_vars = {}
-            exec(func_code, {}, local_vars)
-            dynamic_call = local_vars['__call__']
+        def _to_b64(self,s:str):            
+            string_bytes = s.encode('utf-8')
+            base64_bytes = base64.b64encode(string_bytes)
+            return base64_bytes.decode('utf-8')
 
-            # Dynamically create a subclass and assign the new __call__ method
-            dynamic_cls = create_model(f'MermaidWorkflowTemplateDynamic{id(self)}', __base__=Model4LLMs.MermaidWorkflow)
-            self.__class__ = dynamic_cls
-            setattr(self.__class__, '__call__', dynamic_call)
-            return self
+        def b64_placeholder(self,t,p="THE_PLACE"):
+            t = self._to_b64(t)
+            if p not in self.mermaid_text:
+                p = self._to_b64(p)
+            if p not in self.mermaid_text:
+                print(p)
+                print(self.mermaid_text)
+                raise ValueError('not such palceholder')
+            
+            self.placeholder.append((p,t))
+            self.mermaid_text = self.mermaid_text.replace(p,t)
 
         def run(self, **initial_args) -> Dict[str, dict]:
             # import pdb; pdb.set_trace()
@@ -455,7 +457,8 @@ def __call__(self, {arg_str})->Dict[str, Any]:
         def parse_mermaid(self, mermaid_text: str=None) -> Dict[str, Dict[str, Any]]:
             self._graph = {}
             if mermaid_text is None:
-                mermaid_text = self.mermaid_text
+                mermaid_text = f'\n{self.mermaid_text}'
+                mermaid_text_copy = f'\n{self.mermaid_text}'
             mermaid_text_lines = list(map(lambda l:l.replace(':','__of__',1),mermaid_text.split('\n')))
             mermaid_text_lines = [l for l in mermaid_text_lines if len(l)>0]
             mermaid_text_lines = [l.split('-->',1) for l in mermaid_text_lines]
@@ -468,18 +471,13 @@ def __call__(self, {arg_str})->Dict[str, Any]:
             res = json.loads(json.dumps(res).replace('__of__',':'))
             model_registry = {}
             for k,v in res.items():
-                func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)       
-
-                if not callable(func) and hasattr(func,'build') and not hasattr(func,'builds'):
-                    func:MWFFunction = func.build()          
-
-                elif hasattr(func,'builds') and func.builds and hasattr(func,'build'):
-                    func:MWFFunction = func.build(**json.loads(func.builds))
-
+                func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)
+                if not callable(func) and hasattr(func,'build'):
+                    func:MWFFunction = func.build()
                 model_registry[k] = (func.__class__,func)
                 res[k] = GraphNode(**v)
             self.model_register(model_registry)
-            self.mermaid_text = mermaid_text
+            self.mermaid_text = mermaid_text_copy
             self._graph = res
             return res
         
