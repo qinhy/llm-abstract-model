@@ -19,17 +19,17 @@ vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
 class FrenchReverseGeocodeFunction(Model4LLMs.MermaidWorkflowFunction):
     description:str = "French reverse geocode coordinates to an address"
 
-    class Parameter(BaseModel):
+    class Arguments(BaseModel):
         lon: float = Field(..., description="Longitude")
         lat: float = Field(..., description="Latitude")
 
-    class Returns(BaseModel):
+    class Returness(BaseModel):
         address: Optional[dict] = Field(None, description="Geocoded address result from French government API")
         success: bool = Field(..., description="True if API call was successful")
         error: Optional[str] = Field(None, description="Error message, if any")
 
-    args: Optional[Args] = None
-    rets: Optional[Returns] = None
+    args: Optional[Arguments] = None
+    rets: Optional[Returness] = None
     debug: bool = False
 
     def __call__(self):
@@ -46,11 +46,11 @@ class FrenchReverseGeocodeFunction(Model4LLMs.MermaidWorkflowFunction):
             response.raise_for_status()
             data = response.json()
             debugprint(f"Received data: {data}")
-            self.rets = self.Returns(address=data, success=True)
+            self.rets = self.Returness(address=data, success=True)
         except Exception as e:
             error_msg = f"Request failed: {e}"
             debugprint(error_msg)
-            self.rets = self.Returns(address=None, success=False, error=error_msg)
+            self.rets = self.Returness(address=None, success=False, error=error_msg)
 
         return self.rets
 
@@ -95,7 +95,7 @@ please only reply with the following json in markdown format:
             
             # If the response contains coordinates, perform a reverse geocode search
             if isinstance(coord_or_query, dict):
-                french_address_search_function.args = FrenchReverseGeocodeFunction.Args.model_validate(coord_or_query)
+                french_address_search_function.args = FrenchReverseGeocodeFunction.Arguments.model_validate(coord_or_query)
                 french_address_search_function.debug=debug
                 debugprint(f'[french_address_search_function]: Searching address with coordinates: [{coord_or_query}]')
                 query = french_address_search_function()

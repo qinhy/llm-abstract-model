@@ -122,7 +122,7 @@ class TextMemoryTree:
             sys = '''Please organize the following memory list and respond in the original tree structure format. If a node represents a group, add '(Group)' at the end of the node name. Feel free to edit, delete, move or add new nodes (or groups) as needed. Start with the root node and add child nodes at the appropriate level.'''
             self.llm.system_prompt=sys
             res:str = self.llm(f'```text\n{self.print_tree(is_print=False)}\n```')
-            res:str = RegxExtractor(regx=r"```text\s*(.*)\s*```")(res)
+            res:str = RegxExtractor(para=dict(regx=r"```text\s*(.*)\s*```"))(res)
             # print(res)
         root = self.parse_text_tree(res)
         embeddings = {}
@@ -333,7 +333,7 @@ Note: When it is necessary to retain new and important information, such as pref
     
     def __call__(self, query: str, print_memory=True) -> str:
         query = f"## User Query\n{query} ({str(datetime.datetime.now())})\n"
-        memo_ext = RegxExtractor(regx=r"```memory\s*(.*)\s*```")
+        memo_ext = RegxExtractor(para=dict(regx=r"```memory\s*(.*)\s*```"))
         # Retrieve relevant memory and format it for context
         memory = self.memory_retrieval(query)
         # Format the query with memory context
