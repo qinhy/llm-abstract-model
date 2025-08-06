@@ -13,7 +13,7 @@ class OpenAIVendor(AbstractVendor):
     
     def get_available_models(self) -> Dict[str, Any]:
         response = super().get_available_models()
-        return {model['id']: model for model in response.json().get('data', [])}
+        return {model['id']: model for model in response.get('data', [])}
 
 
     def chat_result(self, response) -> Union[str, Dict[str, Any]]:
