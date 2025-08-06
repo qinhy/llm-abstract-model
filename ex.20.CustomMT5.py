@@ -154,16 +154,16 @@ def load_secure():
     store.load_RSA('./tmp/ex.20.store.rjson', './tmp/private_key.pem')
     return store
 
-store = init_store()
+# tmp_store = init_store()
 # save_secure(store)
 # store.clean()
 # store = load_secure()
 
-workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
-myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
+# workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
+# myprint('json.dumps(workflow.model_dump_json_dict(), indent=2)')
     
 # Monitoring loop
-def start_monitoring(store=store):
+def start_monitoring(store):
     llm = store.find_all('ChatGPT*:*')[0]
     monitor_pairs = store.get('monitor_pairs')['monitor_pairs']
     workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
@@ -207,12 +207,12 @@ def start_monitoring(store=store):
             res = get_rates(json=acc,params=dict(symbol=currency,timeframe='H4',count=30))
             res = decode_rates(res)
             llmr = res = llm(res)
+            with open('../llm-abstract-model-logs.txt', 'a', encoding='utf-8') as log_file:
+                log_file.write(llmr + '\n')
             res = extract_json(res)
             p = to_book_plan(res)
             # res = books_send(json=dict(acc=acc,book=res))
             print("Result:", p)
-            with open('../llm-abstract-model-logs.txt', 'a') as log_file:
-                log_file.write(llmr + '\n')
             plans.append(p)
 
         for p in plans:sa.books_send(p)
