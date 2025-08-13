@@ -541,12 +541,24 @@ class Model4LLMs:
     #                             params='query parameters',
     #                             data='form data',
     #                             json='JSON payload')
-    # class AsyncCeleryWebApiFunction(Function):
-    #     method: str = 'GET'
-        timeout: int = 60
-    #     url: str
-    #     headers: Dict[str, str] = {}
-    #     task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}'
+    class AsyncCeleryWebApiFunction(MermaidWorkflowFunction):
+        description:str = Field('Makes an HTTP request to async Celery REST api.')
+        
+        class Parameter(BaseModel):            
+            method: str = 'GET'
+            timeout: int = 60
+            headers: Dict[str, str] = {}
+            task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}'
+
+        class Arguments(BaseModel):
+            url: str
+
+        class Returness(BaseModel):
+            data: dict = {}
+
+        para: Parameter
+        args: Arguments
+        rets: Returness = Returness()
 
         def __call__(self,params: Optional[Dict[str, Any]] = None,
                      data: Optional[Dict[str, Any]] = None,
@@ -556,8 +568,8 @@ class Model4LLMs:
             try:
                 if debug: return debug_data
                 response = requests.request(
-                    method=self.method,url=self.url,
-                    headers=self.headers,params=params,
+                    method=self.para.method,url=self.args.url,
+                    headers=self.para.headers,params=params,
                     data=data,json=json
                 )
                 response.raise_for_status()
@@ -569,8 +581,8 @@ class Model4LLMs:
                 while True:
                     response = requests.request(
                         method='GET',
-                        url= self.task_status_url.format(task_id=task_id),
-                        headers=self.headers,params=params,
+                        url= self.para.task_status_url.format(task_id=task_id),
+                        headers=self.para.headers,params=params,
                         data=data,json=json
                     )
                     if response is None:
