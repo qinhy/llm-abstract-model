@@ -556,7 +556,7 @@ class Model4LLMs:
         class Returness(BaseModel):
             data: dict = {}
 
-        para: Parameter
+        para: Parameter = Parameter()
         args: Arguments
         rets: Returness = Returness()
 

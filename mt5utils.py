@@ -1,9 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import json
 from typing import Any
 from LLMAbstractModel.LLMsModel import LLMsStore
 from LLMAbstractModel import Model4LLMs
-descriptions = Model4LLMs.Function.param_descriptions
 
 class MT5Account(Model4LLMs.AbstractObj):
     account_id: int = None
@@ -15,6 +14,7 @@ class MT5Account(Model4LLMs.AbstractObj):
         # if self.password == '':raise ValueError('password is not set')
         # if self.account_server == '':raise ValueError('account_server is not set')
         return True
+
 
 class Book(BaseModel):
     class Controller(BaseModel):
@@ -54,37 +54,58 @@ class Book(BaseModel):
         return [ Book(**op) for op in book_list]
      
 
-@descriptions('Create an MT5 order based on symbol, entry price, exit price.',
-        Symbol='The financial instrument for the order (e.g., USDJPY).',
-        EntryPrice='Price at which to enter the trade.',
-        TakeProfitPrice='Price at which to take profit in the trade.',
-        ProfitRiskRatio='The ratio of profit to risk.')
-class MT5MakeOder(Model4LLMs.Function):    
-    def __call__(self, data):
-        Symbol, EntryPrice, TakeProfitPrice, ProfitRiskRatio = data['Symbol'],data['EntryPrice'],data['TakeProfitPrice'],data['ProfitRiskRatio']
-        going_long = TakeProfitPrice > EntryPrice
-        if going_long:
-            stop_loss = EntryPrice - (TakeProfitPrice - EntryPrice) / ProfitRiskRatio
-        else:
-            stop_loss = EntryPrice + (EntryPrice - TakeProfitPrice) / ProfitRiskRatio
-        digitsnum = {'AUDJPY':3,'CADJPY':3,'CHFJPY':3,'CNHJPY':3,'EURJPY':3,
-                        'GBPJPY':3,'USDJPY':3,'NZDJPY':3,'XAUJPY':0,'JPN225':1,'US500':1}[Symbol]
-        EntryPrice,stop_loss,TakeProfitPrice = list(
-                        map(lambda x:round(x*10**digitsnum)/10**digitsnum,
-                                                        [EntryPrice,stop_loss,TakeProfitPrice]))
-        # Prepare trade request
-        return dict(symbol=Symbol,volume= 0.01,price_open=EntryPrice,sl=stop_loss,tp=TakeProfitPrice)
+class MT5MakeOder(Model4LLMs.MermaidWorkflowFunction):    
+        description:str = Field('Create an MT5 order based on symbol, entry price, exit price.')
+        
+        class Parameter(BaseModel):
+            volume:float = 0.01
+            digits:dict[str,int] = {'AUDJPY':3,'CADJPY':3,'CHFJPY':3,'CNHJPY':3,'EURJPY':3,
+                            'GBPJPY':3,'USDJPY':3,'NZDJPY':3,'XAUJPY':0,'JPN225':1,'US500':1}
+
+        class Arguments(BaseModel):
+            Symbol:str=Field(...,description='The financial instrument for the order (e.g., USDJPY).')
+            EntryPrice:float=Field(...,description='Price at which to enter the trade.')
+            TakeProfitPrice:float=Field(...,description='Price at which to take profit in the trade.')
+            ProfitRiskRatio:float=Field(...,description='The ratio of profit to risk.')
+
+        class Returness(BaseModel):
+            symbol: str = Field(..., description='The financial instrument for the order (e.g., USDJPY).')
+            volume: float = Field(..., description='Volume of the order.')
+            price_open: float = Field(..., description='Price at which to enter the trade.')
+            sl: float = Field(..., description='Stop loss price for the order.')
+            tp: float = Field(..., description='Take profit price for the order.')
+
+        para: Parameter = Parameter()
+        args: Arguments
+        rets: Returness
+
+        def __call__(self):
+            going_long = self.args.TakeProfitPrice > self.args.EntryPrice
+            if going_long:
+                stop_loss = self.args.EntryPrice - (self.args.TakeProfitPrice - self.args.EntryPrice) / self.args.ProfitRiskRatio
+            else:
+                stop_loss = self.args.EntryPrice + (self.args.EntryPrice - self.args.TakeProfitPrice) / self.args.ProfitRiskRatio
+            digitsnum = self.para.digits[self.args.Symbol]
+            EntryPrice,stop_loss,TakeProfitPrice = list(
+                            map(lambda x:round(x*10**digitsnum)/10**digitsnum,
+                                                            [EntryPrice,stop_loss,TakeProfitPrice]))
+            self.rets = self.Returness(symbol=self.args.Symbol,volume= 0.01,price_open=EntryPrice,sl=stop_loss,tp=TakeProfitPrice)
+            return  self.rets
 
 
-@descriptions('Return rates as string')
 class RatesReturn(Model4LLMs.Function):
-    class Rates(BaseModel):
+    description:str = Field('Return rates as string')
+    class Parameter(BaseModel):
+        pass
+    class Arguments(BaseModel):
+        pass
+    class Returness(BaseModel):
         symbol: str = "USDJPY"
         timeframe: str = "H1"
         count: int = 10
-        rates: list = None
+        rates: list = []
         digitsnum: int = 0
-        error: Any = None
+        error: str = ''
         header: str='```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n{join_formatted_rates}\n```'
 
         def __str__(self):
@@ -113,14 +134,17 @@ class RatesReturn(Model4LLMs.Function):
                 timeframe=self.timeframe,
                 join_formatted_rates=join_formatted_rates
             )
-        
+   
+    para: Parameter = Parameter()
+    args: Arguments = Arguments()
+    rets: Returness = Returness()
     def __call__(self, rates):
-        return str(RatesReturn.Rates(**(json.loads(rates['result']))['ret']))
+        self.rets = self.Returness(**(json.loads(rates['result'])['ret']))
+        return self.rets
 
     
 # Define and add a mock LLM function if in debug mode
-@descriptions('Return a constant string')
-class MockLLM(Model4LLMs.Function):
+class MockLLM(Model4LLMs.MermaidWorkflowFunction):
     def __call__(self, msg):
         return (
             '```json\n{\n'
@@ -131,8 +155,8 @@ class MockLLM(Model4LLMs.Function):
             '}\n```'
         )
 
-@descriptions('Return a Dict')
-class MakeDict(Model4LLMs.Function):
+
+class MakeDict(Model4LLMs.MermaidWorkflowFunction):
     def __call__(self, **kwargs):
         return dict(kwargs)
 

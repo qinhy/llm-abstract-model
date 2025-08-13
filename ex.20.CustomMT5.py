@@ -11,8 +11,6 @@ from LLMAbstractModel.LLMsModel import Model4LLMs
 from LLMAbstractModel.utils import RegxExtractor
 from mt5utils import MT5Account, MT5MakeOder, RatesReturn
 
-
-descriptions = Model4LLMs.Function.param_descriptions
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
