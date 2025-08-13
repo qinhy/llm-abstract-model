@@ -1,23 +1,19 @@
 # from https://github.com/qinhy/singleton-key-value-storage.git
 from datetime import datetime
 import json
-from typing import Optional
+from typing import Optional, Type
 import unittest
 from uuid import uuid4
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field
-
-try:
-    from .Storage import SingletonKeyValueStorage
-except Exception as e:
-    from Storage import SingletonKeyValueStorage
+from .Storage import SingletonKeyValueStorage
 
 def now_utc():
-    return datetime.now().replace(tzinfo=ZoneInfo("UTC"))
+    return datetime.now(timezone.utc)
 
 class BasicModel(BaseModel):
-    def __call__(self, *args, **kwargs):
-        raise NotImplementedError('This method should be implemented by subclasses.')
+    # def __call__(self, *args, **kwargs):
+    #     raise NotImplementedError('This method should be implemented by subclasses.')
     
     def _log_error(self, e):
         return f"[{self.__class__.__name__}] Error: {str(e)}"
@@ -144,12 +140,17 @@ class Model4Basic:
             self.controller.delete()
         
         def __del__(self):
-            if self.auto_del: self.__obj_del__()
+            if hasattr(self,'auto_del') and self.auto_del: self.__obj_del__()
         
         def model_dump_json_dict(self):
             return json.loads(self.model_dump_json())
 
         def class_name(self): return self.__class__.__name__
+
+        def model_copy(self, *, update = None, deep = False):
+            res = super().model_copy(update=update, deep=deep)
+            res._id = None
+            return res
 
         def set_id(self,id:str):
             assert self._id is None, 'this obj is been setted! can not set again!'
@@ -234,6 +235,10 @@ class BasicStore(SingletonKeyValueStorage):
         id = self._auto_fix_id(obj,id)
         self.set(id,d)
         return self._get_as_obj(id,d)
+    
+    def add_new_class(self,obj_class_type:Type[MODEL_CLASS_GROUP.AbstractObj]):
+        if not hasattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__):
+            setattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__,obj_class_type)
     
     def add_new(self, obj_class_type=MODEL_CLASS_GROUP.AbstractObj,id:str=None):#, id:str=None)->MODEL_CLASS_GROUP.AbstractObj:
         obj_name = obj_class_type.__name__

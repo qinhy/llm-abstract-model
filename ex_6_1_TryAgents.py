@@ -1,44 +1,67 @@
 
 import json
+from typing import Optional
+from pydantic import BaseModel, Field
 import requests
 from LLMAbstractModel.utils import RegxExtractor
 from LLMAbstractModel import LLMsStore,Model4LLMs
-descriptions = Model4LLMs.Function.param_descriptions
+
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
 store = LLMsStore()
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
 
+# def add_tool(t:Type[MermaidWorkflowFunction]):        
+#     mcp.add_tool(t, 
+#     description=t.model_fields['description'].default)
 
-## add French Address Search function
-@descriptions('French reverse geocode coordinates to an address', lon='longitude', lat='latitude')
-class FrenchReverseGeocodeFunction(Model4LLMs.Function):
+class FrenchReverseGeocodeFunction(Model4LLMs.MermaidWorkflowFunction):
+    description:str = "French reverse geocode coordinates to an address"
 
-    def __call__(self, lon: float, lat: float, debug=False):
-        debugprint = lambda msg:print(f'--> [french_address_search_function]: {msg}') if debug else lambda:None
-        # Construct the URL with the longitude and latitude parameters
-        url = f"https://api-adresse.data.gouv.fr/reverse/?lon={lon}&lat={lat}"        
-        # Perform the HTTP GET request
-        debugprint(f'Searching address with: [{dict(url=url)}]')
-        response = requests.get(url)        
-        # Check if the request was successful
-        if response.status_code == 200:
-            # Return the JSON data from the response
-            response = response.json()
-        else:
-            # Handle the error case
-            response = {'error': f"Request failed with status code {response.status_code}"}
-        
-        debugprint(f'Got response: [{dict(response=response)}]')
-        return response
+    class Arguments(BaseModel):
+        lon: float = Field(..., description="Longitude")
+        lat: float = Field(..., description="Latitude")
+
+    class Returness(BaseModel):
+        address: Optional[dict] = Field(None, description="Geocoded address result from French government API")
+        success: bool = Field(..., description="True if API call was successful")
+        error: Optional[str] = Field(None, description="Error message, if any")
+
+    args: Optional[Arguments] = None
+    rets: Optional[Returness] = None
+    debug: bool = False
+
+    def __call__(self):
+        def debugprint(msg):
+            if self.debug:
+                print(f'--> [FrenchReverseGeocodeFunction]: {msg}')
+
+        lon, lat = self.args.lon, self.args.lat
+        url = f"https://api-adresse.data.gouv.fr/reverse/?lon={lon}&lat={lat}"
+        debugprint(f"Querying URL: {url}")
+
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+            debugprint(f"Received data: {data}")
+            self.rets = self.Returness(address=data, success=True)
+        except Exception as e:
+            error_msg = f"Request failed: {e}"
+            debugprint(error_msg)
+            self.rets = self.Returness(address=None, success=False, error=error_msg)
+
+        return self.rets
 
 
 # Workflow function for querying French address agent and handling responses
-@descriptions('Workflow function of querying French address agent', question='The question to ask the LLM')
-class FrenchAddressAgent(Model4LLMs.Function):
+class FrenchAddressAgent(Model4LLMs.MermaidWorkflowFunction):
+    description:str = Field('Workflow function of querying French address agent')
+    # question:str = Field(...,description='The question to ask the LLM')
+    
     french_address_llm_id:str
-    first_json_extract:RegxExtractor = RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True)
+    first_json_extract:RegxExtractor = RegxExtractor(para=dict(regx=r"```json\s*(.*)\s*\n```", is_json=True))
     french_address_search_function_id:str
     french_address_system_prompt:str='''
 You are familiar with France and speak English.
@@ -60,7 +83,7 @@ please only reply with the following json in markdown format:
         store = self.controller.storage()
         french_address_llm:Model4LLMs.AbstractLLM = store.find(self.french_address_llm_id)
         french_address_llm.system_prompt = self.french_address_system_prompt
-        french_address_search_function = store.find(self.french_address_search_function_id)
+        french_address_search_function:FrenchReverseGeocodeFunction = store.find(self.french_address_search_function_id)
         
         while True:
             debugprint(f'Asking french_address_llm with: [{dict(question=query)}]')
@@ -71,9 +94,11 @@ please only reply with the following json in markdown format:
                 coord_or_query = json.loads(coord_or_query)
             
             # If the response contains coordinates, perform a reverse geocode search
-            if isinstance(coord_or_query, dict) and "lon" in coord_or_query and "lat" in coord_or_query:
+            if isinstance(coord_or_query, dict):
+                french_address_search_function.args = FrenchReverseGeocodeFunction.Arguments.model_validate(coord_or_query)
+                french_address_search_function.debug=debug
                 debugprint(f'[french_address_search_function]: Searching address with coordinates: [{coord_or_query}]')
-                query = french_address_search_function(**coord_or_query,debug=debug)
+                query = french_address_search_function()
                 query = f'\n## Question\n{question}\n## Information\n```\n{query}\n```\n'
             else:
                 # Return the final response if no coordinates were found
@@ -82,11 +107,12 @@ please only reply with the following json in markdown format:
                 return answer
 
 # Workflow for handling triage queries and routing to the appropriate agent
-@descriptions('Workflow function of triage queries and routing to the appropriate agent', question='The question to ask the LLM')
-class TriageAgent(Model4LLMs.Function):
+class TriageAgent(Model4LLMs.MermaidWorkflowFunction):
+    description:str = Field('Workflow function of triage queries and routing to the appropriate agent')
+
     triage_llm_id:str
     french_address_agent_id:str
-    agent_extract:RegxExtractor = RegxExtractor(regx=r"```agent\s*(.*)\s*\n```")
+    agent_extract:RegxExtractor = RegxExtractor(para=dict(regx=r"```agent\s*(.*)\s*\n```"))
     triage_system_prompt:str='''
 You are a professional guide who can connect the asker to the correct agent.
 Additionally, you are a skilled leader who can respond to questions using the agents' answer.

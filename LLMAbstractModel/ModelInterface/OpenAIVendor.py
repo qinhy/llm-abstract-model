@@ -1,7 +1,8 @@
 from pydantic import BaseModel
 from typing import Dict, Any, Union, Optional
-
-class OpenAIVendor(BaseModel):
+from .AbstractVendor import AbstractVendor
+    
+class OpenAIVendor(AbstractVendor):
     vendor_name:str = 'OpenAI'
     api_url:str = 'https://api.openai.com'
     chat_endpoint:str = '/v1/chat/completions'
@@ -12,11 +13,13 @@ class OpenAIVendor(BaseModel):
     
     def get_available_models(self) -> Dict[str, Any]:
         response = super().get_available_models()
-        return {model['id']: model for model in response.json().get('data', [])}
+        return {model['id']: model for model in response.get('data', [])}
 
 
     def chat_result(self, response) -> Union[str, Dict[str, Any]]:
         # print(response)
+        if not self._try_binary_error(lambda: response['choices']):
+            raise ValueError(f'cannot get choices from {response}')
         choice = response['choices'][0]
         content = ''
         if self._try_binary_error(lambda: response['choices'][0]['message']['content']):

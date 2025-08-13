@@ -17,23 +17,25 @@ llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',#vendor.get_i
                                                   system_prompt=system_prompt)
 
 print('############# make a message template')
-translate_template = store.add_new_function(
-    StringTemplate(string='''
+translate_template = store.add_new_obj(
+    StringTemplate(para=dict(
+        string='''
 ```text
-{}
-```'''))
+{text}
+```'''
+    ))).build()
 # the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
-print(translate_template('こんにちは！はじめてのチェーン作りです！'))
+print(translate_template(text='こんにちは！はじめてのチェーン作りです！'))
 # -> ...
 
-print(llm( translate_template('こんにちは！はじめてのチェーン作りです！')))
+print(llm( translate_template(text='こんにちは！はじめてのチェーン作りです！')))
 # -> ```translation
 # -> Hello! This is my first time making a chain!
 # -> ```
 
 store:LLMsStore = store
 print('############# make a "translation" extractor, strings between " ```translation " and " ``` "')
-get_result = store.add_new_function(RegxExtractor(regx=r"```translation\s*(.*)\s*\n```"))
+get_result = store.add_new_obj(RegxExtractor(para=dict(regx=r"```translation\s*(.*)\s*\n```")))
 
 # this just a chain like processs
 print(get_result(
@@ -44,11 +46,13 @@ print(get_result(
 
 print('############# make the chain more graceful and simple')
 # chain up functions
-from functools import reduce
 def compose(*funcs):
-    def chained_function(*args, **kwargs):
-        return reduce(lambda acc, f: f(*acc if isinstance(acc, tuple) else (acc,), **kwargs), funcs, args)
-    return chained_function
+    def composed(*args, **kwargs):
+        result = funcs[0](*args, **kwargs)  # start with last (innermost) function
+        for f in funcs[1:]:
+            result = f(result)
+        return result
+    return composed
 
 def say_a(x):return f'{x}a'
 def say_b(x):return f'{x}b'
@@ -75,6 +79,7 @@ print(LLMsStore.chain_dumps(translator_chain))
 
 loaded_chain = store.chain_loads(LLMsStore.chain_dumps(translator_chain))
 print(loaded_chain)
+loaded_chain[0] = loaded_chain[0].build()
 translator = compose(*loaded_chain)
 print(translator('こんにちは！はじめてのチェーン作りです！'))
 # -> Hello! It's my first time making a chain!
@@ -85,19 +90,21 @@ print('############# additional template usage')
 llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto')
 
 # we use raw json to do template
-translate_template = store.add_new_function(
-    StringTemplate(string='''[
-    {{"role":"system","content":"You are an expert in translation text.I will you provide text. Please tranlate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n```translation\\n...\\n```"}},
-    {{"role":"user","content":"\\nPlease translate the text in{}.\\n```text\\n{}\\n```"}}
-]'''))
+translate_template = store.add_new_obj(
+    StringTemplate(para=dict(
+        string='''[
+    {{"role":"system",
+        "content":"You are an expert in translation text.I will you provide text. Please tranlate it.\\nYou should reply translations only, without any additional information.\\n\\n## Your Reply Format Example\\n```translation\\n...\\n```"}},
+    {{"role":"user","content":"\\nPlease translate the text in{lng}.\\n```text\\n{txt}\\n```"}}
+]'''.replace('\n','').replace('\n','\\n')))).build()
 # the usage of template is tmp( [args1,args2,...] ) is the same of sting.format(*[...])
-print(translate_template('to English','こんにちは！はじめてのチェーン作りです！'))
+print(translate_template(lng='to English',txt='こんにちは！はじめてのチェーン作りです！'))
 # -> [
 # ->     {"role":"system","content":"You are an expert in translation text.I will you provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## -> Your Reply Format Example\n```translation\n...\n```"},
 # ->     {"role":"user","content":"\nPlease translate the text into English.\n```text\nこんにちは！はじめてのチェーン作りです！\n```"}
 # -> ]
 
-msg = json.loads( translate_template('to English','こんにちは！はじめてのチェーン作りです！'))
+msg = json.loads( translate_template(lng='to English',txt='こんにちは！はじめてのチェーン作りです！'))
 print(msg)
 # -> [{'role': 'system', 'content': 'You are an expert in translation text.I will you provide text. Please tranlate it.\nYou should reply translations only, without any additional information.\n\n## Your Reply Format Example\n```translation\n...\n```'}, {'role': 'user', 'content': '\nPlease translate the text into English.\n```text\nこんにちは！はじめてのチェーン作りです！\n```'}]
 
@@ -108,7 +115,7 @@ print(llm(msg))
 
 translator_chain = [translate_template, json.loads, llm, get_result]
 translator = compose(*translator_chain)
-print(translator('to Chinese','こんにちは！はじめてのチェーン作りです！'))
+print(translator(lng='to Chinese',txt='こんにちは！はじめてのチェーン作りです！'))
 # -> 你好！这是第一次制作链条！
-print(translator('to Japanese','Hello! This is my first time making a chain!'))
+print(translator(lng='to Japanese',txt='Hello! This is my first time making a chain!'))
 # -> こんにちは！これは私の初めてのチェーン作りです！

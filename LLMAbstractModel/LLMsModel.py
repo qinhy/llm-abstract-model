@@ -1,3 +1,4 @@
+import base64
 from graphlib import TopologicalSorter
 import inspect
 import json
@@ -5,9 +6,9 @@ import math
 import os
 import time
 import unittest
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, Union
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, create_model
 import requests
 from typing import Dict, Any
 
@@ -16,8 +17,10 @@ from .ModelInterface import AbstractVendor
 from .ModelInterface import AbstractLLM
 from .ModelInterface import OpenAIVendor
 from .ModelInterface import AbstractGPTModel
-from .ModelInterface import AbstractEmbedding
-    
+from .ModelInterface import AbstractEmbedding    
+from .MermaidWorkflowEngine import GraphNode, MermaidWorkflowFunction as MWFFunction
+from .MermaidWorkflowEngine import MermaidWorkflowEngine
+
 class Controller4LLMs:
     class AbstractObjController(Controller4Basic.AbstractObjController):
         pass
@@ -184,7 +187,11 @@ class Controller4LLMs:
     class AsyncCeleryWebApiFunctionController(AbstractObjController): pass
     class RegxExtractorController(AbstractObjController): pass
     class StringTemplateController(AbstractObjController): pass
+    class StringToBase64EncoderController(AbstractObjController): pass
+    class Base64ToStringDecoderController(AbstractObjController): pass
     class ClassificationTemplateController(AbstractObjController): pass
+    class MermaidWorkflowFunctionController(AbstractObjController): pass
+    class MermaidWorkflowController(AbstractObjController): pass
     
 class Model4LLMs:
     class AbstractObj(Model4Basic.AbstractObj):
@@ -401,114 +408,145 @@ class Model4LLMs:
         max_input_length: int = 8192  # Default max token length for text-embedding-3-small
         
     ##################### utils model #########
+    class MermaidWorkflowFunction(MWFFunction, AbstractObj):
+        description: str = Field(..., description="description of this function.")        
+        controller: Optional[Controller4LLMs.MermaidWorkflowFunctionController] = None
+
+    class MermaidWorkflow(MermaidWorkflowEngine, AbstractObj):
+        results: Dict[str, dict] = {}
+        placeholder:list[tuple[str, str]] = []
+
+        def __call__(self)->str:
+            self.parse_mermaid()
+            res = self.run()['final']
+            while self.placeholder:
+                p,t = self.placeholder.pop()
+                self.mermaid_text = self.mermaid_text.replace(t,p)
+
+            return str(res) if 'data' not in res else str(res['data'])
+
+        def _to_b64(self,s:str):            
+            string_bytes = s.encode('utf-8')
+            base64_bytes = base64.b64encode(string_bytes)
+            return base64_bytes.decode('utf-8')
+
+        def b64_placeholder(self,t,p="THE_PLACE"):
+            t = self._to_b64(t)
+            if p not in self.mermaid_text:
+                p = self._to_b64(p)
+            if p not in self.mermaid_text:
+                print(p)
+                print(self.mermaid_text)
+                raise ValueError('not such palceholder')
+            
+            self.placeholder.append((p,t))
+            self.mermaid_text = self.mermaid_text.replace(p,t)
+
+        def run(self, **initial_args) -> Dict[str, dict]:
+            # import pdb; pdb.set_trace()
+            def ignite_func(instance:MWFFunction, cls_data:dict, self=self):                
+                # Get parameters of the __call__ method (excluding 'self')
+                parameters = inspect.signature(instance.__call__).parameters
+                if len(parameters) == 0 or list(parameters.keys()) == ['self']:
+                    return instance()
+                else:
+                    return instance(**cls_data.get('args',{}))
+                
+            self.results = super().run(ignite_func=ignite_func,initial_args=initial_args)
+            return self.results
+
+        def parse_mermaid(self, mermaid_text: str=None) -> Dict[str, Dict[str, Any]]:
+            self._graph = {}
+            if mermaid_text is None:
+                mermaid_text = f'\n{self.mermaid_text}'
+                mermaid_text_copy = f'\n{self.mermaid_text}'
+            mermaid_text_lines = list(map(lambda l:l.replace(':','__of__',1),mermaid_text.split('\n')))
+            mermaid_text_lines = [l for l in mermaid_text_lines if len(l)>0]
+            mermaid_text_lines = [l.split('-->',1) for l in mermaid_text_lines]
+            mermaid_text_lines = [[l[0],l[1].replace(':','__of__',1)] if len(l)>1 else l for l in mermaid_text_lines]
+            mermaid_text_lines = [l[0]+'-->'+l[1] if len(l)>1 else l[0] for l in mermaid_text_lines]
+            mermaid_text = '\n'.join(mermaid_text_lines)
+            res:dict[str,GraphNode] = super().parse_mermaid(mermaid_text)
+            for k,v in res.items():
+                res[k] = v.model_dump()
+            res = json.loads(json.dumps(res).replace('__of__',':'))
+            model_registry = {}
+            for k,v in res.items():
+                func:Model4LLMs.MermaidWorkflowFunction = self.controller.storage().find(k)
+                if not callable(func) and hasattr(func,'build'):
+                    func:MWFFunction = func.build()
+                model_registry[k] = (func.__class__,func)
+                res[k] = GraphNode(**v)
+            self.model_register(model_registry)
+            self.mermaid_text = mermaid_text_copy
+            self._graph = res
+            return res
+        
+        controller: Optional[Controller4LLMs.MermaidWorkflowController] = None
+
+    class RequestsFunction(MermaidWorkflowFunction):
+        description:str = Field('Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.')
+        
+        class Parameter(BaseModel):            
+            method: str = 'GET'
+            url: str
+            headers: Dict[str, str] = {}
+
+        class Arguments(BaseModel):
+            params: Optional[Dict[str, Any]] = Field(...,description='query parameters'),
+            data:   Optional[Dict[str, Any]] = Field(...,description='form data'),
+            json_payload:   Optional[Dict[str, Any]] = Field(...,description='JSON payload'),
+
+        class Returness(BaseModel):
+            data: dict = {}
+
+        para: Parameter
+        args: Arguments
+        rets: Returness = Returness()
+                
+        def __call__(self,
+                     debug=False,
+                     debug_data=None) -> Dict[str, Any]:
+            try:
+                if debug: self.rets.data = debug_data
+                response = requests.request(
+                    method=self.para.method,url=self.para.url,
+                    headers=self.para.headers,params=self.args.params,
+                    data=self.args.data,json=self.args.json_payload,
+                )
+                response.raise_for_status()
+                try:
+                    self.rets.data = response.json()
+                except Exception as e:
+                    self.rets.data = {'text':response.text}
+            except requests.exceptions.RequestException as e:
+                self.rets.data = {"error": str(e), "status": getattr(e.response, "status_code", None)}
+
+            return self
+                # # Example usage:
+                # request_function = RequestsFunction(
+                #     method="POST",
+                #     url="https://api.example.com/data",
+                #     headers={"Authorization": "Bearer YOUR_TOKEN"}
+                # )
+
+                # result = request_function(json={"key": "value"})
+
+                # if "error" in result:
+                #     print(f"Error: {result['error']}")
+                # else:
+                #     print(f"Success: {result['data']}")
     
-    class Function(AbstractObj):
-
-        def param_descriptions(description,**descriptions):
-            def decorator(func):
-                func:Model4LLMs.Function = func
-                func._parameters_description = descriptions
-                func._description = description
-                return func
-            return decorator
-
-        class Parameter(BaseModel):
-            type: str
-            description: str            
-
-        name: str = 'null'
-        description: str = 'null'
-        _description: str = 'null'
-        # arguments: Dict[str, Any] = None
-        _properties: Dict[str, Parameter] = {}
-        parameters: Dict[str, Any] = {"type": "object",'properties':_properties}
-        required: list[str] = []        
-        _parameters_description: Dict[str, str] = {}
-        _string_arguments: str='\{\}'
-
-        def __init__(self, *args, **kwargs):
-            # super(self.__class__, self).__init__(*args, **kwargs)
-            super().__init__(*args, **kwargs)
-            self._extract_signature()
-
-        def _extract_signature(self):
-            self.name=self.__class__.__name__
-            sig = inspect.signature(self.__call__)
-            # try:
-            #     self.__call__()
-            # except Exception as e:
-            #     pass
-            # Map Python types to more generic strings
-            type_map = {
-                int: "integer",float: "number",
-                str: "string",bool: "boolean",
-                list: "array",dict: "object"
-                # ... add more mappings if needed
-            }
-            self.required = []
-            for name, param in sig.parameters.items():
-                param_type = type_map.get(param.annotation, "object")
-                self._properties[name] = Model4LLMs.Function.Parameter(
-                    type=param_type, description=self._parameters_description.get(name,''))
-                if param.default is inspect._empty:
-                    self.required.append(name)
-            self.parameters['properties']=self._properties
-            self.description = self._description
-
-        def __call__(self):
-            raise ValueError('this is root class , not implement')
-        
-        def get_description(self):
-            return self.model_dump()#exclude=['arguments'])
-
-        controller: Optional[Controller4LLMs.AbstractObjController] = None
-
-    class WorkFlow(AbstractObj):
-        tasks: Dict[str, list[str]] # using uuids, task and dependencies
-        # tasks = {
-        #     "task1_uuid": ["task2_uuid", "task3_uuid"],  # task1 depends on task2 and task3
-        #     "task2_uuid": ["task4_uuid"],           # task2 depends on task4
-        #     "task3_uuid": [],                  # task3 has no dependencies
-        #     "task4_uuid": []                   # task4 has no dependencies
-        # }
-        results: Dict[str, Any] = {}
-
-        def __call__(self, *args, **kwargs):
-            if '__input__' in  self.tasks:
-                del  self.tasks['__input__']
-
-            # if a sequential task input
-            if len(args)!=0:
-                first_task_id = self.todo_list()[0]
-                if first_task_id != '__input__':
-                    first_task_deps = self.tasks[first_task_id]
-                    if '__input__' not in first_task_deps:
-                        self.tasks[first_task_id].append('__input__')
-                kwargs['__input__'] = [args,{}]
-            return self.controller.run(**kwargs)
-
-        
-        def todo_list(self):
-            return list(TopologicalSorter(self.tasks).static_order())
-        
-        def find_dependency_results(self,task_id):
-            return [self.results[dep] for dep in self.tasks[task_id]]
-
-        def get_result(self, task_uuid: str) -> Any:
-            """Returns the result of a specified task."""
-            return self.results.get(task_uuid, None)
-        
-        model_config = ConfigDict(arbitrary_types_allowed=True)    
-        controller: Optional[Controller4LLMs.WorkFlowController] = None
-
-    @Function.param_descriptions('Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.',
-                                params='query parameters',
-                                data='form data',
-                                json='JSON payload')
-    class RequestsFunction(Function):
-        method: str = 'GET'
-        url: str
-        headers: Dict[str, str] = {}
+    # @Function.param_descriptions('Makes an HTTP request to async Celery REST api.',
+    #                             params='query parameters',
+    #                             data='form data',
+    #                             json='JSON payload')
+    # class AsyncCeleryWebApiFunction(Function):
+    #     method: str = 'GET'
+        timeout: int = 60
+    #     url: str
+    #     headers: Dict[str, str] = {}
+    #     task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}'
 
         def __call__(self,params: Optional[Dict[str, Any]] = None,
                      data: Optional[Dict[str, Any]] = None,
@@ -523,113 +561,35 @@ class Model4LLMs:
                     data=data,json=json
                 )
                 response.raise_for_status()
+                # get task id
+                for k,v in response.json().items():
+                    if 'id' in k:
+                        task_id = v
+                
+                while True:
+                    response = requests.request(
+                        method='GET',
+                        url= self.task_status_url.format(task_id=task_id),
+                        headers=self.headers,params=params,
+                        data=data,json=json
+                    )
+                    if response is None:
+                        break
+                    response.raise_for_status()
+                    if response.json() is None:
+                        break
+                    if response.json()['status'] in ['SUCCESS','FAILURE','REVOKED']:
+                        if response.json()['status'] == 'FAILURE':
+                            raise ValueError(f'{response.json()}')
+                        break
+                    time.sleep(1)
+
                 try:
                     return response.json()
                 except Exception as e:
-                    return {'text':response.text}
+                    raise ValueError(f'"text":{response.text}')
             except requests.exceptions.RequestException as e:
-                return {"error": str(e), "status": getattr(e.response, "status_code", None)}
-
-                # # Example usage:
-                # request_function = RequestsFunction(
-                #     method="POST",
-                #     url="https://api.example.com/data",
-                #     headers={"Authorization": "Bearer YOUR_TOKEN"}
-                # )
-
-                # result = request_function(json={"key": "value"})
-
-                # if "error" in result:
-                #     print(f"Error: {result['error']}")
-                # else:
-                #     print(f"Success: {result['data']}")
-    @Function.param_descriptions('Makes an HTTP request to async Celery REST api.',
-                                params='query parameters',
-                                data='form data',
-                                json='JSON payload')
-    class AsyncCeleryWebApiFunction(Function):
-        method: str = 'GET'
-        timeout: int = 60
-        url: str
-        headers: Dict[str, str] = {}
-        task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}'
-
-        def _make_request(self, url: str, params: Optional[Dict[str, Any]] = None, 
-                        data: Optional[Dict[str, Any]] = None, 
-                        json: Optional[Dict[str, Any]] = None,
-                        method=None) -> requests.Response:
-            """Helper method to send an HTTP request and handle exceptions."""
-            try:
-                if method is None:method=self.method
-                response = requests.request(
-                    method=method,
-                    url=url,
-                    headers=self.headers,
-                    params=params,
-                    data=data,
-                    json=json
-                )
-                response.raise_for_status()
-                return response
-            except requests.exceptions.RequestException as e:
-                error_message = f'"error": {e}, "status": {getattr(e.response, "status_code", None)}'
-                raise ValueError(error_message)
-
-        def _extract_task_id(self, response: Dict[str, Any]) -> Any:
-            """Extract the task ID from the response JSON."""
-            for key, value in response.items():
-                if 'id' in key: # usually key == 'task_id'
-                    return value
-            raise ValueError('Task ID not found in response.')
-
-        def _poll_task_status(self, task_id: Any, params: Optional[Dict[str, Any]] = None, 
-                            data: Optional[Dict[str, Any]] = None, 
-                            json: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-            """Poll the task status until completion or timeout."""
-            start_time = time.time()
-            while True:
-                if time.time() - start_time > self.timeout:
-                    raise TimeoutError("Task polling timed out.")
-
-                response = self._make_request(
-                    url=self.task_status_url.format(task_id=task_id),
-                    params=params,
-                    data=data,
-                    json=json,
-                    method='GET'
-                )
-
-                response_data = response.json()
-                if not response_data:
-                    break
-
-                status = response_data.get('status')
-                if status in ['SUCCESS', 'FAILURE', 'REVOKED']:
-                    if status == 'FAILURE':
-                        raise ValueError(f"Task failed: {response_data}")
-                    return response_data
-
-                time.sleep(1)
-
-        def __call__(self, params: Optional[Dict[str, Any]] = None,
-                    data: Optional[Dict[str, Any]] = None,
-                    json: Optional[Dict[str, Any]] = None,
-                    debug: bool = False,
-                    debug_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-            """Main callable method to execute the task and poll its status."""
-            if debug:
-                return debug_data
-
-            # Initial task submission
-            response = self._make_request(self.url, params=params, data=data, json=json)
-            response_data = response.json()
-            
-            # Extract task ID
-            task_id = self._extract_task_id(response_data)
-
-            # Poll task status
-            return self._poll_task_status(task_id, params=params, data=data, json=json)
-
+                raise ValueError(f'"error": {e} "status": {getattr(e.response, "status_code", None)}')
             
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   
@@ -667,26 +627,26 @@ class LLMsStore(BasicStore):
                         id=id)
         return add_llm
     
-    def add_new_function(self, function_obj:MODEL_CLASS_GROUP.Function, id:str=None)->MODEL_CLASS_GROUP.Function:
+    def add_new_function(self, function_obj:MODEL_CLASS_GROUP.MermaidWorkflowFunction, id:str=None)->MODEL_CLASS_GROUP.MermaidWorkflowFunction:
         return self.add_new_obj(function_obj,id=id)
     
     def add_new_request(self, url:str, method='GET', headers={}, id:str=None)->MODEL_CLASS_GROUP.RequestsFunction:
         return self.add_new_obj(self.MODEL_CLASS_GROUP.RequestsFunction(method=method,url=url,headers=headers),id=id)
     
     def add_new_celery_request(self, url:str, method='GET', headers={},
-                               task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}', id:str=None
+                               task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}', id:str=None
                                )->MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction:
         return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
                                                         headers=headers,task_status_url=task_status_url),id=id)
     
-    def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]], metadata={}, id:str=None)->MODEL_CLASS_GROUP.WorkFlow:
-        if type(tasks) is list:
-            tasks = tasks[::-1]
-            ds    = [[t] for t in tasks[1:]] + [[]]
-            tasks = {t:d for t,d in zip(tasks,ds)}
-        return self.add_new_obj(Model4LLMs.WorkFlow(tasks=tasks,metadata=metadata),id=id)
+    # def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]], metadata={}, id:str=None)->MODEL_CLASS_GROUP.WorkFlow:
+    #     if type(tasks) is list:
+    #         tasks = tasks[::-1]
+    #         ds    = [[t] for t in tasks[1:]] + [[]]
+    #         tasks = {t:d for t,d in zip(tasks,ds)}
+    #     return self.add_new_obj(Model4LLMs.WorkFlow(tasks=tasks,metadata=metadata),id=id)
     
-    def find_function(self,function_id:str) -> MODEL_CLASS_GROUP.Function:
+    def find_function(self,function_id:str) -> MODEL_CLASS_GROUP.MermaidWorkflowFunction:
         return self.find(function_id)
     
     def find_all_vendors(self)->list[MODEL_CLASS_GROUP.AbstractVendor]:

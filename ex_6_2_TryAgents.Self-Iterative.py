@@ -1,7 +1,6 @@
 
 from LLMAbstractModel.utils import RegxExtractor
 from LLMAbstractModel import LLMsStore,Model4LLMs
-descriptions = Model4LLMs.Function.param_descriptions
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
@@ -12,17 +11,16 @@ debug = True
 # enhance from https://github.com/richards199999/Self-Iterative-Agent-System-for-Complex-Problem-Solving/tree/main
 
 ## add Main model
-@descriptions('Workflow function of main model of Self-Iterative-Agent-System-for-Complex-Problem-Solving',
-               question='The question to ask the LLM')
-class MainAgent(Model4LLMs.Function):
+class MainAgent(Model4LLMs.MermaidWorkflowFunction):
+    description:str='Workflow function of main model of Self-Iterative-Agent-System-for-Complex-Problem-Solving'
     solutions:int = 2
     each_iterations:int = 2
     llm_id:str
     eval_agent_id:str
-    relevant_concepts_extract:RegxExtractor = RegxExtractor(regx=r"<relevant_concepts>\s*(.*)\s*</relevant_concepts>")
-    thoughts_extract:RegxExtractor = RegxExtractor(regx=r"<thoughts>\s*(.*)\s*</thoughts>")
-    process_extract:RegxExtractor = RegxExtractor(regx=r"<process>\s*(.*)\s*</process>")
-    solution_extract:RegxExtractor = RegxExtractor(regx=r"<solution>\s*(.*)\s*</solution>")
+    relevant_concepts_extract:RegxExtractor = RegxExtractor(**{'para':dict(regx=r"<relevant_concepts>\s*(.*)\s*</relevant_concepts>")})
+    thoughts_extract:RegxExtractor = RegxExtractor(**{'para':dict(regx=r"<thoughts>\s*(.*)\s*</thoughts>")})
+    process_extract:RegxExtractor = RegxExtractor(**{'para':dict(regx=r"<process>\s*(.*)\s*</process>")})
+    solution_extract:RegxExtractor = RegxExtractor(**{'para':dict(regx=r"<solution>\s*(.*)\s*</solution>")})
     system_prompt: str = '''**You will be addressing questions and tasks as a professional problem-solver. When the user provides a task or question, follow these steps:**
 
 ### Step 1: Identify Relevant Concepts
@@ -144,15 +142,13 @@ Remember to be objective, thorough, and consistent in your evaluation. Your goal
         answer = final_llm(f'## question\n{question}\n## solutions\n{rs}\n')
         return answer,self.solution_extract(answer)
 
-
-@descriptions('Workflow function of eval model of Self-Iterative-Agent-System-for-Complex-Problem-Solving',
-              question='The question to ask the LLM')
-class EvalAgent(Model4LLMs.Function):
+class EvalAgent(Model4LLMs.MermaidWorkflowFunction):
+    description:str='Workflow function of eval model of Self-Iterative-Agent-System-for-Complex-Problem-Solving'
     llm_id: str
-    initial_review_extract: RegxExtractor = RegxExtractor(regx=r"<initial_review>\s*(.*)\s*</initial_review>")
-    reasoning_feedback_extract: RegxExtractor = RegxExtractor(regx=r"<reasoning_feedback>\s*(.*)\s*</reasoning_feedback>")
-    process_errors_extract: RegxExtractor = RegxExtractor(regx=r"<process_errors>\s*(.*)\s*</process_errors>")
-    overall_assessment_extract: RegxExtractor = RegxExtractor(regx=r"<overall_assessment>\s*(.*)\s*</overall_assessment>")
+    initial_review_extract: RegxExtractor = RegxExtractor(**{'para':dict(regx=r"<initial_review>\s*(.*)\s*</initial_review>")})
+    reasoning_feedback_extract: RegxExtractor = RegxExtractor(**{'para':dict(regx=r"<reasoning_feedback>\s*(.*)\s*</reasoning_feedback>")})
+    process_errors_extract: RegxExtractor = RegxExtractor(**{'para':dict(regx=r"<process_errors>\s*(.*)\s*</process_errors>")})
+    overall_assessment_extract: RegxExtractor = RegxExtractor(**{'para':dict(regx=r"<overall_assessment>\s*(.*)\s*</overall_assessment>")})
     system_prompt: str = '''You will review the problem-solving process of another assistant that has answered a question. Your task is to evaluate the solution and provide a detailed review for refinement. Follow these steps:
 
 ### step1
@@ -202,8 +198,8 @@ eval_llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',limit_ou
 # main_llm = store.add_new_deepseek(vendor_id='auto',limit_output_tokens=4096)
 # eval_llm = store.add_new_deepseek(vendor_id='auto',limit_output_tokens=4096)
 
-store.add_new_obj(EvalAgent(llm_id=eval_llm.get_id()),id='EvalAgent:eval_agent')
-store.add_new_obj(MainAgent(llm_id=main_llm.get_id(),eval_agent_id='EvalAgent:eval_agent'),id='MainAgent:main_agent')
+store.add_new_obj(EvalAgent(llm_id=eval_llm.get_id()),id='eval_agent')
+store.add_new_obj(MainAgent(llm_id=main_llm.get_id(),eval_agent_id='eval_agent'),id='main_agent')
 
 data = store.dumps()
 store.clean()

@@ -1,17 +1,16 @@
-[tool.poetry]
-name = "LLMAbstractModel"
+[project]
+name = "llm-abstract-model"
 version = "0.1.0"
-description = "LLMAbstractModel"
-authors = ["koki.chin <545705507@qq.com>"]
-license = "MIT"
+description = "Add your description here"
 readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.3.1",
+    "pydantic>=2.11.7",
+    "requests>=2.32.4",
+]
 
-[tool.poetry.dependencies]
-python = "^3.7"
-pydantic = "^2.9.2"
-requests = "^2.32.3"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "ipython>=9.4.0",
+]

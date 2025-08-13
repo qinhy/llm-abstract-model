@@ -1,8 +1,6 @@
-
-import json
-from LLMAbstractModel.utils import StringTemplate, RegxExtractor
+from LLMAbstractModel.utils import Base64ToStringDecoder, StringTemplate, RegxExtractor, StringToBase64Encoder
 from LLMAbstractModel import LLMsStore,Model4LLMs
-descriptions = Model4LLMs.Function.param_descriptions
+
 def myprint(string):
     print('##',string,':\n',eval(string),'\n')
 
@@ -74,58 +72,52 @@ Be professional and constructive to improve the solution quality.''')
 
 Key: Be objective, consistent, and thorough. Choose the solution with the best reasoning, accuracy, and clarity.''')
     
-    relevant_concepts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 1:.+?\n(.*?)(?=Step\s\d+:|$)"))
-    thoughts_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 2:.+?\n(.*?)(?=Step\s\d+:|$)"))
-    process_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 3:.+?\n(.*?)(?=Step\s\d+:|$)"))
-    solution_extract:RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 4:.+?\n(.*?)(?=Step\s\d+:|$)"))
+    relevant_concepts_extract:RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 1:.+?\n(.*?)(?=Step\s\d+:|$)")))
+    thoughts_extract:RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 2:.+?\n(.*?)(?=Step\s\d+:|$)")))
+    process_extract:RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 3:.+?\n(.*?)(?=Step\s\d+:|$)")))
+    solution_extract:RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 4:.+?\n(.*?)(?=Step\s\d+:|$)")))
     
-    initial_review_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 1:.+?\n(.*?)(?=Step\s\d+:|$)"))
-    reasoning_feedback_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 2:.+?\n(.*?)(?=Step\s\d+:|$)"))
-    process_errors_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 3:.+?\n(.*?)(?=Step\s\d+:|$)"))
-    overall_assessment_extract: RegxExtractor = store.add_new_function(RegxExtractor(regx=r"Step 4:.+?\n(.*?)(?=Step\s\d+:|$)"))
+    initial_review_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 1:.+?\n(.*?)(?=Step\s\d+:|$)")))
+    reasoning_feedback_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 2:.+?\n(.*?)(?=Step\s\d+:|$)")))
+    process_errors_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 3:.+?\n(.*?)(?=Step\s\d+:|$)")))
+    overall_assessment_extract: RegxExtractor = store.add_new_obj(RegxExtractor(para=dict(regx=r"Step 4:.+?\n(.*?)(?=Step\s\d+:|$)")))
     
-    question_plain:StringTemplate = store.add_new_function(StringTemplate(string='{}'))
-    question_tmp:StringTemplate = store.add_new_function(StringTemplate(string=
-        'Please provide a better answer to the following question based on the previous process and review.\n\nQuestion:\n{}\n\nPrevious process:\n{}\n\nPrevious solution review:\n{}'))
-    review_tmp = store.add_new_function(StringTemplate(string=
-        'Question\n{}\n\nRelevant concepts\n{}\n\nThoughts\n{}\n\nProcess\n{}\n\nSolution\n{}'))
-        
-    solve_and_review_1 = store.add_new_workflow(
-        tasks={
-            question_plain.get_id():['__input__'],
+    b642str: Base64ToStringDecoder = store.add_new_obj(Base64ToStringDecoder())
 
-            question_tmp.get_id()  :['__input__'],
-            solver.get_id()        :[question_tmp.get_id()],
+    question_tmplt:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string=
+        'Please provide a better answer to the following question based on the previous process and review.\n\nQuestion:\n{qu}\n\nPrevious process:\n{pp}\n\nPrevious solution review:\n{ps}')))
+    review_tmp:StringTemplate = store.add_new_obj(StringTemplate(para=dict(string=                                                                           
+        'Question\n{qu}\n\nRelevant concepts\n{rc}\n\nThoughts\n{th}\n\nProcess\n{pr}\n\nSolution\n{sl}')))
+    
+    store.add_new_obj(
+        Model4LLMs.MermaidWorkflow(
+            mermaid_text=f'''
+    graph TD
+        {b642str.get_id()}["{{'args': {{'encoded': 'THE_QUESTION'}} }}"]
 
-            relevant_concepts_extract.get_id() :[solver.get_id()],
-            thoughts_extract.get_id()          :[solver.get_id()],
-            process_extract.get_id()           :[solver.get_id()],
-            solution_extract.get_id()          :[solver.get_id()],
+        {b642str.get_id()} -- "{{'plain':'messages'}}" --> {solver.get_id()}
+        {solver.get_id()} -- "{{'data':'text'}}" --> {relevant_concepts_extract.get_id()}
+        {solver.get_id()} -- "{{'data':'text'}}" --> {thoughts_extract.get_id()}
+        {solver.get_id()} -- "{{'data':'text'}}" --> {process_extract.get_id()}
+        {solver.get_id()} -- "{{'data':'text'}}" --> {solution_extract.get_id()}
 
-            review_tmp.get_id():[question_plain.get_id(),relevant_concepts_extract.get_id(),
-                                thoughts_extract.get_id(),process_extract.get_id(),solution_extract.get_id()],
-            
-            reviewer.get_id():[review_tmp.get_id()],
+        {b642str.get_id()} -- "{{'plain':'qu'}}" --> {review_tmp.get_id()}
+        {relevant_concepts_extract.get_id()} -- "{{'data':'rc'}}" --> {review_tmp.get_id()}
+        {thoughts_extract.get_id()} -- "{{'data':'th'}}" --> {review_tmp.get_id()}
+        {process_extract.get_id()} -- "{{'data':'pr'}}" --> {review_tmp.get_id()}
+        {solution_extract.get_id()} -- "{{'data':'sl'}}" --> {review_tmp.get_id()}
+        {review_tmp.get_id()} -- "{{'data':'messages'}}" --> {reviewer.get_id()}
 
-            # initial_review_extract.get_id():[reviewer.get_id()],
-            # reasoning_feedback_extract.get_id():[reviewer.get_id()],
-            # process_errors_extract.get_id():[reviewer.get_id()],
-            # overall_assessment_extract.get_id():[reviewer.get_id()],
+        {reviewer.get_id()} -- "{{'data':'text'}}" --> {initial_review_extract.get_id()}
+        {reviewer.get_id()} -- "{{'data':'text'}}" --> {reasoning_feedback_extract.get_id()}
+        {reviewer.get_id()} -- "{{'data':'text'}}" --> {process_errors_extract.get_id()}
+        {reviewer.get_id()} -- "{{'data':'text'}}" --> {overall_assessment_extract.get_id()}
 
-            'final':[question_plain.get_id(),process_extract.get_id(),
-                     reviewer.get_id(),solution_extract.get_id()],
-        }
-    )
+        {b642str.get_id()} -- "{{'plain':'qu'}}" --> {question_tmplt.get_id()}
+        {process_extract.get_id()} -- "{{'data':'pp'}}" --> {question_tmplt.get_id()}
+        {reviewer.get_id()} -- "{{'data':'ps'}}" --> {question_tmplt.get_id()}
 
-    solve_and_review_2 = store.add_new_obj(solve_and_review_1.model_copy(update={'_id':None}))
-    solve_and_review_3 = store.add_new_obj(solve_and_review_1.model_copy(update={'_id':None}))
-
-    store.add_new_workflow(
-        tasks=[
-            solve_and_review_1.get_id(),
-            solve_and_review_2.get_id(),
-            solve_and_review_3.get_id(),
-        ],id='WorkFlow:solve_and_review_3_times')
+    '''),id='solveAndReview')
     
     return store    
 
@@ -135,6 +127,11 @@ data = store.dumps()
 store.clean()
 store.loads(data)
 
-res = store.find('WorkFlow:solve_and_review_3_times'
-           )('How many characters of the letter "r" in "rarspberrrry"?','no process','no review','no solution')
+solve_and_review:Model4LLMs.MermaidWorkflow = store.find('solveAndReview')
+solve_and_review.b64_placeholder('How many characters of the letter "r" in "rarspberrrry"?','THE_QUESTION')
+for i in range(3):
+    res = solve_and_review()
+    solve_and_review.b64_placeholder(res,'THE_QUESTION')
+    qu = res
+print('######## final answer #######')
 print(res)

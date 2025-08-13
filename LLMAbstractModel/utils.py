@@ -1,64 +1,166 @@
+import base64
 import json
 import os
 import re
-from pydantic import Field
+from types import MethodType
+from pydantic import BaseModel, Field, create_model
 from typing import Any, Callable, Optional, List
+from typing_extensions import LiteralString
 
 from .BasicModel import Model4Basic
 from .LLMsModel import LLMsStore, Model4LLMs
 
-descriptions = Model4LLMs.Function.param_descriptions
-@descriptions('Extract text by regx pattern',
-              text='input text')
-class RegxExtractor(Model4LLMs.Function):
-    regx:str = Field(description='regx pattern')
-    is_json:bool=False
+class RegxExtractor(Model4LLMs.MermaidWorkflowFunction):    
+    description:str = Field('Extract text by regx pattern')
+    
+    class Parameter(BaseModel):            
+        regx:str = Field(..., description='regx pattern')
+        is_json:bool=False
+
+    class Arguments(BaseModel):
+        text:str = ''
+
+    class Returness(BaseModel):
+        data: Optional[str|dict|list[dict]] = None
+
+    para: Parameter
+    args: Arguments = Arguments()
+    rets: Returness = Returness()
+            
     def __call__(self,text:str):
-        return self.extract(text)
+        self.args.text = text
+        self.rets.data = self.extract(self.args.text)
+        return self.rets.data
     
     def extract(self,text,only_first=True)->str:
-        matches = re.findall(self.regx, text, re.DOTALL)        
+        matches = re.findall(self.para.regx, text, re.DOTALL)        
         if not self._try_binary_error(lambda:matches[0]):
-            self._log_error(ValueError(f'cannot match {self.regx} at {text}'))
+            self._log_error(ValueError(f'cannot match {self.para.regx} at {text}'))
             return text
         if only_first:
             m = matches[0]
-            if self.is_json:return json.loads(m)
+            if self.para.is_json:return json.loads(m)
             return m
         else:
-            if self.is_json:return [json.loads(m) for m in matches]
+            if self.para.is_json:return [json.loads(m) for m in matches]
             return matches
 
-@descriptions('String Template for format function',
-              args='string.format args')
-class StringTemplate(Model4LLMs.Function):
-    string:str = Field(description='string of f"..."')
-    def __call__(self,*args,**kwargs):
-        return self.string.format(*args,**kwargs)
+class StringTemplate(Model4LLMs.MermaidWorkflowFunction): 
+    description:str = Field('Extract text by regx pattern')
+    
+    class Parameter(BaseModel):
+        string:str = Field(description='string of f"..."')
+        
+    class Returness(BaseModel):
+        data: str = ''
 
+    para: Parameter
+    rets: Returness = Returness()
+                
+    def __call__(self, *args, **kwargs):
+        self.rets.data = self.para.string.format(*args,**kwargs)
+        return self.rets.data
 
-@descriptions('Classification Template for performing conditional checks on a target',
-              target='The object or value to be classified',
-              condition_funcs='List of condition functions to evaluate the target')
-class ClassificationTemplate(Model4LLMs.Function):
-    def __call__(self, target: Any, condition_funcs: List[Callable[[Any], Any]] = []) -> List[bool]:
-        # Initialize an empty result list
-        results = []
-        for idx, func in enumerate(condition_funcs):
-            try:
-                # Attempt to apply the function to the target and ensure it's a boolean result
-                result = bool(func(target))
-                results.append(result)
-            except Exception as e:
-                # Log the error gracefully and append False as a default failure value
-                print(f"Error in condition function {idx} for target {target}: {e}")
-                results.append(False)
+class StringToBase64Encoder(Model4LLMs.MermaidWorkflowFunction): 
+    description:str = Field('StringToBase64Encoder')
 
-        return results
+    class Arguments(BaseModel):
+        plain: str = Field(description="Plain text string to encode")
+    
+    class Returness(BaseModel):
+        encoded: str = Field(default="", description="Base64 encoded string")
+    
+    args: Optional[Arguments] = None
+    rets: Returness = Returness()
+    
+    def __call__(self,plain:str=''):
+        self.args = self.Arguments(plain=plain)
+        string_bytes = self.args.plain.encode('utf-8')
+        base64_bytes = base64.b64encode(string_bytes)
+        self.rets.encoded = base64_bytes.decode('utf-8')
+        return self.rets.encoded
+    
+class Base64ToStringDecoder(Model4LLMs.MermaidWorkflowFunction): 
+    description:str = Field('Base64ToStringDecoder')
 
-LLMsStore().add_new_obj(RegxExtractor(regx='')).controller.delete()
-LLMsStore().add_new_obj(StringTemplate(string='')).controller.delete()
-LLMsStore().add_new_obj(ClassificationTemplate()).controller.delete()
+    class Arguments(BaseModel):
+        encoded: str = Field(description="Base64 string to decode")
+    
+    class Returness(BaseModel):
+        plain: str = Field(default="", description="Decoded plain text string")
+    
+    args: Optional[Arguments] = None
+    rets: Returness = Returness()    
+        
+    def __call__(self,encoded:str=''):
+        self.args = self.Arguments(encoded=encoded)
+        base64_bytes = self.args.encoded.encode('utf-8')
+        string_bytes = base64.b64decode(base64_bytes)
+        self.rets.plain = string_bytes.decode('utf-8')
+        return self.rets.plain
+    
+class StringTemplate(Model4LLMs.MermaidWorkflowFunction):
+    description: str = Field(default='Dynamic templated string callable')
+    
+    class Parameter(BaseModel):
+        string:str = Field(description='string of f"..."')
+        
+    class Returness(BaseModel):
+        data: str = ''
+
+    para: Parameter
+    rets: Returness = Returness()
+    
+    def build(self):
+        self._create_dynamic_call()
+        return self
+
+    def _extract_placeholders(self) -> list[str]:
+        string = self.para.string.replace(r'{{','')
+        string = string.replace(r'}}','')
+        return re.findall(r'{(.*?)}', string)
+
+    def _create_dynamic_call(self):
+        fields = self._extract_placeholders()
+        arg_str = ', '.join([f'{f}:str' for f in fields])
+        format_args = ', '.join([f'{f}={f}' for f in fields])
+
+        func_code = f"""
+def __call__(self, {arg_str}):
+    self.rets.data = self.para.string.format({format_args})
+    return self.rets.data
+"""
+
+        local_vars = {}
+        exec(func_code, {}, local_vars)
+        dynamic_call = local_vars['__call__']
+        # Assign to the class so the object becomes callable
+        dynamic_cls = create_model(f'StringTemplateDynamic{id(self)}', __base__=StringTemplate)
+        self.__class__ = dynamic_cls
+        setattr(self.__class__, '__call__', dynamic_call)
+
+# @descriptions('Classification Template for performing conditional checks on a target',
+#               target='The object or value to be classified',
+#               condition_funcs='List of condition functions to evaluate the target')
+# class ClassificationTemplate(Model4LLMs.Function):
+#     def __call__(self, target: Any, condition_funcs: List[Callable[[Any], Any]] = []) -> List[bool]:
+#         # Initialize an empty result list
+#         results = []
+#         for idx, func in enumerate(condition_funcs):
+#             try:
+#                 # Attempt to apply the function to the target and ensure it's a boolean result
+#                 result = bool(func(target))
+#                 results.append(result)
+#             except Exception as e:
+#                 # Log the error gracefully and append False as a default failure value
+#                 print(f"Error in condition function {idx} for target {target}: {e}")
+#                 results.append(False)
+
+#         return results
+
+LLMsStore().add_new_class(RegxExtractor)
+LLMsStore().add_new_class(StringTemplate)
+# LLMsStore().add_new_obj(ClassificationTemplate()).controller.delete()
 
 class TextFile(Model4Basic.AbstractObj):
     file_path: str
@@ -137,7 +239,7 @@ class TextFile(Model4Basic.AbstractObj):
 
     def __next__(self) -> List[str]:
         """
-        Return the next chunk of lines.
+        Returness the next chunk of lines.
         """
         if not self._current_chunk:
             self._current_chunk = self.read_chunk()
@@ -163,11 +265,13 @@ class TextFile(Model4Basic.AbstractObj):
 
 def traverse_files(folder_path, ext='.md', recursive=True):
     ext_files:list[str] = []
+    ext_files:list[str] = []
 
     if recursive:
         for root, _, files in os.walk(folder_path):
             for file in files:
                 if file.lower().endswith(ext):
+                    ext_files.append(os.path.join(root, file))
                     ext_files.append(os.path.join(root, file))
     else:
         for file in os.listdir(folder_path):
@@ -176,6 +280,7 @@ def traverse_files(folder_path, ext='.md', recursive=True):
                 ext_files.append(full_path)
 
     return ext_files
+
 
 def create_file_forcefully(file_path, content=''):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -198,7 +303,10 @@ def files2files(in_dir,out_dir,ext='.md',transfunc=lambda x:x,overwrite=False):
         yield file2file(p,op,transfunc)
 
 def files2file(in_dir,out_path,ext='.md',transfunc=lambda x:x,overwrite=False):
-    s = ""
+    s = ''
     for p in traverse_files(in_dir,ext,True):
         with open(p, 'r', encoding='utf-8') as f: s+=f.read()
+    if os.path.exists(out_path) and not overwrite:return False
     create_file_forcefully(out_path,transfunc(s))
+    return True
+    
