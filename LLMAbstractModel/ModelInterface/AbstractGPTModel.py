@@ -61,7 +61,7 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
         payload = super().construct_payload(messages) 
         payload.update({
             # "stop": self.stop_sequences,
-            "n": self.n_generations,
+            # "n": self.n_generations,
         })
         
         if self.mcp_tools:
@@ -74,6 +74,87 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
             
         return {k: v for k, v in payload.items() if v is not None}
     
+    def openai_responses_payload(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Build a payload for the Responses API from Chat-Completions-style messages.
+        Maps:
+          - system -> instructions
+          - messages -> input (typed parts)
+          - token limit -> max_output_tokens
+          - tools -> tools (if provided)
+        """
+        def _messages_to_responses_input(messages: list) -> list:
+            """
+            Convert Chat Completions-style messages into Responses 'input' blocks.
+
+            - role stays ('user' / 'assistant' / 'system' allowed)
+            - content becomes a list of typed parts; we default to input_text
+            - if a message already has typed parts, we keep them
+            """
+            result = []
+            for m in messages or []:
+                role = m.get("role", "user")
+                content = m.get("content", "")
+                if isinstance(content, list) and all(isinstance(p, dict) and "type" in p for p in content):
+                    parts = content
+                else:
+                    parts = [{"type": "input_text", "text": content}]
+                result.append({"role": role, "content": parts})
+            return result
+        
+        # Build the messages list with your existing helper (system_prompt handled there)
+        # This ensures consistent behavior with your current pipeline.
+        payload = self.openai_construct_payload(messages)
+
+        # Split out system messages for 'instructions'
+        for m in messages:
+            if m.get("role") == "system":
+                self.system_prompt = m.get("content", "")
+                break
+            
+        instructions = self.system_prompt
+        non_system = [m for m in messages or [] if m.get("role") != "system"]
+        payload.pop("messages", None)  # Remove messages; we'll use input instead
+
+        payload.update({
+            "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
+            "input": _messages_to_responses_input(non_system) or [
+                {"role": "user", "content": [{"type": "input_text", "text": ""}]}
+            ],
+            # Keep your streaming setting
+            "stream": self.stream or None,
+            # Temperature/top_p are supported by most models via Responses
+            # "temperature": self.temperature,
+            "top_p": self.top_p,
+            # Prefer an explicit output limit; fall back if None
+            "max_output_tokens": self.limit_output_tokens if self.limit_output_tokens is not None else self.max_output_tokens
+        })
+
+        if instructions:
+            payload["instructions"] = instructions
+
+        # Tools wiring (prefer explicit get_tools(); otherwise use mcp_tools if present)
+        tools = None
+        try:
+            tools = self.get_tools()
+        except NotImplementedError:
+            pass
+        if not tools and self.mcp_tools:
+            # If you rely on MCPTool objects having .to_openai_tool()
+            tools = [t.to_openai_tool() if hasattr(t, "to_openai_tool") else t for t in self.mcp_tools]
+
+        if tools:
+            payload["tools"] = tools
+
+        # Clean out Nones for a tidy payload
+        return {k: v for k, v in payload.items() if v is not None}
+
+    # # --- (optional) For o* models that ignore temperature --------------------
+    def openai_o_models_responses_payload(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        payload = self.openai_responses_payload(messages)
+        payload.pop("temperature", None)
+        return payload
+
     def openai_o_models_construct_payload(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Construct payload for OpenAI 'o' models (o3, o3-mini, etc.).
         
@@ -105,6 +186,7 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
             
         return messages
 
+    
     def claude_construct_payload(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Construct payload for Claude API with appropriate parameters.
         

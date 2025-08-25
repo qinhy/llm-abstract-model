@@ -13,8 +13,8 @@ system_prompt='''You are an expert in English translation. I will provide you wi
 ```'''
 
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key="OPENAI_API_KEY")#auto check os.environ
-llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',#vendor.get_id(),
-                                                  system_prompt=system_prompt)
+llm = store.add_new(Model4LLMs.ChatGPTDynamic)(
+    llm_model_name='gpt-5-nano',vendor_id='auto',system_prompt=system_prompt)
 
 print('############# make a message template')
 translate_template = store.add_new_obj(
@@ -75,8 +75,6 @@ print(translator('为政以德，譬如北辰，居其所而众星共之。'))
 
 
 print('############# save/load chain json')
-print(LLMsStore.chain_dumps(translator_chain))
-
 loaded_chain = store.chain_loads(LLMsStore.chain_dumps(translator_chain))
 print(loaded_chain)
 loaded_chain[0] = loaded_chain[0].build()
@@ -87,7 +85,7 @@ print(translator('こんにちは！はじめてのチェーン作りです！')
 
 print('############# additional template usage')
 
-llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto')
+llm = store.add_new(Model4LLMs.ChatGPTDynamic)(llm_model_name='gpt-5-nano',vendor_id='auto')
 
 # we use raw json to do template
 translate_template = store.add_new_obj(

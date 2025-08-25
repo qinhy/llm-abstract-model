@@ -110,7 +110,7 @@ You should reply with translations only, without any additional information.
 
 
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
-llm = chatgpt = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',system_prompt=system_prompt)
+llm = chatgpt = store.add_new_llm(Model4LLMs.ChatGPTDynamic)(llm_model_name='gpt-5-nano',vendor_id='auto',system_prompt=system_prompt)
 
 # Create template and extractor tasks
 input_template = store.add_new_obj(
