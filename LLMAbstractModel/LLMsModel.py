@@ -167,6 +167,15 @@ class Controller4LLMs:
     class ChatGPT45Controller(AbstractLLMController): pass
     class ChatGPTO3Controller(AbstractLLMController): pass
     class ChatGPTO3MiniController(AbstractLLMController): pass
+    class ChatGPT5Controller(AbstractLLMController): pass
+    class ChatGPT5MiniController(AbstractLLMController): pass
+    class ChatGPT5NanoController(AbstractLLMController): pass
+    class ChatGPT5ThinkingController(AbstractLLMController): pass
+    class ChatGPT5ThinkingMiniController(AbstractLLMController): pass
+    class ChatGPT5ThinkingNanoController(AbstractLLMController): pass
+    class ChatGPT5ThinkingProController(AbstractLLMController): pass
+    class ChatGPTDynamicController(AbstractLLMController): pass
+    
     class DeepSeekVendorController(AbstractVendorController): pass
     class DeepSeekController(AbstractLLMController): pass
     class XaiVendorController(AbstractVendorController): pass
@@ -267,7 +276,66 @@ class Model4LLMs:
         llm_model_name: str = 'o3-mini'
         context_window_tokens: int = 1047576
         max_output_tokens: int = 32768
+
+    class ChatGPT5(AbstractChatGPT):
+        llm_model_name: str = "gpt-5"
+        context_window_tokens: int = 256000
+        max_output_tokens: int = 32768
+
+    class ChatGPT5Mini(ChatGPT5):
+        llm_model_name: str = "gpt-5-mini"
+
+    class ChatGPT5Nano(ChatGPT5):
+        llm_model_name: str = "gpt-5-nano"
+
+    class ChatGPT5Thinking(AbstractChatGPT):
+        llm_model_name: str = "gpt-5-thinking"
+        context_window_tokens: int = 256000
+        max_output_tokens: int = 32768
+        # Optional extras your runtime can consume:
+        reasoning_effort: str = "high"      # e.g., "low" | "medium" | "high"
+        parallel_inference: bool = False    # set True for Pro below
+
+    class ChatGPT5ThinkingMini(ChatGPT5Thinking):
+        llm_model_name: str = "gpt-5-thinking-mini"
+
+    class ChatGPT5ThinkingNano(ChatGPT5Thinking):
+        llm_model_name: str = "gpt-5-thinking-nano"
+
+    class ChatGPT5ThinkingPro(ChatGPT5Thinking):
+        llm_model_name: str = "gpt-5-thinking-pro"
+        parallel_inference: bool = True
+
+    class ChatGPTDynamic(AbstractChatGPT):
+        llm_model_name: str = "gpt-5-nano"
+        llm_model_obj:  Optional['Model4LLMs.AbstractChatGPT'] = None
+        context_window_tokens: int = -1
+        max_output_tokens: int = -1
+        # llm_models:  Dict[str,Type['Model4LLMs.AbstractChatGPT']] = {}
+
+        # def model_post_init(self, __context):
+        #     clss:List[Type[Model4LLMs.AbstractChatGPT]] = [
+        #         cls for k,cls in Model4LLMs.__dict__.items() if 'ChatGPT' not in k]
+        #     self.llm_models = {cls().llm_model_name:cls for cls in clss}
+        #     return super().model_post_init(__context)
         
+        def __getattr__(self, name):
+            clss:List[Type[Model4LLMs.AbstractChatGPT]] = [
+                cls for k,cls in Model4LLMs.__dict__.items()
+                if k.startswith('ChatGPT') and 'ChatGPTDynamic' not in k]
+            llm_models = {cls().llm_model_name:cls for cls in clss}
+            if self.llm_model_obj is None:
+                self.llm_model_obj=llm_models[self.llm_model_name](
+                    vendor_id=self.vendor_id
+                )
+            else:
+                if self.llm_model_obj.llm_model_name!=self.llm_model_name:
+                    self.llm_model_obj=llm_models[self.llm_model_name](
+                    vendor_id=self.vendor_id
+                )
+            return getattr(self.llm_model_obj, name)
+
+    
     class DeepSeekVendor(OpenAIVendor):
         vendor_name: str = "DeepSeek"
         api_url: str = "https://api.deepseek.com"
