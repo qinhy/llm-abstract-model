@@ -8,8 +8,8 @@ vendor = store.add_new(Model4LLMs.OpenAIVendor)(
                             api_key='OPENAI_API_KEY')
 text_embedding = store.add_new(Model4LLMs.TextEmbedding3Small)(
                             vendor_id=vendor.get_id())
-llm = store.add_new(Model4LLMs.ChatGPT41Nano)(
-                            vendor_id=vendor.get_id())
+llm = store.add_new(Model4LLMs.ChatGPTDynamic)(
+            llm_model_name='gpt-5-nano',vendor_id=vendor.get_id())
 
 # vendor = store.add_new(Model4LLMs.AnthropicVendor)(api_key='ANTHROPIC_API_KEY')
 # llm = store.add_new(Model4LLMs.Claude35)(vendor_id=vendor.get_id())
@@ -39,7 +39,7 @@ print(llm([
 # -> "Hello!"
 
 
-print(text_embedding('hi! What is your name?')[:10], '...')
+print(text_embedding('hi! What is your model name?')[:10], '...')
 # -> [0.0118862, -0.0006172658, -0.008183353, 0.02926386, -0.03759078, -0.031130238, -0.02367668 ...
 
 # save all to json

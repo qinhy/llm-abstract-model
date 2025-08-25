@@ -107,7 +107,7 @@ class AbstractLLM(BaseModel):
     stream: bool = False
     
     limit_output_tokens: Optional[int] = None
-    temperature: Optional[float] = 0.7
+    temperature: Optional[float] = 1.0
     top_p: Optional[float] = 1.0
     frequency_penalty: Optional[float] = 0.0
     presence_penalty: Optional[float] = 0.0
@@ -243,7 +243,7 @@ class AbstractLLM(BaseModel):
             "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
             "stream": self.stream,
             "messages": messages,
-            "max_tokens": self.limit_output_tokens,
+            "max_completion_tokens": self.limit_output_tokens,
             "temperature": self.temperature,
             "top_p": self.top_p,
             "frequency_penalty": self.frequency_penalty,

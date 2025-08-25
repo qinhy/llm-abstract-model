@@ -60,7 +60,7 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
         """
         payload = super().construct_payload(messages) 
         payload.update({
-            "stop": self.stop_sequences, 
+            # "stop": self.stop_sequences,
             "n": self.n_generations,
         })
         
@@ -84,8 +84,6 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
             Dict[str, Any]: Payload for OpenAI API request
         """
         payload = super().construct_payload(messages)
-        payload["max_completion_tokens"] = payload["max_tokens"]
-        del payload["max_tokens"]
         del payload["temperature"]
         return {k: v for k, v in payload.items() if v is not None}
         
