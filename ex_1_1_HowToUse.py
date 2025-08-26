@@ -9,13 +9,14 @@ vendor = store.add_new(Model4LLMs.OpenAIVendor)(
 text_embedding = store.add_new(Model4LLMs.TextEmbedding3Small)(
                             vendor_id=vendor.get_id())
 llm = store.add_new(Model4LLMs.ChatGPTDynamic)(
-            llm_model_name='gpt-5-nano',vendor_id=vendor.get_id())
+            llm_model_name='gpt-5-nano',
+            vendor_id=vendor.get_id())
 
 # vendor = store.add_new(Model4LLMs.AnthropicVendor)(api_key='ANTHROPIC_API_KEY')
-# llm = store.add_new(Model4LLMs.Claude35)(vendor_id=vendor.get_id())
+# llm = store.add_new(Model4LLMs.ClaudeDynamic)(vendor_id=vendor.get_id())
 
 # vendor = store.add_new(Model4LLMs.DeepSeekVendor)(api_key='DEEPSEEK_API_KEY')
-# llm = deepseek = store.add_new(Model4LLMs.DeepSeek)(vendor_id=vendor.get_id())
+# llm = deepseek = store.add_new(Model4LLMs.DeepSeekDynamic)(vendor_id=vendor.get_id())
 
 # vendor = store.add_new_vendor(Model4LLMs.XaiVendor)(api_key='XAI_API_KEY')
 # llm = grok = store.add_new(Model4LLMs.Grok)(vendor_id=vendor.get_id())

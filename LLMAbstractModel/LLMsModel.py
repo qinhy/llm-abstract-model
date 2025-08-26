@@ -179,16 +179,24 @@ class Controller4LLMs:
     
     class DeepSeekVendorController(AbstractVendorController): pass
     class DeepSeekController(AbstractLLMController): pass
+    class DeepSeekReasonerController(AbstractLLMController): pass
+    class DeepSeekDynamicController(AbstractLLMController): pass
+    
     class XaiVendorController(AbstractVendorController): pass
     class GrokController(AbstractLLMController): pass
     class OllamaVendorController(AbstractVendorController): pass
     class Gemma2Controller(AbstractLLMController): pass
     class Phi3Controller(AbstractLLMController): pass
     class LlamaController(AbstractLLMController): pass
+    
     class AnthropicVendorController(AbstractVendorController): pass
     class AbstractClaudeController(AbstractLLMController): pass
     class Claude35Controller(AbstractLLMController): pass
     class Claude37Controller(AbstractLLMController): pass
+    class Claude4Controller(AbstractLLMController): pass
+    class Claude41Controller(AbstractLLMController): pass
+    class ClaudeDynamicController(AbstractLLMController): pass
+    
     class TextEmbedding3SmallController(AbstractEmbeddingController): pass
     class FunctionController(AbstractObjController): pass
     class ParameterController(AbstractObjController): pass
@@ -235,7 +243,7 @@ class Model4LLMs:
             return [t.to_openai_tool() for t in self.mcp_tools]         
         def construct_payload(self, messages):
             return self.openai_responses_payload(messages)
-            return self.openai_construct_payload(messages)
+            # return self.openai_construct_payload(messages)
 
     class ChatGPT4o(AbstractChatGPT):
         llm_model_name:str = 'gpt-4o'
@@ -329,19 +337,121 @@ class Model4LLMs:
                     vendor_id=self.vendor_id
                 )
             return getattr(self.llm_model_obj, name)
-
     
-    class DeepSeekVendor(OpenAIVendor):
-        vendor_name: str = "DeepSeek"
-        api_url: str = "https://api.deepseek.com"
-        chat_endpoint: str = "/v1/chat/completions"
+    class AnthropicVendor(AbstractVendor):
+        vendor_name: str = "Anthropic"
+        api_url: str = "https://api.anthropic.com"
+        chat_endpoint: str = "/v1/messages"
         models_endpoint: str = "/v1/models"
-        rate_limit: Optional[int] = None  # Example rate limit for xAI
+        embeddings_endpoint: str = "NULL"
+        default_timeout: int = 30
+        rate_limit: Optional[int] = None
+
+        def format_llm_model_name(self,llm_model_name:str) -> str:            
+            return llm_model_name.lower().replace('.','-')
+
+        def chat_result(self, response) -> str:
+            if "content" in response:
+                return response["content"][0]["text"]
+            return self._log_error(ValueError(f'cannot get result from {response}'))
+
+        def _build_headers(self) -> Dict[str, str]:
+            headers = super()._build_headers()
+            headers["anthropic-version"] = "2023-06-01"
+            headers["x-api-key"] = self.get_api_key()
+            headers.pop("Authorization", None)  # Remove Bearer token
+            return headers
+    
+    class AbstractClaude(AbstractLLM):
+        context_window_tokens: int = 200_000
+        max_output_tokens: int = 4096
         
-    class DeepSeek(AbstractLLM):
+        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:   
+            return self.claude_construct_payload(messages)
+        
+        def construct_messages(self, messages: Optional[List | str]) -> list:
+            msgs = self.claude_construct_messages(messages)
+            return msgs
+
+    class Claude35(AbstractClaude):
+        llm_model_name: str = "claude-3.5-sonnet-latest"
+        max_output_tokens: int = 8192
+
+    class Claude37(AbstractClaude):
+        llm_model_name: str = "claude-3.7-sonnet-latest"
+        max_output_tokens: int = 64000
+
+    class Claude4(AbstractClaude):
+        llm_model_name: str = "claude-sonnet-4.0"
+        max_output_tokens: int = 8192
+
+    class Claude41(AbstractClaude):
+        llm_model_name: str = "claude-opus-4.1"
+        max_output_tokens: int = 8192
+
+    class ClaudeDynamic(AbstractClaude):
+        llm_model_name: str = "claude-3.5-sonnet-latest"
+        llm_model_obj:  Optional['Model4LLMs.AbstractClaude'] = None
+        context_window_tokens: int = -1
+        max_output_tokens: int = -1
+
+        def __getattr__(self, name):
+            clss:List[Type[Model4LLMs.AbstractClaude]] = [
+                cls for k,cls in Model4LLMs.__dict__.items()
+                if k.startswith('Claude') and 'ClaudeDynamic' not in k]
+            llm_models = {cls().llm_model_name:cls for cls in clss}
+            if self.llm_model_obj is None:
+                self.llm_model_obj=llm_models[self.llm_model_name](
+                    vendor_id=self.vendor_id
+                )
+            else:
+                if self.llm_model_obj.llm_model_name!=self.llm_model_name:
+                    self.llm_model_obj=llm_models[self.llm_model_name](
+                    vendor_id=self.vendor_id
+                )
+            return getattr(self.llm_model_obj, name)
+        
+    class DeepSeekVendor(AnthropicVendor):
+        vendor_name: str = "DeepSeek"
+        api_url: str = "https://api.deepseek.com/anthropic"
+        chat_endpoint: str = "/v1/messages"
+        models_endpoint: str = "/v1/models"
+        rate_limit: Optional[int] = None
+        
+    class DeepSeek(AbstractClaude):
         llm_model_name:str = 'deepseek-chat'
         context_window_tokens:int = 64000
         max_output_tokens:int = 4096*2
+        def construct_messages(self, messages: Optional[List | str]) -> list:
+            msgs = self.claude_construct_messages(messages,available_content_types=['text'])
+            return msgs
+        
+    class DeepSeekReasoner(DeepSeek):
+        llm_model_name:str = 'deepseek-reasoner'
+        context_window_tokens:int = 64000
+        max_output_tokens:int = 4096*2
+        
+    class DeepSeekDynamic(DeepSeek):
+        llm_model_name: str = 'deepseek-chat'
+        llm_model_obj:  Optional['Model4LLMs.DeepSeek'] = None
+        context_window_tokens: int = -1
+        max_output_tokens: int = -1
+
+        def __getattr__(self, name):
+            clss:List[Type[Model4LLMs.DeepSeek]] = [
+                cls for k,cls in Model4LLMs.__dict__.items()
+                if k.startswith('DeepSeek') and ('DeepSeekDynamic' not in k and 'Vendor' not in k)]
+            llm_models = {cls().llm_model_name:cls for cls in clss}
+            if self.llm_model_obj is None:
+                self.llm_model_obj=llm_models[self.llm_model_name](
+                    vendor_id=self.vendor_id
+                )
+            else:
+                if self.llm_model_obj.llm_model_name!=self.llm_model_name:
+                    self.llm_model_obj=llm_models[self.llm_model_name](
+                    vendor_id=self.vendor_id
+                )
+            return getattr(self.llm_model_obj, name)
         
     class XaiVendor(OpenAIVendor):
         vendor_name: str = "xAI"
@@ -349,7 +459,7 @@ class Model4LLMs:
         chat_endpoint: str = "/v1/chat/completions"
         models_endpoint: str = "/v1/models"
         embeddings_endpoint: str = "/v1/embeddings"
-        rate_limit: Optional[int] = None  # Example rate limit for xAI
+        rate_limit: Optional[int] = None
         
     class Grok(AbstractLLM):
         llm_model_name:str = 'grok-beta'
@@ -392,48 +502,7 @@ class Model4LLMs:
     class Llama(AbstractLLM):
         llm_model_name:str = 'llama-3.2-3b'
     
-    class AnthropicVendor(AbstractVendor):
-        vendor_name: str = "Anthropic"
-        api_url: str = "https://api.anthropic.com"
-        chat_endpoint: str = "/v1/messages"
-        models_endpoint: str = "/v1/models"
-        embeddings_endpoint: str = "NULL"
-        default_timeout: int = 30
-        rate_limit: Optional[int] = None
-
-        def format_llm_model_name(self,llm_model_name:str) -> str:            
-            return llm_model_name.lower().replace('.','-')
-
-        def chat_result(self, response) -> str:
-            if "content" in response:
-                return response["content"][0]["text"]
-            return self._log_error(ValueError(f'cannot get result from {response}'))
-
-        def _build_headers(self) -> Dict[str, str]:
-            headers = super()._build_headers()
-            headers["anthropic-version"] = "2023-06-01"
-            headers["x-api-key"] = self.get_api_key()
-            headers.pop("Authorization", None)  # Remove Bearer token
-            return headers
-    
-    class AbstractClaude(AbstractLLM):
-        context_window_tokens: int = 200_000
-        max_output_tokens: int = 4096
         
-        def construct_payload(self, messages: List[Dict]) -> Dict[str, Any]:   
-            return self.claude_construct_payload(messages)
-        
-        def construct_messages(self, messages: Optional[List | str]) -> list:
-            return self.claude_construct_messages(messages)
-
-    class Claude35(AbstractClaude):
-        llm_model_name: str = "claude-3.5-sonnet-latest"
-        max_output_tokens: int = 8192
-
-    class Claude37(AbstractClaude):
-        llm_model_name: str = "claude-3.7-sonnet-latest"
-        max_output_tokens: int = 64000
-
     ##################### embedding model #####
     
     class AbstractEmbedding(AbstractEmbedding, AbstractObj):
