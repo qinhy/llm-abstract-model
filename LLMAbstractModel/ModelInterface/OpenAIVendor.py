@@ -112,6 +112,7 @@ class OpenAIVendor(AbstractVendor):
         # --- 3) Nothing matched: surface something useful -----------------------
         self._log_error(ValueError(f"Unrecognized response shape: {response}"))
         return response
+    
     def get_embedding(self, text: str, model: str='text-embedding-3-small') -> Dict[str, Any]:
         payload = {"model": model,"input": text}
         return self.embedding_request(payload)

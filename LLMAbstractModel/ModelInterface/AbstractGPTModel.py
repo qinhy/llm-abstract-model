@@ -198,10 +198,12 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
         Returns:
             Dict[str, Any]: Payload for Claude API request
         """
-        payload = super().construct_payload(messages)        
+        payload = super().construct_payload(messages)
         
         if self.system_prompt:
             payload["system"] = self.system_prompt
+        
+        payload['max_tokens'] = self.limit_output_tokens
             
         # Only include allowed fields for Claude API
         allowed_keys = {
@@ -210,7 +212,9 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
         }
         return {k: v for k, v in payload.items() if k in allowed_keys and v is not None}
     
-    def claude_construct_messages(self, messages: Optional[Union[List, str]]) -> List[Dict[str, Any]]:
+    def claude_construct_messages(self, messages: Optional[Union[List[Dict], str]],
+                                  available_content_types: Optional[List[str]] = None
+                                  ) -> List[Dict[str, Any]]:
         """Format messages for Claude API, handling system messages differently.
         
         Args:
@@ -229,5 +233,20 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
                 self.system_prompt = msg.get("content", "")
             else:
                 cleaned_messages.append(msg)
-                
+
+            if isinstance(msg.get("content"), list):
+                for i,c in enumerate(msg["content"]):
+                    if isinstance(c, dict):
+                        if "text" in c.get("type"):
+                            if available_content_types and "text" not in available_content_types:
+                                raise ValueError(f"Text content not supported by this model/vendor.")
+                            msg["content"][i]["type"] = "text"
+
+                        elif "image" in c.get("type"):
+                            if available_content_types and "image" not in available_content_types:
+                                raise ValueError(f"Image content not supported by this model/vendor.")                            
+                            msg["content"][i]["type"] = "image"
+
+                            if "image_url" in c:
+                                msg["content"][i]["source"] = {"type": "url", "url":c.pop("image_url")}
         return cleaned_messages
