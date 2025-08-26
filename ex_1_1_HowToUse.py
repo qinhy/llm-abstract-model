@@ -19,7 +19,9 @@ llm = store.add_new(Model4LLMs.ChatGPTDynamic)(
 # llm = deepseek = store.add_new(Model4LLMs.DeepSeekDynamic)(vendor_id=vendor.get_id())
 
 vendor = store.add_new_vendor(Model4LLMs.GeminiVendor)(api_key='GEMINI_API_KEY')
-llm = gemini = store.add_new(Model4LLMs.Gemini25Pro)(vendor_id=vendor.get_id())
+text_embedding = store.add_new(Model4LLMs.TextGeminiEmbedding001)(
+                            vendor_id=vendor.get_id())
+llm = gemini = store.add_new(Model4LLMs.Gemini25Flash)(vendor_id=vendor.get_id())
 
 # vendor = store.add_new_vendor(Model4LLMs.XaiVendor)(api_key='XAI_API_KEY')
 # llm = grok = store.add_new(Model4LLMs.Grok)(vendor_id=vendor.get_id())
@@ -42,15 +44,15 @@ print(llm([
 # -> Hello! I'm an AI language model created by OpenAI, and I don't have a personal name, but you can call me Assistant. How can I help you today?
 # -> "Hello!"
 
-print(llm([
-    {
-        "role": "user",
-        "content": [
-            {"type": "input_text", "text": "What do you see in this image?"},
-            {"type": "input_image", "image_url": "https://upload.wikimedia.org/wikipedia/commons/9/99/Black_square.jpg"}
-        ]
-    }
-]))
+# print(llm([
+#     {
+#         "role": "user",
+#         "content": [
+#             {"type": "input_text", "text": "What do you see in this image?"},
+#             {"type": "input_image", "image_url": "https://upload.wikimedia.org/wikipedia/commons/9/99/Black_square.jpg"}
+#         ]
+#     }
+# ]))
 # -> A solid black square centered on a white background, with a white border around it. There are no visible details or patterns—it's basically a blank/void image.
 
 print(text_embedding('hi! What is your model name?')[:10], '...')

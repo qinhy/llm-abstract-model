@@ -187,6 +187,7 @@ class Controller4LLMs:
     
     class GeminiVendorController(AbstractVendorController): pass
     class Gemini25ProController(AbstractLLMController): pass
+    class Gemini25FlashController(AbstractLLMController): pass
 
     class OllamaVendorController(AbstractVendorController): pass
     class Gemma2Controller(AbstractLLMController): pass
@@ -202,6 +203,8 @@ class Controller4LLMs:
     class ClaudeDynamicController(AbstractLLMController): pass
     
     class TextEmbedding3SmallController(AbstractEmbeddingController): pass
+    class TextGeminiEmbedding001Controller(AbstractEmbeddingController): pass
+    
     class FunctionController(AbstractObjController): pass
     class ParameterController(AbstractObjController): pass
     class RequestsFunctionController(AbstractObjController): pass
@@ -463,25 +466,89 @@ class Model4LLMs:
         chat_endpoint: str = "/v1beta/models/{llm_model_name}:generateContent"
         models_endpoint: str = "/v1beta/models"
         embeddings_endpoint: str = "/v1beta/models/gemini-embedding-001:embedContent"
-        rate_limit: Optional[int] = None
-    
+        rate_limit: Optional[int] = None    
+        
         def _build_headers(self) -> Dict[str, str]:
             headers = super()._build_headers()
             headers["X-goog-api-key"] = self.get_api_key()
             headers.pop("Authorization", None)  # Remove Bearer token
             return headers
+
+        def chat_result(self,response) -> Union[str, Dict[str, Any]]:
+            """
+            Parse a Gemini API GenerateContentResponse for text or tool calls.
+
+            Returns:
+            - str: assistant text (preferred)
+            - dict: structured object for tool calls
+            """
+            if not isinstance(response, dict):
+                return response
+            if "error" in response and response["error"]:
+                return response
+            
+            # Gemini responses contain a list of 'candidates'
+            candidates = response.get("candidates", [])
+            if not candidates:
+                # No candidates in the response means the request was likely blocked.
+                # The 'prompt_feedback' field provides details.
+                if "prompt_feedback" in response:
+                    return response
+                else:
+                    # Fallback for unexpected empty response
+                    return {"error": "No candidates found in the response."}
+            
+            # We only process the first candidate, as it's the primary response.
+            first_candidate = candidates[0]
+            content_parts = first_candidate.get("content", {}).get("parts", [])
+
+            text_chunks = []
+            tool_calls = []
+
+            for part in content_parts:
+                # Check for function_call, which is a key in the part dictionary
+                if "function_call" in part:
+                    # The function_call itself is a dictionary with 'name' and 'args'
+                    tool_calls.append(part["function_call"])
+                    continue
+
+                # Check for text
+                if "text" in part and isinstance(part["text"], str):
+                    text_chunks.append(part["text"])
+
+            # If tool calls are present, return them
+            if tool_calls:
+                return {
+                    "type": "tool_calls",
+                    "calls": tool_calls,
+                    "content": "".join(text_chunks).strip()
+                }
+            # Otherwise, if we assembled text, return it
+            if text_chunks:
+                return "".join(text_chunks).strip()
+            return response
         
+        def get_embedding(self, text: str, model: str="models/gemini-embedding-001") -> Dict[str, Any]:            
+            payload = {"model": model, "content": {"parts":[{"text": text}]}}
+            return self.embedding_request(payload)
+
     class AbstractGemini(AbstractLLM):
         def construct_messages(self, messages):
             return self.gemini_construct_messages(messages)
         
         def construct_payload(self, messages):
             v = self.get_vendor()
-            v.chat_endpoint = v.chat_endpoint.format(llm_model_name=self.llm_model_name)
+            v.controller.update(
+                chat_endpoint=v.chat_endpoint.format(llm_model_name=self.llm_model_name))
             return self.gemini_construct_payload(messages)
 
     class Gemini25Pro(AbstractGemini):
         llm_model_name:str = 'gemini-2.5-pro'
+        context_window_tokens:int = 1048576
+        max_output_tokens:int = 65536
+        
+    class Gemini25Flash(AbstractGemini):
+        llm_model_name:str = 'gemini-2.5-flash'
         context_window_tokens:int = 1048576
         max_output_tokens:int = 65536
         
@@ -569,6 +636,13 @@ class Model4LLMs:
         embedding_dim: int = 1536  # As specified by OpenAI's "text-embedding-3-small" model
         normalize_embeddings: bool = True
         max_input_length: int = 8192  # Default max token length for text-embedding-3-small
+        
+    class TextGeminiEmbedding001(AbstractEmbedding, AbstractObj):
+        vendor_id: str = "auto"
+        embedding_model_name: str = "gemini-embedding-001"
+        embedding_dim: int = 1536
+        normalize_embeddings: bool = True
+        max_input_length: int = 8192
         
     ##################### utils model #########
     class MermaidWorkflowFunction(MWFFunction, AbstractObj):
@@ -765,9 +839,12 @@ class LLMsStore(BasicStore):
     
     def add_new_vendor(self,vendor_class_type=MODEL_CLASS_GROUP.OpenAIVendor):
         def add_vendor(api_key: str='',
-                       api_url: str='https://api.openai.com',
+                       api_url: str=None,
                        timeout: int=30)->Model4LLMs.AbstractVendor:
-            return self.add_new(vendor_class_type)(api_key=api_key,api_url=api_url,timeout=timeout)
+            if api_url:
+                return self.add_new(vendor_class_type)(api_key=api_key,api_url=api_url,timeout=timeout)
+            else:
+                return self.add_new(vendor_class_type)(api_key=api_key,timeout=timeout)
         return add_vendor
     
     def add_new_llm(self,llm_class_type=MODEL_CLASS_GROUP.AbstractLLM):
