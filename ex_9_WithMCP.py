@@ -14,8 +14,8 @@ vendor = store.add_new(
             Model4LLMs.OpenAIVendor)(
                 api_key=os.environ.get('OPENAI_API_KEY','null'))
 llm:Model4LLMs.AbstractLLM = store.add_new(
-            Model4LLMs.ChatGPT41Nano)(
-                vendor_id=vendor.get_id())
+            Model4LLMs.ChatGPTDynamic)(
+            llm_model_name='gpt-5-nano',limit_output_tokens=2048,vendor_id=vendor.get_id())
 
 # Server script path
 SERVER_SCRIPT = "./tmp/letter_counter.py"
@@ -38,16 +38,15 @@ async def call_tool(tool_name, tool_args)->str:
     transport = PythonStdioTransport(script_path=SERVER_SCRIPT)
     async with Client(transport) as client:
         result = await client.call_tool(tool_name, tool_args)
-        return json.dumps([r.text for r in result][0])
+        return json.dumps([r.text for r in result.content][0])
     
-async def openai_call_tools(res):
+async def openai_call_tools(fc):
     """Extract and invoke tool calls from the assistant's response."""
-    if "calls" not in res: return []
-
+    if not fc: return []
     results = []
-    for call in res["calls"]:
-        tool_data = call.get(call['type'])
-        tool_call_id = call['id']
+    for call in fc:
+        tool_data = call
+        tool_call_id = call['call_id']
         if not tool_data: continue
         tool_name = tool_data['name']
         print(f'calling func: {tool_name}')
@@ -67,23 +66,20 @@ def one_query(ask:str='How many "r" in "raspberrypi"?',llm=llm):
     messages = [{"role": "user", "content": ask}]
     # First assistant response (might suggest a tool)
     res = llm(messages)
+    fc = []
+    if isinstance(res,dict):
+        fc = [i for i in res.get('output',[]) if i.get('type')=='function_call']
     # Handle tool calls
-    if "calls" not in res: return res
+    if len(fc)==0: return res
     # Insert assistant message with tool_calls
-    messages.append({
-        "role": "assistant",
-            # might be empty or partial
-        "content": res.get("content", ""),
-        "tool_calls": res["calls"]
-    })
-    # Run the tool(s)
-    tool_results = asyncio.run(openai_call_tools(res))
+    messages += res.get('output',[])
+    tool_results = asyncio.run(openai_call_tools(fc))
     # For each tool call, insert a 'tool' message
     for i, tr in enumerate(tool_results):
-        messages.append({
-            "role": "tool",
-            "tool_call_id": res["calls"][i]["id"],  # MUST match
-            "name": tr["name"],"content": tr["content"]
+        messages.append({      
+            "type": "function_call_output",
+            "call_id": tr["tool_call_id"],  # MUST match
+            "output": tr["content"],
         })
     # Now ask assistant for final response
     messages.append({
@@ -100,7 +96,7 @@ print(llm('tell me your tools.'))
 # store = LLMsStore()
 # store.loads(data)
 # llm = store.find_all('ChatGPT41Nano*')[0]
-print(one_query('How many "r" in "raspberrypi"?',llm))
+print(one_query('How many "r" in "raspberrypi"?(By using tools)',llm))
 
 # ### advance with History in ex.8.TryAgentsAndHistory.py
 from ex_8_TryAgentsAndHistory import HistoryAssistantAgent
@@ -109,5 +105,5 @@ agent.set_mcp_tools(
             asyncio.run(get_tools()),
             lambda rs:asyncio.run(openai_call_tools(rs))
     )
-print(agent('How many "r" in "raspberrypi"?',auto_tool=True))
+print(agent('How many "r" in "raspberrypi"?(By using tools)',auto_tool=True))
 # agent("Please give me the final answer.")

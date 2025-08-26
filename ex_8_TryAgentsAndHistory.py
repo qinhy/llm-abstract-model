@@ -116,50 +116,49 @@ class HistoryAssistantAgent(BaseModel):
 
     def add_history(self, content: str, role:str='user',name:str=''):
         if content is None:content='NULL'
-        content=role+'@@@@'+content
-        if name:
-            content = content+'@@@@'+name
-        last = TextContentNode(content=content)
+        if isinstance(content,str):
+            node_content=dict(content=content, role=role)
+            if name:
+                node_content=dict(content=content, role=role,name=name)
+            last = TextContentNode(content=json.dumps(node_content))
+        elif isinstance(content,dict):
+            last = TextContentNode(content=json.dumps(content))
+        else:
+            raise ValueError('content must be str or dict')
         self.get_last_history().add(last)
         self.history_last = last
-        # {role}@@@@{content}
-        # {role}@@@@{content}@@@@{name}
 
-    def add_funcalls_history(self,tool_calls: str,
-                            content: str='NULL', role:str='assistant'):
+    def add_funcalls_history(self,tool_calls: List,
+                            content: str='tool_calls', role:str='assistant'):
+        assert isinstance(tool_calls,list), 'tool_calls must be list'
         self.add_history(content,role)
         last = self.get_last_history()
-        last.content += '@@tc@@'+tool_calls
-        # assistant@@@@{content}@@tc@@{tool_calls}
-        # assistant@@@@{content}@@@@{name}@@tc@@{tool_calls}
+        c = json.loads(last.content)
+        c['tool_calls'] = tool_calls
+        last.content = json.dumps(c)
         
     def add_funres_history(self,name: str,tool_call_id: str,
                             content: str='NULL', role:str='tool'):
         self.add_history(content,role,name)
         last = self.get_last_history()
-        last.content += '@@tcid@@'+tool_call_id
-        # tool@@@@{content}@@@@{name}@@tcid@@{tool_call_id}
+        c = json.loads(last.content)
+        c['tool_call_id'] = tool_call_id
+        last.content = json.dumps(c)
 
     def prepare_openai_his_messages(self, history: List[TextContentNode]):
         msgs = []
         for h in history:
-            if '@@@@' in h.content:
-                cs = h.content.split('@@@@')
-                msgs.append({'role':cs[0],'content':cs[1]})
-                if len(cs)>2:
-                    msgs[-1]['name'] = cs[2]
-                
-            if '@@tcid@@' in h.content:
-                i = h.content.split('@@tcid@@')[1]
-                msgs[-1]['tool_call_id'] = i
-
-            if '@@tc@@' in h.content:
-                c = h.content.split('@@tc@@')[1]
-                msgs[-1]['tool_calls'] = json.loads(c)
-                
-            if 'NULL@@' in msgs[-1]['content']:
-                msgs[-1]['content'] = ''
-                
+            h = json.loads(h.content)
+            if 'tool_calls' in h:
+                msgs += h['tool_calls']
+            else:
+                if h.get('role','user')=='tool':
+                    h = {
+                        "type": "function_call_output",
+                        "call_id": h.get('tool_call_id',''),
+                        "output": h.get('content','NULL')
+                    }
+                msgs.append(h)
         return msgs
 
     def set_mcp_tools(self, ts=[], call_func=None):
@@ -167,7 +166,7 @@ class HistoryAssistantAgent(BaseModel):
         if call_func:
             self._ts_call = call_func
 
-    def __call__(self, qustion: str, system_prompt:str=None,
+    def __call__(self, question: str, system_prompt:str=None,
                  last_k: int=4, print_history=True,
                  auto_tool=False) -> str:
         tmp = self.llm.system_prompt
@@ -176,8 +175,8 @@ class HistoryAssistantAgent(BaseModel):
         history = self.history_retrieval(last_k)
         msgs = self.prepare_openai_his_messages(history)
 
-        if qustion:
-            msgs.append({'role':'user','content':qustion})
+        if question:
+            msgs.append({'role':'user','content':question})
 
         if print_history:
             print("############ For Debug ##############")
@@ -186,22 +185,29 @@ class HistoryAssistantAgent(BaseModel):
             [print(i) for i in msgs]
             print("#####################################")
 
-        if qustion:
-            self.add_history(qustion)
+        if question:
+            self.add_history(question)
 
-        response = self.llm(msgs)
-        if 'calls' in response:
-            self.add_funcalls_history(
-                json.dumps(response['calls']),response['content'])
+        response = self.llm(msgs)        
+        fc = []
+        if isinstance(response,dict):
+            for m in response.get('output',[]):
+                if m.get('type')=='function_call':
+                    fc.append(m)
+                else:
+                    self.add_history(m,'assistant')
         else:
-            self.add_history(response,'assistant')    
+            self.add_history(response,'assistant')
+
+        if len(fc)>0:
+            self.add_funcalls_history(fc)
 
         self.llm.system_prompt = tmp
 
         if auto_tool:
             if self._ts_call is None:
                 raise ValueError('call method is no set, only has info of tools.')
-            fs = self._ts_call(response)
+            fs = self._ts_call(fc)
             [self.add_funres_history(**i) for i in fs]
             return self('')
         return response
@@ -228,10 +234,11 @@ def load_history_agent():
 # agent, store = load_history_agent()
 # print(agent("Welcome back! What's planned for today?"))
 
-store = LLMsStore()
-vendor = store.add_new_vendor(
-    Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
-llm = store.add_new_llm(
-    Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id(), temperature=0.7)
-agent = HistoryAssistantAgent(llm=llm)
-print(agent("Welcome back! What's planned for today?"))
+if __name__ == "__main__":
+    store = LLMsStore()
+    vendor = store.add_new_vendor(
+        Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
+    llm = store.add_new_llm(
+        Model4LLMs.ChatGPTDynamic)(llm_model_name='gpt-5-nano',vendor_id=vendor.get_id(),limit_output_tokens=2048)
+    agent = HistoryAssistantAgent(llm=llm)
+    print(agent("Welcome back! What's planned for today?"))

@@ -396,7 +396,7 @@ vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
 
 # Add the necessary components
 text_embedding = store.add_new_obj(Model4LLMs.TextEmbedding3Small())
-llm = store.add_new_llm(Model4LLMs.ChatGPT41Nano)(vendor_id='auto',temperature=0.7)
+llm = store.add_new_llm(Model4LLMs.ChatGPTDynamic)(llm_model_name='gpt-5-nano',vendor_id='auto',limit_output_tokens=2048)
 
 # vendor = store.add_new_Xai_vendor(api_key='XAI_API_KEY')
 # llm = grok = store.add_new_grok(vendor_id=vendor.get_id())

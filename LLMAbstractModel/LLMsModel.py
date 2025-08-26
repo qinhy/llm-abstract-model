@@ -234,6 +234,7 @@ class Model4LLMs:
             if not self.mcp_tools:return []            
             return [t.to_openai_tool() for t in self.mcp_tools]         
         def construct_payload(self, messages):
+            return self.openai_responses_payload(messages)
             return self.openai_construct_payload(messages)
 
     class ChatGPT4o(AbstractChatGPT):
@@ -312,14 +313,7 @@ class Model4LLMs:
         llm_model_obj:  Optional['Model4LLMs.AbstractChatGPT'] = None
         context_window_tokens: int = -1
         max_output_tokens: int = -1
-        # llm_models:  Dict[str,Type['Model4LLMs.AbstractChatGPT']] = {}
 
-        # def model_post_init(self, __context):
-        #     clss:List[Type[Model4LLMs.AbstractChatGPT]] = [
-        #         cls for k,cls in Model4LLMs.__dict__.items() if 'ChatGPT' not in k]
-        #     self.llm_models = {cls().llm_model_name:cls for cls in clss}
-        #     return super().model_post_init(__context)
-        
         def __getattr__(self, name):
             clss:List[Type[Model4LLMs.AbstractChatGPT]] = [
                 cls for k,cls in Model4LLMs.__dict__.items()
@@ -690,14 +684,16 @@ class LLMsStore(BasicStore):
     
     def add_new_llm(self,llm_class_type=MODEL_CLASS_GROUP.AbstractLLM):
         def add_llm(vendor_id:str,
+                    llm_model_name:str = None,
                     limit_output_tokens:int = 1024,
-                    temperature:float = 0.7,
+                    temperature:float = 1.0,
                     top_p:float = 1.0,
                     frequency_penalty:float = 0.0,
                     presence_penalty:float = 0.0,
-                    system_prompt:str = None,
+                    system_prompt:str = None,                    
                     id:str=None)->Model4LLMs.AbstractLLM:
             return self.add_new(llm_class_type)(vendor_id=vendor_id,
+                        llm_model_name=llm_model_name,
                         limit_output_tokens=limit_output_tokens,
                         temperature=temperature,
                         top_p=top_p,
@@ -764,8 +760,7 @@ class LLMsStore(BasicStore):
         tmp_store = LLMsStore()
         tmp_store.loads(cl_json)
         vs = [tmp_store.find(k) for k in ks]
-        for v in vs:v._id=None
-        return [self.add_new_obj(v) for v in vs]
+        return [self.add_new(v.__class__)(**v.model_dump()) for v in vs]
 
 class Tests(unittest.TestCase):
     def __init__(self,*args,**kwargs)->None:

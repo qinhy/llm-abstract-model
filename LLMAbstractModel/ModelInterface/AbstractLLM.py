@@ -68,11 +68,9 @@ class MCPTool(BaseModel):
         """
         openai_tool = {
             "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.inputSchema,
-            }, 
+            "name": self.name,
+            "description": self.description,
+            "parameters": self.inputSchema, 
         }
         return json.loads(json.dumps(openai_tool))
 
@@ -243,11 +241,11 @@ class AbstractLLM(BaseModel):
             "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
             "stream": self.stream,
             "messages": messages,
-            "max_completion_tokens": self.limit_output_tokens,
+            "max_output_tokens": self.limit_output_tokens,
             "temperature": self.temperature,
             "top_p": self.top_p,
-            "frequency_penalty": self.frequency_penalty,
-            "presence_penalty": self.presence_penalty,
+            # "frequency_penalty": self.frequency_penalty,
+            # "presence_penalty": self.presence_penalty,
         }
         return {k: v for k, v in payload.items() if v is not None}
     

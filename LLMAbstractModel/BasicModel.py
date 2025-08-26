@@ -153,11 +153,13 @@ class Model4Basic:
             return res
 
         def set_id(self,id:str):
-            assert self._id is None, 'this obj is been setted! can not set again!'
-            self._id = id
+            assert self._id is None, 'this obj is been setted! can not set again!'            
+            setattr(self,'_id',id)
+            self.__dict__['_id'] = id
             return self
         
-        def gen_new_id(self): return f"{self.class_name()}:{uuid4()}"
+        def gen_new_id(self): 
+            return f"{self.class_name()}:{uuid4()}"
 
         def get_id(self):
             assert self._id is not None, 'this obj is not setted!'

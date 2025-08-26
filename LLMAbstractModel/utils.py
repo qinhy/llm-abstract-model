@@ -3,7 +3,7 @@ import json
 import os
 import re
 from types import MethodType
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 from typing import Any, Callable, Optional, List
 from typing_extensions import LiteralString
 
@@ -173,9 +173,8 @@ class TextFile(Model4Basic.AbstractObj):
     line_count: Optional[int] = None
     _file:Any = None
     _current_chunk:Any = None
-
-    class Config:
-        arbitrary_types_allowed = True
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __init__(self, **data):
         super().__init__(**data)
