@@ -68,11 +68,9 @@ class MCPTool(BaseModel):
         """
         openai_tool = {
             "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.inputSchema,
-            }, 
+            "name": self.name,
+            "description": self.description,
+            "parameters": self.inputSchema, 
         }
         return json.loads(json.dumps(openai_tool))
 

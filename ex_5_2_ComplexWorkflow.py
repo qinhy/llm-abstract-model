@@ -7,8 +7,10 @@ def myprint(string):
 def init(store = LLMsStore()):    
     store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
     store.add_new_vendor(Model4LLMs.DeepSeekVendor)(api_key='DEEPSEEK_API_KEY')
-    llm_type = Model4LLMs.ChatGPT41Nano
-    solver = store.add_new_llm(llm_type)(vendor_id='auto',limit_output_tokens = 2048,system_prompt='''You will act as a professional problem-solver. Follow these 4 steps for any task or question without any tool ( python ... ):  
+    new_llm = lambda system_prompt: store.add_new_llm( Model4LLMs.ChatGPTDynamic)(
+        llm_model_name='gpt-5-nano',vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt)
+    solver = new_llm(
+    system_prompt='''You will act as a professional problem-solver. Follow these 4 steps for any task or question without any tool ( python ... ):  
 
 Step 1: Identify Key Concepts  
 Read the task carefully and identify the main ideas and knowledge areas needed.
@@ -28,7 +30,7 @@ Share the final outcome clearly and concisely. Include necessary labels, units, 
 Additional Notes:  
 Stay professional, thorough, and precise. Your solution should be clear, actionable, and well-explained.''')
     
-    reviewer = store.add_new_llm(llm_type)(vendor_id='auto',limit_output_tokens = 2048,system_prompt='''You will review another assistant's solution to a question. Your task is to evaluate and improve it by following these 4 steps:
+    reviewer = new_llm(system_prompt='''You will review another assistant's solution to a question. Your task is to evaluate and improve it by following these 4 steps:
 
 Step 1: Review the Solution  
 Read the question and solution carefully. Assess if it's clear, logical, and well-organized.
@@ -45,7 +47,7 @@ Evaluate the solution accuracy, clarity, and thoroughness. Highlight strengths, 
 Additional Notes:
 Be professional and constructive to improve the solution quality.''')
     
-    jugde = store.add_new_llm(llm_type)(vendor_id='auto',limit_output_tokens = 2048,system_prompt='''Task: Evaluate multiple solutions to a problem and select the best one. Follow these steps:
+    jugde = new_llm(system_prompt='''Task: Evaluate multiple solutions to a problem and select the best one. Follow these steps:
 
 1. Review Each Solution: Analyze the concepts, logic, and structure of each solution.
    - Assign scores (1-5) for:

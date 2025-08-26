@@ -93,13 +93,16 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
             """
             result = []
             for m in messages or []:
-                role = m.get("role", "user")
-                content = m.get("content", "")
-                if isinstance(content, list) and all(isinstance(p, dict) and "type" in p for p in content):
-                    parts = content
+                if "role" in m:
+                    role = m["role"]
+                    content = m.get("content", "")
+                    if isinstance(content, list) and all(isinstance(p, dict) and "type" in p for p in content):
+                        parts = content
+                    else:
+                        parts = [{"type": "input_text", "text": content}]
+                    result.append({"role": role, "content": parts})
                 else:
-                    parts = [{"type": "input_text", "text": content}]
-                result.append({"role": role, "content": parts})
+                    result.append(m)
             return result
         
         # Build the messages list with your existing helper (system_prompt handled there)
@@ -115,7 +118,6 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
         instructions = self.system_prompt
         non_system = [m for m in messages or [] if m.get("role") != "system"]
         payload.pop("messages", None)  # Remove messages; we'll use input instead
-
         payload.update({
             "model": self.get_vendor().format_llm_model_name(self.llm_model_name),
             "input": _messages_to_responses_input(non_system) or [
