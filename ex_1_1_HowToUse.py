@@ -18,6 +18,9 @@ llm = store.add_new(Model4LLMs.ChatGPTDynamic)(
 # vendor = store.add_new(Model4LLMs.DeepSeekVendor)(api_key='DEEPSEEK_API_KEY')
 # llm = deepseek = store.add_new(Model4LLMs.DeepSeekDynamic)(vendor_id=vendor.get_id())
 
+vendor = store.add_new_vendor(Model4LLMs.GeminiVendor)(api_key='GEMINI_API_KEY')
+llm = gemini = store.add_new(Model4LLMs.Gemini25Pro)(vendor_id=vendor.get_id())
+
 # vendor = store.add_new_vendor(Model4LLMs.XaiVendor)(api_key='XAI_API_KEY')
 # llm = grok = store.add_new(Model4LLMs.Grok)(vendor_id=vendor.get_id())
 

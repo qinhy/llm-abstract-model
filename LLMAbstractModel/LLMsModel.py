@@ -45,7 +45,8 @@ class Controller4LLMs:
                 'ChatGPT': 'OpenAIVendor:*',
                 'Claude': 'AnthropicVendor:*', 
                 'Grok': 'XaiVendor:*',
-                'DeepSeek': 'DeepSeekVendor:*'
+                'DeepSeek': 'DeepSeekVendor:*',
+                'Gemini': 'GeminiVendor:*'
             }
             # Check model name against mapping
             for model_type, vendor_type in vendor_mapping.items():
@@ -183,6 +184,10 @@ class Controller4LLMs:
     
     class XaiVendorController(AbstractVendorController): pass
     class GrokController(AbstractLLMController): pass
+    
+    class GeminiVendorController(AbstractVendorController): pass
+    class Gemini25ProController(AbstractLLMController): pass
+
     class OllamaVendorController(AbstractVendorController): pass
     class Gemma2Controller(AbstractLLMController): pass
     class Phi3Controller(AbstractLLMController): pass
@@ -239,7 +244,7 @@ class Model4LLMs:
     class AbstractChatGPT(AbstractLLM):
         def get_tools(self) -> List[Dict[str, Any]]:
             if not self.mcp_tools:return []            
-            return [t.to_openai_tool() for t in self.mcp_tools]         
+            return [t.to_openai_tool() for t in self.mcp_tools]
         def construct_payload(self, messages):
             return self.openai_responses_payload(messages)
             # return self.openai_construct_payload(messages)
@@ -451,6 +456,34 @@ class Model4LLMs:
                     vendor_id=self.vendor_id
                 )
             return getattr(self.llm_model_obj, name)
+        
+    class GeminiVendor(OpenAIVendor):
+        vendor_name: str = "Google"
+        api_url: str = "https://generativelanguage.googleapis.com"
+        chat_endpoint: str = "/v1beta/models/{llm_model_name}:generateContent"
+        models_endpoint: str = "/v1beta/models"
+        embeddings_endpoint: str = "/v1beta/models/gemini-embedding-001:embedContent"
+        rate_limit: Optional[int] = None
+    
+        def _build_headers(self) -> Dict[str, str]:
+            headers = super()._build_headers()
+            headers["X-goog-api-key"] = self.get_api_key()
+            headers.pop("Authorization", None)  # Remove Bearer token
+            return headers
+        
+    class AbstractGemini(AbstractLLM):
+        def construct_messages(self, messages):
+            return self.gemini_construct_messages(messages)
+        
+        def construct_payload(self, messages):
+            v = self.get_vendor()
+            v.chat_endpoint = v.chat_endpoint.format(llm_model_name=self.llm_model_name)
+            return self.gemini_construct_payload(messages)
+
+    class Gemini25Pro(AbstractGemini):
+        llm_model_name:str = 'gemini-2.5-pro'
+        context_window_tokens:int = 1048576
+        max_output_tokens:int = 65536
         
     class XaiVendor(OpenAIVendor):
         vendor_name: str = "xAI"

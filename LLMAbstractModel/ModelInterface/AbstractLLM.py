@@ -282,7 +282,10 @@ class AbstractLLM(BaseModel):
         if not isinstance(messages, list) and not isinstance(messages, str):
             if auto_str:
                 messages = str(messages)
-                
-        payload = self.construct_payload(self.construct_messages(messages))
+        print('LLM Call with messages:', messages)
+        messages = self.construct_messages(messages)
+        print('Constructed messages:', messages)
+        payload = self.construct_payload(messages)
+        print('Constructed payload:', payload)
         vendor = self.get_vendor()
         return vendor.chat_result(vendor.chat_request(payload))

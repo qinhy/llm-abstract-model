@@ -1,3 +1,4 @@
+import json
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Any, Optional, Union
 
@@ -250,3 +251,102 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
                             if "image_url" in c:
                                 msg["content"][i]["source"] = {"type": "url", "url":c.pop("image_url")}
         return cleaned_messages
+        
+    def gemini_construct_payload(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        
+        # The gemini_construct_contents helper handles message formatting and
+        # extracts the system prompt.
+        formatted_contents = messages
+        
+        # Gemini nests generation parameters inside a 'generationConfig' object.
+        generation_config = {
+            "temperature": self.temperature,
+            "topP": self.top_p,
+            "maxOutputTokens": self.limit_output_tokens,
+            "stopSequences": self.stop_sequences or [],
+        }
+        
+        payload = {
+            "contents": formatted_contents,
+            "generationConfig": {k: v for k, v in generation_config.items() if v is not None},
+        }
+
+        # Add system prompt using the dedicated 'system_instruction' field.
+        if self.system_prompt:
+            payload["system_instruction"] = {"parts": [{"text": self.system_prompt}]}
+            
+        # Handle and format tools if they are provided.
+        if self.mcp_tools:
+            # Assumes your MCPTool class can produce an OpenAI-compatible format.
+            tools = [
+                t if isinstance(t, MCPTool) else 
+                MCPTool(**t) for t in self.mcp_tools
+            ]
+            # We convert from OpenAI's format to Gemini's by extracting the 'function' object.
+            function_declarations = [t.to_openai_tool()["function"] for t in tools]
+            payload["tools"] = [{"function_declarations": function_declarations}]
+            
+        # Return a clean payload, removing any keys with empty or None values.
+        return {k: v for k, v in payload.items() if v}
+
+    def gemini_construct_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        contents = []
+        self.system_prompt = None
+        
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+        
+        # Extract the last system message found in the history.
+        for msg in reversed(messages or []):
+            if msg.get("role") == "system":
+                self.system_prompt = msg.get("content", "")
+                break
+        
+        for msg in messages or []:
+            role = msg.get("role")
+            
+            # Skip system messages; they are handled separately.
+            if role == "system":
+                continue
+            
+            # Map roles to Gemini's expected values.
+            gemini_role = "user" # Default
+            if role == "assistant":
+                gemini_role = "model"
+            elif role == "tool":
+                gemini_role = "function" # For function/tool responses.
+                
+            parts = []
+            # Handle standard text content.
+            if msg.get("content"):
+                parts.append({"text": msg["content"]})
+            
+            # Handle tool calls initiated by the model ('assistant' role).
+            if msg.get("tool_calls"):
+                for tool_call in msg["tool_calls"]:
+                    function_call = tool_call.get("function", {})
+                    try:
+                        # Gemini expects 'args' as a dictionary, not a JSON string.
+                        arguments = json.loads(function_call.get("arguments", "{}"))
+                    except json.JSONDecodeError:
+                        arguments = {} # Default to empty dict on error.
+                        
+                    parts.append({
+                        "functionCall": {
+                            "name": function_call.get("name"),
+                            "args": arguments
+                        }
+                    })
+                    
+            if role == "tool" and msg.get("name"):
+                parts.append({
+                    "functionResponse": {
+                        "name": msg.get("name"),
+                        "response": {"content": msg.get("content")}
+                    }
+                })
+            
+            if parts:
+                contents.append({"role": gemini_role, "parts": parts})
+                
+        return contents
