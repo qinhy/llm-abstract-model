@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 import json
-from typing import Any
+from typing import Any, Optional
 from LLMAbstractModel.LLMsModel import LLMsStore
 from LLMAbstractModel import Model4LLMs
 
@@ -76,25 +76,32 @@ class MT5MakeOder(Model4LLMs.MermaidWorkflowFunction):
             tp: float = Field(..., description='Take profit price for the order.')
 
         para: Parameter = Parameter()
-        args: Arguments
-        rets: Returness
+        args: Optional[Arguments] = None
+        rets: Optional[Returness] = None
 
-        def __call__(self):
-            going_long = self.args.TakeProfitPrice > self.args.EntryPrice
+        def __call__(self,args,volume=0.01):
+            self.args = MT5MakeOder.Arguments(**args)
+            EntryPrice = self.args.EntryPrice
+            TakeProfitPrice = self.args.TakeProfitPrice
+            ProfitRiskRatio = self.args.ProfitRiskRatio
+
+            going_long = TakeProfitPrice > EntryPrice
             if going_long:
-                stop_loss = self.args.EntryPrice - (self.args.TakeProfitPrice - self.args.EntryPrice) / self.args.ProfitRiskRatio
+                stop_loss = EntryPrice - (TakeProfitPrice - EntryPrice) / ProfitRiskRatio
             else:
-                stop_loss = self.args.EntryPrice + (self.args.EntryPrice - self.args.TakeProfitPrice) / self.args.ProfitRiskRatio
+                stop_loss = EntryPrice + (EntryPrice - TakeProfitPrice) / ProfitRiskRatio
             digitsnum = self.para.digits[self.args.Symbol]
             EntryPrice,stop_loss,TakeProfitPrice = list(
                             map(lambda x:round(x*10**digitsnum)/10**digitsnum,
-                                                            [EntryPrice,stop_loss,TakeProfitPrice]))
-            self.rets = self.Returness(symbol=self.args.Symbol,volume= 0.01,price_open=EntryPrice,sl=stop_loss,tp=TakeProfitPrice)
+                            [EntryPrice,stop_loss,TakeProfitPrice]))
+            self.rets = self.Returness(symbol=self.args.Symbol,volume=volume,
+                                       price_open=EntryPrice,sl=stop_loss,tp=TakeProfitPrice)
             return  self.rets
 
 
-class RatesReturn(Model4LLMs.Function):
+class RatesReturn(Model4LLMs.MermaidWorkflowFunction):
     description:str = Field('Return rates as string')
+
     class Parameter(BaseModel):
         pass
     class Arguments(BaseModel):
@@ -105,7 +112,7 @@ class RatesReturn(Model4LLMs.Function):
         count: int = 10
         rates: list = []
         digitsnum: int = 0
-        error: str = ''
+        error: Optional[str] = ''
         header: str='```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n{join_formatted_rates}\n```'
 
         def __str__(self):
@@ -138,27 +145,54 @@ class RatesReturn(Model4LLMs.Function):
     para: Parameter = Parameter()
     args: Arguments = Arguments()
     rets: Returness = Returness()
-    def __call__(self, rates):
-        self.rets = self.Returness(**(json.loads(rates['result'])['ret']))
+    def __call__(self, data):
+        self.rets = self.Returness(**data)
         return self.rets
 
     
 # Define and add a mock LLM function if in debug mode
 class MockLLM(Model4LLMs.MermaidWorkflowFunction):
+    description:str = Field('Define and add a mock LLM function if in debug mode')
+
+    class Parameter(BaseModel):
+        pass
+    class Arguments(BaseModel):
+        pass
+    class Returness(BaseModel):
+        res:str = 'null'
+        
+    para: Parameter = Parameter()
+    args: Arguments = Arguments()
+    rets: Returness = Returness()
+
     def __call__(self, msg):
-        return (
+        self.rets = self.Returness(res=(
             '```json\n{\n'
             '"Symbol": "USDJPY",\n'
             '"EntryPrice": 146.5,\n'
             '"TakeProfitPrice": 149.0,\n'
             '"ProfitRiskRatio": 2\n'
             '}\n```'
-        )
-
+        ))
+        return self.rets
 
 class MakeDict(Model4LLMs.MermaidWorkflowFunction):
+    description:str = Field('class MakeDict(Model4LLMs.MermaidWorkflowFunction)')
+    
+    class Parameter(BaseModel):
+        pass
+    class Arguments(BaseModel):
+        pass
+    class Returness(BaseModel):
+        res:dict = {}
+        
+    para: Parameter = Parameter()
+    args: Arguments = Arguments()
+    rets: Returness = Returness()   
+        
     def __call__(self, **kwargs):
-        return dict(kwargs)
+        self.rets = self.Returness(res=dict(kwargs))
+        return self.rets
 
 store = LLMsStore()
 acc = store.add_new_obj(
@@ -171,15 +205,15 @@ acc = store.add_new_obj(
 
 store.add_new_function(
     MockLLM()
-).get_controller().delete()
+).controller.delete()
 store.add_new_function(
     MT5MakeOder()
-).get_controller().delete()
+).controller.delete()
 store.add_new_function(
     RatesReturn()
-).get_controller().delete()
+).controller.delete()
 store.add_new_function(
     MakeDict()
-).get_controller().delete()
+).controller.delete()
 
-acc.get_controller().delete()
+acc.controller.delete()

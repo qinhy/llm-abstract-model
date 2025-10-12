@@ -321,6 +321,7 @@ class Model4LLMs:
         llm_model_obj:  Optional['Model4LLMs.AbstractChatGPT'] = None
         context_window_tokens: int = -1
         max_output_tokens: int = -1
+        limit_output_tokens: int = 1024
 
         def __getattr__(self, name):
             clss:List[Type[Model4LLMs.AbstractChatGPT]] = [
@@ -329,12 +330,14 @@ class Model4LLMs:
             llm_models = {cls().llm_model_name:cls for cls in clss}
             if self.llm_model_obj is None:
                 self.llm_model_obj=llm_models[self.llm_model_name](
-                    vendor_id=self.vendor_id
+                    vendor_id=self.vendor_id,
+                    limit_output_tokens=self.limit_output_tokens
                 )
             else:
                 if self.llm_model_obj.llm_model_name!=self.llm_model_name:
                     self.llm_model_obj=llm_models[self.llm_model_name](
-                    vendor_id=self.vendor_id
+                    vendor_id=self.vendor_id,
+                    limit_output_tokens=self.limit_output_tokens
                 )
             return getattr(self.llm_model_obj, name)
     
@@ -685,7 +688,10 @@ class Model4LLMs:
             url: str
 
         class Returness(BaseModel):
-            data: dict = {}
+            raw: str = ''
+            param: dict = {}
+            args: dict = {}
+            ret: dict = {}
 
         para: Parameter = Parameter()
         args: Arguments
@@ -728,7 +734,16 @@ class Model4LLMs:
                     time.sleep(1)
 
                 try:
-                    return response.json()
+                    self.rets.raw = response.json()
+                    del json
+                    import json
+
+                    res = json.loads(self.rets.raw['result'])
+                    self.rets.param = res['param']
+                    self.rets.args = res['args']
+                    self.rets.ret = res['ret']
+                    return self.rets
+                
                 except Exception as e:
                     raise ValueError(f'"text":{response.text}')
             except requests.exceptions.RequestException as e:
@@ -779,10 +794,18 @@ class LLMsStore(BasicStore):
         return self.add_new_obj(self.MODEL_CLASS_GROUP.RequestsFunction(method=method,url=url,headers=headers),id=id)
     
     def add_new_celery_request(self, url:str, method='GET', headers={},
-                               task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}', id:str=None
+                               task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}',
+                               timeout: int = 60, id:str=None
                                )->MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction:
-        return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
-                                                        headers=headers,task_status_url=task_status_url),id=id)
+        
+        return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(
+            **dict(
+                para=dict(method=method,timeout=timeout,headers=headers,task_status_url=task_status_url,),
+                args=dict(url=url)
+            )
+        ))
+        # return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
+        #                                                 headers=headers,task_status_url=task_status_url),id=id)
     
     # def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]], metadata={}, id:str=None)->MODEL_CLASS_GROUP.WorkFlow:
     #     if type(tasks) is list:

@@ -12,7 +12,7 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
     """
     
     # Basic configuration parameters
-    limit_output_tokens: Optional[int] = 1024
+    limit_output_tokens: Optional[int] = -1
 
     # Advanced configuration parameters
     stop_sequences: Optional[List[str]] = Field(default_factory=list)
