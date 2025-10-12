@@ -105,7 +105,7 @@ class RatesReturn(Model4LLMs.MermaidWorkflowFunction):
     class Parameter(BaseModel):
         pass
     class Arguments(BaseModel):
-        pass
+        rates: list = []
     class Returness(BaseModel):
         symbol: str = "USDJPY"
         timeframe: str = "H1"
@@ -145,8 +145,8 @@ class RatesReturn(Model4LLMs.MermaidWorkflowFunction):
     para: Parameter = Parameter()
     args: Arguments = Arguments()
     rets: Returness = Returness()
-    def __call__(self, data):
-        self.rets = self.Returness(**data)
+    def __call__(self, rates: list = []):
+        self.rets = self.Returness(rates=rates)
         return self.rets
 
     

@@ -678,14 +678,19 @@ class Model4LLMs:
     class AsyncCeleryWebApiFunction(MermaidWorkflowFunction):
         description:str = Field('Makes an HTTP request to async Celery REST api.')
         
-        class Parameter(BaseModel):            
+        class Parameter(BaseModel):
+            url: str 
             method: str = 'GET'
             timeout: int = 60
             headers: Dict[str, str] = {}
             task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}'
 
         class Arguments(BaseModel):
-            url: str
+            params: Optional[Dict[str, Any]] = None
+            data: Optional[Dict[str, Any]] = None
+            json: Optional[Dict[str, Any]] = None
+            debug:bool = False
+            debug_data:Optional[Dict] = None
 
         class Returness(BaseModel):
             raw: str = ''
@@ -693,19 +698,21 @@ class Model4LLMs:
             args: dict = {}
             ret: dict = {}
 
-        para: Parameter = Parameter()
-        args: Arguments
+        para: Parameter
+        args: Arguments = Arguments()
         rets: Returness = Returness()
 
-        def __call__(self,params: Optional[Dict[str, Any]] = None,
-                     data: Optional[Dict[str, Any]] = None,
-                     json: Optional[Dict[str, Any]] = None,
-                     debug=False,
-                     debug_data=None) -> Dict[str, Any]:
+        def __call__(self,
+                    params: Optional[Dict[str, Any]] = None,
+                    data: Optional[Dict[str, Any]] = None,
+                    json: Optional[Dict[str, Any]] = None,
+                    debug:bool = False,
+                    debug_data:Optional[Dict] = None,
+        ) -> Dict[str, Any]:
             try:
                 if debug: return debug_data
                 response = requests.request(
-                    method=self.para.method,url=self.args.url,
+                    method=self.para.method,url=self.para.url,
                     headers=self.para.headers,params=params,
                     data=data,json=json
                 )
@@ -800,8 +807,7 @@ class LLMsStore(BasicStore):
         
         return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(
             **dict(
-                para=dict(method=method,timeout=timeout,headers=headers,task_status_url=task_status_url,),
-                args=dict(url=url)
+                para=dict(url=url,method=method,timeout=timeout,headers=headers,task_status_url=task_status_url,)
             )
         ))
         # return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
