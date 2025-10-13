@@ -684,6 +684,7 @@ class Model4LLMs:
             timeout: int = 60
             headers: Dict[str, str] = {}
             task_status_url: str = 'http://127.0.0.1:8000/tasks/meta/{task_id}'
+            to_del: bool=True
 
         class Arguments(BaseModel):
             params: Optional[Dict[str, Any]] = None
@@ -746,6 +747,12 @@ class Model4LLMs:
                     self.rets.param = res['param']
                     self.rets.args = res['args']
                     self.rets.ret = res['ret']
+                    if self.para.to_del:
+                        requests.request(
+                            method='GET',
+                            url= self.para.task_status_url.format(
+                                task_id=task_id).replace('meta','meta/delete')
+                        )
                     return self.rets
                 
                 except Exception as e:
