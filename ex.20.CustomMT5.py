@@ -31,14 +31,6 @@ def init_store():
 
     # try celery web requests, need a valid url(here is local one)
     store.clean()
-    # req = store.add_new_celery_request(url='http://localhost:8000/terminals/add',method='POST')
-    # myprint('req.model_dump()')
-    # ->  {'rank': [0], 'create_time': datetime.datetime(2024, 10, 18, 9, 44, 4, 502305, tzinfo=TzInfo(UTC)), 'update_time': datetime.datetime(2024, 10, 18, 9, 44, 4, 502305, tzinfo=TzInfo(UTC)), 'status': '', 'metadata': {}, 'name': 'RequestsFunction', 'description': 'Makes an HTTP request using the configured method, url, and headers, and the provided params, data, or json.', 'parameters': {'type': 'object', 'properties': {'params': {'type': 'object', 'description': 'query parameters'}, 'data': {'type': 'object', 'description': 'form data'}, 'json': {'type': 'object', 'description': 'JSON payload'}}}, 'required': [], 'method': 'GET', 'url': 'http://localhost:8000/tasks/status/some-task-id', 'headers': {}} 
-    # myprint('req(params={"broker": "TitanFX", "path": "C:/Program Files/Titan FX MetaTrader 5/terminal64.exe"})')
-    # ->  {'task_id': 'some-task-id', 'status': 'STARTED', 'result': {'message': 'Task is started'}} 
-
-    # req = store.add_new_celery_request(url='http://localhost:8000/terminals/',method='GET')
-    # myprint('req()')
 
     # Add an MT5 accounts to the store
     accs:list[MT5Account] = [ store.add_new_obj(
@@ -56,90 +48,90 @@ def init_store():
     book=dict(symbol='USDJPY',price_open = 100.0,volume= 0.01)
 
     # get account info
-    account_info = store.add_new_celery_request(url='http://localhost:8000/bookservice/',
-                                            method='POST',id='AsyncCeleryWebApiFunction:account_info')
-    # account_info(json={
-    #   "param": {
-    #     "account": acc.model_dump_json_dict(),
-    #     "action": "account_info"
-    #   }
-    # })
+    account_info = store.add_new_celery_request(url='http://localhost:8000/mt5accountinfo/',
+                                            method='POST',id='AsyncCeleryWebApiFunction:account-info')
+    
+    account_info(json_data={
+        "param": acc,
+    }).ret['info']['books']
 
     # get books info
-    books_info = store.add_new_celery_request(url='http://localhost:8000/bookservice/',
-                                                method='POST',id='AsyncCeleryWebApiFunction:books_info')
-    # account_info(json={
-    #   "param": {
-    #     "account": acc.model_dump_json_dict(),
-    #     "action": "getBooks"
-    #   }
-    # })
+    books_info = account_info
+
+    books_info(json_data={
+        "param": acc,
+    }).ret['info']['books']
 
     # get rates
-    get_rates = store.add_new_celery_request(url='http://localhost:8000/rates/',method='GET')
-    # myprint('''get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30))''')
+    get_rates = store.add_new_celery_request(url='http://localhost:8000/mt5copylastratesservice/',
+                                             method='POST',id='AsyncCeleryWebApiFunction:get-rates')
+    get_rates(json_data={
+        "param": acc,
+        "args": dict(symbol='USDJPY',timeframe='H4',count=30)
+    }).ret['rates']
+    # myprint('''get_rates(json_data=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30))''')
 
     decode_rates = store.add_new_function(RatesReturn())
-    # myprint('''decode_rates(get_rates(json=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30)))''')
+    # myprint('''decode_rates(get_rates(json_data=acc,params=dict(symbol='USDJPY',timeframe='H4',count=30)))''')
 
     # Initialize LLM vendor and add to the store    
-    vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key=os.environ['OPENAI_API_KEY'])
-    llm = store.add_new(Model4LLMs.ChatGPT41Nano)(vendor_id=vendor.get_id(), system_prompt=system_prompt)
+    vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key=os.environ['OPENAI_API_KEY'],timeout=60)
+    llm = store.add_new(Model4LLMs.ChatGPTDynamic)(
+            llm_model_name='o3',system_prompt=system_prompt,limit_output_tokens=4096,
+            vendor_id=vendor.get_id())
     # llm = store.add_new_function(MockLLM()) if debug else llm
 
     # Add functions to the store
-    extract_json = store.add_new_function(RegxExtractor(regx=r"```json\s*(.*)\s*\n```", is_json=True))
+    extract_json = store.add_new_function(RegxExtractor(
+                        para=dict(regx=r"```json\s*(.*)\s*\n```",is_json=True)))
     to_book_plan = store.add_new_function(MT5MakeOder())
-    books_send   = store.add_new_celery_request(url='http://localhost:8000/books/send',
-                                            method='POST',id='AsyncCeleryWebApiFunction:books_send')
-    # myprint('''books_send(json=dict(acc=acc,book=book))''')
+    books_send   = store.add_new_celery_request(url='http://localhost:8000/booksendservice/',
+                                            method='POST',id='AsyncCeleryWebApiFunction:books-send')
+    
+    # myprint('''books_send(json_data=dict(acc=acc,book=book))''')
 
     # manual workflow
-    # res = books_send(
-    #         json=dict(
-    #             acc=acc,
-    #             book=to_book_plan(
-    #                       extract_json(
-    #                         llm(
-    #                             decode_rates(
-    #                                 get_rates(json=acc,
-    #                                             params=dict(symbol='USDJPY',timeframe='H4',count=30))
-    #                             )
-    #                         )
+    # order = to_book_plan(
+    #                 extract_json(
+    #                 llm(
+    #                     decode_rates(
+    #                             get_rates(json_data={
+    #                                 "param": acc,
+    #                                 "args": dict(symbol='USDJPY',timeframe='H4',count=30)
+    #                             }).ret
     #                     )
     #                 )
     #             )
-    # )
-
-    # Define and save workflow
-    # workflow = store.add_new_workflow(
-    #     tasks=[
-    #         account_info.get_id(),
-    #         # get_rates.get_id(),
-    #         # llm.get_id(),
-    #         # extract_json.get_id(),
-    #         # make_order.get_id(),
-    #     ],
-    #     metadata={'tags': [str(accs[0].account_id)]}
-    # )
-    workflow = store.add_new_workflow(
-        tasks={
-            get_rates.get_id():['init_deps','rates_param'],
-            decode_rates.get_id():[get_rates.get_id()],
-            llm.get_id():[decode_rates.get_id()],
-            extract_json.get_id():[llm.get_id()],
-            to_book_plan.get_id():[extract_json.get_id()],
-        },
-        metadata={'tags': [str(accs[0].account_id)]}
-    )
-    workflowf = lambda acc,symbol:workflow(
-        init_deps=[(),
-                    dict(json=acc)],
-        rates_param=[(),
-                    dict(
-                        params=dict(symbol=symbol,timeframe='H4',count=30)
-                    )]
-    )
+    #         )
+    # res = books_send(order)
+    djson={
+        "param": acc,
+        "args": dict(symbol='USDJPY',timeframe='H4',count=30)
+    }
+    workflow:Model4LLMs.MermaidWorkflow = store.add_new_obj(
+        Model4LLMs.MermaidWorkflow(
+            mermaid_text=f'''
+    graph TD
+        {get_rates.get_id()}["{{ 'args': {{'json_data':{djson} }} }}"]
+        {get_rates.get_id()} -- "{{'ret':'data'}}" --> {decode_rates.get_id()}
+        {decode_rates.get_id()} -- "{{'prompt':'messages'}}" --> {llm.get_id()}
+        {llm.get_id()} -- "{{'data':'text'}}" --> {extract_json.get_id()}
+        {extract_json.get_id()} -- "{{'data':'data'}}" --> {to_book_plan.get_id()}
+    '''))
+    workflow.parse_mermaid()
+    workflow.run()
+    books_send(json_data={
+        "param": acc,
+        "args": workflow.results['final']
+    })
+    # parse_mermaid the workflow
+    # print(workflow.parse_mermaid())
+    # print(res)
+    # myprint('workflow.parse_mermaid()')
+    ## -> 13
+    # Run the workflow
+    # myprint('workflow.run()')
+    ## -> 13
     return store
 
 # Functions for secure data storage and retrieval using RSA key pair
@@ -164,20 +156,15 @@ def load_secure():
 def start_monitoring(store):
     llm = store.find_all('ChatGPT*:*')[0]
     monitor_pairs = store.get('monitor_pairs')['monitor_pairs']
-    workflow:Model4LLMs.WorkFlow = store.find_all('WorkFlow:*')[0]
+    workflow:Model4LLMs.MermaidWorkflow = store.find_all('MermaidWorkflow:*')[0]
     accs = store.find_all('MT5Account:*')
     acc = accs[0]
-    books_send = store.find('AsyncCeleryWebApiFunction:books_send')
-    books_info = store.find('AsyncCeleryWebApiFunction:books_info')
-    get_rates = store.find('AsyncCeleryWebApiFunction:47ca31f7-933d-4127-a462-ce0de163b987')
+    books_send = store.find('AsyncCeleryWebApiFunction:books-send')
+    books_info = store.find('AsyncCeleryWebApiFunction:account-info')
+    get_rates = store.find('AsyncCeleryWebApiFunction:get-rates')
     decode_rates = store.find_all('RatesReturn:*')[0]
     extract_json = store.find_all('RegxExtractor:*')[0]
     to_book_plan = store.find_all('MT5MakeOder:*')[0]
-
-    workflowf = lambda acc,symbol:workflow(
-        init_deps   =[(),dict(json=acc)],
-        rates_param =[(),dict(params=dict(symbol=symbol,timeframe='H4',count=30))]
-    )
     
     class SyncAccounts:
         def __init__(self,accs:list[MT5Account]):
@@ -188,30 +175,35 @@ def start_monitoring(store):
                         for acc in accs]
 
         def books_send(self,plan):
-            for acc in self.accs:
-                books_send(json=dict(acc=acc,book=plan))
+            for acc in self.accs:                
+                books_send(json_data={
+                    "param": acc,
+                    "args": plan
+                })
 
         # def book_close(self,order):
         #     for acc in self.accs:
-        #         books_close(json=dict(acc=acc,book=order))
+        #         books_close(json_data=dict(acc=acc,book=order))
 
     sa = SyncAccounts(accs)
     acc = sa.accs[0]
     try:
-        alls = set(monitor_pairs) - {book['symbol'] for book in json.loads(books_info(json=acc)['result'])['ret']['first_book'] if book['volume']==0.01}
+        bs = [json.loads(b) for b in books_info(json_data={
+            "param": acc,
+        }).ret['info']['books']]
+        alls = set(monitor_pairs) - {book['symbol'] for book in bs if book['volume']==0.01}
         plans = []
         for currency in list(alls):
             # workflow_result = workflowf(acc,currency)
-            res = get_rates(json=acc,params=dict(symbol=currency,timeframe='H4',count=30))
-            res = decode_rates(res)
-            llmr = res = llm(res)
+            res = get_rates(json_data={"param": acc, "args":dict(symbol=currency,timeframe='H4',count=30)}).ret
+            res = decode_rates(data=res)
+            llmr = res = llm(str(res))
             with open('../llm-abstract-model-logs.txt', 'a', encoding='utf-8') as log_file:
                 log_file.write(llmr + '\n')
-            res = extract_json(res)
-            p = to_book_plan(res)
-            # res = books_send(json=dict(acc=acc,book=res))
+            res = extract_json(res).data
+            p = to_book_plan(data=res)
             print("Result:", p)
-            plans.append(p)
+            plans.append(p.model_dump())
 
         for p in plans:sa.books_send(p)
         

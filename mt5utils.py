@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 import json
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from LLMAbstractModel.LLMsModel import LLMsStore
 from LLMAbstractModel import Model4LLMs
 
@@ -63,10 +63,10 @@ class MT5MakeOder(Model4LLMs.MermaidWorkflowFunction):
                             'GBPJPY':3,'USDJPY':3,'NZDJPY':3,'XAUJPY':0,'JPN225':1,'US500':1}
 
         class Arguments(BaseModel):
-            Symbol:str=Field(...,description='The financial instrument for the order (e.g., USDJPY).')
-            EntryPrice:float=Field(...,description='Price at which to enter the trade.')
-            TakeProfitPrice:float=Field(...,description='Price at which to take profit in the trade.')
-            ProfitRiskRatio:float=Field(...,description='The ratio of profit to risk.')
+            Symbol:str=Field('',description='The financial instrument for the order (e.g., USDJPY).')
+            EntryPrice:float=Field(0.0,description='Price at which to enter the trade.')
+            TakeProfitPrice:float=Field(0.0,description='Price at which to take profit in the trade.')
+            ProfitRiskRatio:float=Field(0.0,description='The ratio of profit to risk.')
 
         class Returness(BaseModel):
             symbol: str = Field(..., description='The financial instrument for the order (e.g., USDJPY).')
@@ -79,8 +79,13 @@ class MT5MakeOder(Model4LLMs.MermaidWorkflowFunction):
         args: Optional[Arguments] = None
         rets: Optional[Returness] = None
 
-        def __call__(self,args,volume=0.01):
-            self.args = MT5MakeOder.Arguments(**args)
+        def __call__(self,Symbol:str='',EntryPrice:float=0.0,TakeProfitPrice:float=0.0,ProfitRiskRatio:float=0.0,
+                     data:Dict={}):            
+            data['Symbol']=data.get('Symbol',Symbol)
+            data['EntryPrice']=data.get('EntryPrice',EntryPrice)
+            data['TakeProfitPrice']=data.get('TakeProfitPrice',TakeProfitPrice)
+            data['ProfitRiskRatio']=data.get('ProfitRiskRatio',ProfitRiskRatio)
+            self.args = self.Arguments(**data)
             EntryPrice = self.args.EntryPrice
             TakeProfitPrice = self.args.TakeProfitPrice
             ProfitRiskRatio = self.args.ProfitRiskRatio
@@ -94,7 +99,7 @@ class MT5MakeOder(Model4LLMs.MermaidWorkflowFunction):
             EntryPrice,stop_loss,TakeProfitPrice = list(
                             map(lambda x:round(x*10**digitsnum)/10**digitsnum,
                             [EntryPrice,stop_loss,TakeProfitPrice]))
-            self.rets = self.Returness(symbol=self.args.Symbol,volume=volume,
+            self.rets = self.Returness(symbol=self.args.Symbol,volume=self.para.volume,
                                        price_open=EntryPrice,sl=stop_loss,tp=TakeProfitPrice)
             return  self.rets
 
@@ -105,8 +110,7 @@ class RatesReturn(Model4LLMs.MermaidWorkflowFunction):
     class Parameter(BaseModel):
         pass
     class Arguments(BaseModel):
-        rates: list = []
-    class Returness(BaseModel):
+        data: dict = {}
         symbol: str = "USDJPY"
         timeframe: str = "H1"
         count: int = 10
@@ -115,6 +119,20 @@ class RatesReturn(Model4LLMs.MermaidWorkflowFunction):
         error: Optional[str] = ''
         header: str='```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n{join_formatted_rates}\n```'
 
+    class Returness(BaseModel):
+        symbol: str = "USDJPY"
+        timeframe: str = "H1"
+        count: int = 10
+        rates: list = []
+        digitsnum: int = 0
+        error: Optional[str] = ''
+        header: str='```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n{join_formatted_rates}\n```'
+        prompt: str=''
+
+        def model_post_init(self, context):
+            self.prompt = str(self)
+            return super().model_post_init(context)
+
         def __str__(self):
             if self.rates is None:
                 return f"Error: {self.error}"
@@ -122,12 +140,12 @@ class RatesReturn(Model4LLMs.MermaidWorkflowFunction):
             if self.digitsnum > 0:
                 n = self.digitsnum
                 formatted_rates = [
-                    f'{r[1]:.{n}f}\n{r[2]:.{n}f}\n{r[3]:.{n}f}\n{r[4]:.{n}f}\n'
+                    f'{r[1]:.{n}f}, {r[2]:.{n}f}, {r[3]:.{n}f}, {r[4]:.{n}f}\n'
                     for r in self.rates
                 ]
             else:
                 formatted_rates = [
-                    f'{int(r[1])}\n{int(r[2])}\n{int(r[3])}\n{int(r[4])}\n'
+                    f'{int(r[1])}, {int(r[2])}, {int(r[3])}, {int(r[4])}\n'
                     for r in self.rates
                 ]
 
@@ -145,8 +163,23 @@ class RatesReturn(Model4LLMs.MermaidWorkflowFunction):
     para: Parameter = Parameter()
     args: Arguments = Arguments()
     rets: Returness = Returness()
-    def __call__(self, rates: list = []):
-        self.rets = self.Returness(rates=rates)
+    def __call__(self, data: dict = {}, 
+        symbol: str = "USDJPY",
+        timeframe: str = "H1",
+        count: int = 10,
+        rates: list = [],
+        digitsnum: int = 0,
+        error: Optional[str] = '',
+        header: str='```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n{join_formatted_rates}\n```'
+):
+        data['timeframe']=data.get('timeframe',timeframe)
+        data['symbol']=data.get('symbol',symbol)
+        data['count']=data.get('count',count)
+        data['rates']=data.get('rates',rates)
+        data['digitsnum']=data.get('digitsnum',digitsnum)
+        data['error']=data.get('error',error)
+        data['header']=data.get('header',header)
+        self.rets= self.Returness(**data)
         return self.rets
 
     

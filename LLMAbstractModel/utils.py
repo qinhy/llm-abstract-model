@@ -30,7 +30,7 @@ class RegxExtractor(Model4LLMs.MermaidWorkflowFunction):
     def __call__(self,text:str):
         self.args.text = text
         self.rets.data = self.extract(self.args.text)
-        return self.rets.data
+        return self.rets
     
     def extract(self,text,only_first=True)->str:
         matches = re.findall(self.para.regx, text, re.DOTALL)        

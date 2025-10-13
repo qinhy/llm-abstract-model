@@ -688,7 +688,7 @@ class Model4LLMs:
         class Arguments(BaseModel):
             params: Optional[Dict[str, Any]] = None
             data: Optional[Dict[str, Any]] = None
-            json: Optional[Dict[str, Any]] = None
+            json_data: Optional[Dict[str, Any]] = None
             debug:bool = False
             debug_data:Optional[Dict] = None
 
@@ -705,7 +705,7 @@ class Model4LLMs:
         def __call__(self,
                     params: Optional[Dict[str, Any]] = None,
                     data: Optional[Dict[str, Any]] = None,
-                    json: Optional[Dict[str, Any]] = None,
+                    json_data: Optional[Dict[str, Any]] = None,
                     debug:bool = False,
                     debug_data:Optional[Dict] = None,
         ) -> Dict[str, Any]:
@@ -714,7 +714,7 @@ class Model4LLMs:
                 response = requests.request(
                     method=self.para.method,url=self.para.url,
                     headers=self.para.headers,params=params,
-                    data=data,json=json
+                    data=data,json=json_data
                 )
                 response.raise_for_status()
                 # get task id
@@ -727,7 +727,7 @@ class Model4LLMs:
                         method='GET',
                         url= self.para.task_status_url.format(task_id=task_id),
                         headers=self.para.headers,params=params,
-                        data=data,json=json
+                        data=data,json=json_data
                     )
                     if response is None:
                         break
@@ -742,9 +742,6 @@ class Model4LLMs:
 
                 try:
                     self.rets.raw = response.json()
-                    del json
-                    import json
-
                     res = json.loads(self.rets.raw['result'])
                     self.rets.param = res['param']
                     self.rets.args = res['args']
@@ -809,7 +806,7 @@ class LLMsStore(BasicStore):
             **dict(
                 para=dict(url=url,method=method,timeout=timeout,headers=headers,task_status_url=task_status_url,)
             )
-        ))
+        ),id=id)
         # return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
         #                                                 headers=headers,task_status_url=task_status_url),id=id)
     
