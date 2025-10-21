@@ -1032,7 +1032,7 @@ class LLMsStore(BasicStore):
                 return self.add_new(vendor_class_type)(api_key=api_key,timeout=timeout)
         return add_vendor
     
-    def add_new_obj(self,llm_class_type=MODEL_CLASS_GROUP.AbstractLLM):
+    def add_new_llm(self,llm_class_type=MODEL_CLASS_GROUP.AbstractLLM):
         def add_llm(vendor_id:str,
                     llm_model_name:str = None,
                     limit_output_tokens:int = 1024,
