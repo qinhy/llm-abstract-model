@@ -59,6 +59,38 @@ emb = store.add_new_obj(Model4LLMs.EmbeddingContent(target_id=text.get_id(),vec=
 print(emb.get_target_data().raw,": ",emb.get_vec()[:10], '...')
 # -> hi! What is your model name?: [0.0118862, -0.0006172658, -0.008183353, 0.02926386, -0.03759078, -0.031130238, -0.02367668 ...
 
+
+class SimpleHistory:
+    def __init__(self, store=store):
+        self.store = store
+        self.root = store.add_new_obj(Model4LLMs.ContentGroup(owner_id='null',depth=0,))
+    def add_user(self, msg: str):
+        return self.add_msg(msg, author="user")
+    def add_assistant(self, msg: str):
+        return self.add_msg(msg, author="assistant")
+    def add_msg(self,msg,author='user'):
+        msg_obj = store.add_new_obj(Model4LLMs.TextContent(text=msg,author_id=author))
+        msg_group = self.store.add_new_obj(Model4LLMs.ContentGroup(owner_id=msg_obj.get_id()))
+        self.root.controller.add_child(msg_group)    
+        return f"{author}: {msg}"
+
+    def to_list(self):
+        gs = list(self.root.get_children_recursive())
+        ms:list[Model4LLMs.TextContent] = [self.store.find(g.owner_id) for g in gs]
+        return [{"role": m.author_id, "content": m.text} for m in ms]
+    
+    def print(self):
+        for item in self.to_list():
+            print(f"{item['role'] or 'unknown'}: {item['content']}")
+
+
+hist = SimpleHistory()
+print(hist.add_user('hi! What is your model name?'))
+print(hist.add_assistant(llm(hist.to_list()[-4:])))
+print(hist.add_user('How big is your body?'))
+print(hist.add_assistant(llm(hist.to_list()[-4:])))
+print(hist.to_list())
+
 # save all to json
 store.dump('./tmp/ex.1.1HowToUse.json')
 

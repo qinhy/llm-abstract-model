@@ -103,7 +103,7 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
                     if isinstance(content, list) and all(isinstance(p, dict) and "type" in p for p in content):
                         parts = content
                     else:
-                        parts = [{"type": "input_text", "text": content}]
+                        parts = [{"type": "input_text" if role!='assistant' else 'output_text', "text": content}]
                     result.append({"role": role, "content": parts})
                 else:
                     result.append(m)
@@ -138,6 +138,9 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
 
         if instructions:
             payload["instructions"] = instructions
+        
+        if hasattr(self,'reasoning_effort'):
+            payload["reasoning"] = { "effort": self.reasoning_effort }
 
         # Tools wiring (prefer explicit get_tools(); otherwise use mcp_tools if present)
         tools = None

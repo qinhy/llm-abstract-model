@@ -463,6 +463,7 @@ class Model4LLMs:
 
     class ChatGPT5Nano(ChatGPT5):
         llm_model_name: str = "gpt-5-nano"
+        reasoning_effort: str = "low"
 
     class ChatGPT5Thinking(AbstractChatGPT):
         llm_model_name: str = "gpt-5-thinking"
@@ -484,25 +485,24 @@ class Model4LLMs:
 
     class ChatGPTDynamic(AbstractChatGPT):
         llm_model_name: str = "gpt-5-nano"
-        llm_model_obj:  Optional['Model4LLMs.AbstractChatGPT'] = None
+        # llm_model_obj:  Optional['Model4LLMs.AbstractChatGPT'] = None
         context_window_tokens: int = -1
         max_output_tokens: int = -1
+        reasoning_effort: str = "low"
+        limit_output_tokens: int = 512
 
         def __getattr__(self, name):
             clss:List[Type[Model4LLMs.AbstractChatGPT]] = [
                 cls for k,cls in Model4LLMs.__dict__.items()
                 if k.startswith('ChatGPT') and 'ChatGPTDynamic' not in k]
             llm_models = {cls().llm_model_name:cls for cls in clss}
-            if self.llm_model_obj is None:
-                self.llm_model_obj=llm_models[self.llm_model_name](
-                    vendor_id=self.vendor_id
-                )
-            else:
-                if self.llm_model_obj.llm_model_name!=self.llm_model_name:
-                    self.llm_model_obj=llm_models[self.llm_model_name](
-                    vendor_id=self.vendor_id
-                )
-            return getattr(self.llm_model_obj, name)
+            llm_model_obj=llm_models[self.llm_model_name](
+                vendor_id=self.vendor_id,
+                limit_output_tokens=self.limit_output_tokens
+            )
+            if hasattr(llm_model_obj,'reasoning_effort'):
+                llm_model_obj.reasoning_effort=self.reasoning_effort
+            return getattr(llm_model_obj, name)
     
     class AnthropicVendor(AbstractVendor):
         vendor_name: str = "Anthropic"

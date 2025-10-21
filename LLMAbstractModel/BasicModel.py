@@ -79,43 +79,24 @@ class Controller4Basic:
             self.model: Model4Basic.AbstractGroup = model
             self._store: BasicStore = store
 
-        def yield_children_recursive(self, depth: int = 0):
-            for child_id in self.model.children_id:
-                if not self.storage().exists(child_id):
-                    continue
-                child: Model4Basic.AbstractObj = self.storage().find(child_id)
-                if hasattr(child, 'parent_id') and hasattr(child, 'children_id'):
-                    group:Controller4Basic.AbstractGroupController = child.controller
-                    yield from group.yield_children_recursive(depth + 1)
-                yield child, depth
-
+        def delete(self):
+            parent: Model4Basic.AbstractGroup = self.storage().find(self.model.parent_id)
+            remaining_ids = [cid for cid in parent.children_id if cid != self.model.get_id()]
+            parent.controller.update(children_id=remaining_ids)
+            return super().delete()
+        
         def delete_recursive(self):
-            for child, _ in self.yield_children_recursive():
+            for child, _ in self.model.yield_children_recursive():
                 child.controller.delete()
             self.delete()
-
-        def get_children_recursive(self):
-            children_list = []
-            for child_id in self.model.children_id:
-                if not self.storage().exists(child_id):
-                    continue
-                child: Model4Basic.AbstractObj = self.storage().find(child_id)
-                if hasattr(child, 'parent_id') and hasattr(child, 'children_id'):
-                    group:Controller4Basic.AbstractGroupController = child.controller
-                    children_list.append(group.get_children_recursive())
-                else:
-                    children_list.append(child)            
-            return children_list
-
-        def get_children(self):
-            assert self.model is not None, 'Controller has a null model!'
-            return [self.storage().find(child_id) for child_id in self.model.children_id]
-
-        def get_child(self, child_id: str):
-            return self.storage().find(child_id)
-        
+            
         def add_child(self, child_id: str):
-            return self.update(children_id= self.model.children_id + [child_id])
+            if hasattr(child_id,'get_id'):
+                child_id = child_id.get_id()
+            child = self.storage().find(child_id)
+            if child:
+                self.update(children_id= self.model.children_id + [child_id])
+                child.controller.update(depth=self.model.depth+1)
 
         def delete_child(self, child_id:str):
             if child_id not in self.model.children_id:return self
@@ -209,13 +190,41 @@ class Model4Basic:
             self.controller = self._get_controller_class()(store,self)
 
     class AbstractGroup(AbstractObj):
-        author_id: str=''
+        owner_id: str=''
         parent_id: str = ''
         children_id: list[str] = []
-
+        depth: int = -1
         # auto exclude when model dump
         controller: Optional[Controller4Basic.AbstractGroupController] = None
 
+        def get_own(self):
+            return self.controller.storage().find(self.owner_id)
+        
+        def get_parent(self):
+            return self.controller.storage().find(self.parent_id)
+        
+        def is_root(self) -> bool:
+            return self.depth == 0
+
+        def yield_children_recursive(self, depth: int = 0):
+            for child_id in self.children_id:
+                if not self.controller.storage().exists(child_id):
+                    continue
+                child: Model4Basic.AbstractGroup = self.controller.storage().find(child_id)
+                if hasattr(child, 'parent_id') and hasattr(child, 'children_id'):
+                    yield from child.yield_children_recursive(depth + 1)
+                yield child, depth
+
+        def get_children_recursive(self):
+            return [cd[0] for cd in self.yield_children_recursive(self.depth)]
+
+        def get_children(self):
+            return [self.controller.storage().find(child_id) for child_id in self.children_id]
+
+        def get_child(self, child_id: str):
+            if child_id in self.children_id:
+                return self.controller.storage().find(child_id)
+        
 class BasicStore(SingletonKeyValueStorage):
     MODEL_CLASS_GROUP = Model4Basic
     
