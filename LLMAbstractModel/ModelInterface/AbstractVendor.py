@@ -194,8 +194,13 @@ class AbstractVendor(BasicModel):
             
             if 'error' in response_data:
                 return response_data
-                
-            return response_data['data'][0]['embedding']
+
+            if 'data' in response_data and isinstance(response_data['data'], list) and len(response_data['data']) > 0:
+                return response_data['data'][0]['embedding']
+            elif 'embedding' in response_data and 'values' in response_data['embedding']:
+                return response_data['embedding']['values']
+            
+            raise ValueError(f'Unexpected embedding response format: {response_data}')
         except (KeyError, IndexError) as e:
             return {'error': f'Failed to extract embedding: {str(e)}'}
         except requests.RequestException as e:

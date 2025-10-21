@@ -15,8 +15,8 @@ You should reply summarizations only, without any additional information.
 ```'''
 
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key="OPENAI_API_KEY")#auto check os.environ
-llm = chatgpt = store.add_new_llm(Model4LLMs.ChatGPTDynamic)(
-     llm_model_name='gpt-5-nano',vendor_id='auto',system_prompt=system_prompt,limit_output_tokens=2048)
+llm = chatgpt = store.add_new_obj(Model4LLMs.ChatGPTDynamic(
+     llm_model_name='gpt-5-nano',vendor_id='auto',system_prompt=system_prompt,limit_output_tokens=2048))
 
 msg_template = store.add_new_function(StringTemplate(para=dict(
      string='''

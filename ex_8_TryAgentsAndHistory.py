@@ -238,7 +238,7 @@ if __name__ == "__main__":
     store = LLMsStore()
     vendor = store.add_new_vendor(
         Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
-    llm = store.add_new_llm(
-        Model4LLMs.ChatGPTDynamic)(llm_model_name='gpt-5-nano',vendor_id=vendor.get_id(),limit_output_tokens=2048)
+    llm = store.add_new_obj(
+        Model4LLMs.ChatGPTDynamic(llm_model_name='gpt-5-nano',vendor_id=vendor.get_id(),limit_output_tokens=2048))
     agent = HistoryAssistantAgent(llm=llm)
     print(agent("Welcome back! What's planned for today?"))

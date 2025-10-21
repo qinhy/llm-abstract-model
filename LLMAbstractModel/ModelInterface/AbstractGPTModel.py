@@ -1,5 +1,9 @@
+import base64
+import json
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Any, Optional, Union
+
+import requests
 
 # Import the required modules
 from .AbstractLLM import AbstractLLM,MCPTool,MCPToolAnnotations
@@ -99,7 +103,7 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
                     if isinstance(content, list) and all(isinstance(p, dict) and "type" in p for p in content):
                         parts = content
                     else:
-                        parts = [{"type": "input_text", "text": content}]
+                        parts = [{"type": "input_text" if role!='assistant' else 'output_text', "text": content}]
                     result.append({"role": role, "content": parts})
                 else:
                     result.append(m)
@@ -134,6 +138,9 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
 
         if instructions:
             payload["instructions"] = instructions
+        
+        if hasattr(self,'reasoning_effort'):
+            payload["reasoning"] = { "effort": self.reasoning_effort }
 
         # Tools wiring (prefer explicit get_tools(); otherwise use mcp_tools if present)
         tools = None
@@ -250,3 +257,167 @@ class AbstractGPTModel(AbstractLLM, BaseModel):
                             if "image_url" in c:
                                 msg["content"][i]["source"] = {"type": "url", "url":c.pop("image_url")}
         return cleaned_messages
+        
+    def gemini_construct_payload(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        
+        # The gemini_construct_contents helper handles message formatting and
+        # extracts the system prompt.
+        formatted_contents = messages
+        
+        # Gemini nests generation parameters inside a 'generationConfig' object.
+        generation_config = {
+            "temperature": self.temperature,
+            "topP": self.top_p,
+            "maxOutputTokens": self.limit_output_tokens,
+            "stopSequences": self.stop_sequences or [],
+        }
+        
+        payload = {
+            "contents": formatted_contents,
+            "generationConfig": {k: v for k, v in generation_config.items() if v is not None},
+        }
+
+        # Add system prompt using the dedicated 'system_instruction' field.
+        if self.system_prompt:
+            payload["system_instruction"] = {"parts": [{"text": self.system_prompt}]}
+            
+        # Handle and format tools if they are provided.
+        if self.mcp_tools:
+            # Assumes your MCPTool class can produce an OpenAI-compatible format.
+            tools = [
+                t if isinstance(t, MCPTool) else 
+                MCPTool(**t) for t in self.mcp_tools
+            ]
+            # We convert from OpenAI's format to Gemini's by extracting the 'function' object.
+            function_declarations = [t.to_openai_tool()["function"] for t in tools]
+            payload["tools"] = [{"function_declarations": function_declarations}]
+        # else:
+        #     payload["tool_config"] =  {
+        #         "function_calling_config": {
+        #         "mode": "NONE"
+        #         }
+        #     }
+
+        # payload["safetySettings"] = [
+        #     {
+        #     "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        #     "threshold": "BLOCK_NONE"
+        #     },
+        #     {
+        #     "category": "HARM_CATEGORY_HARASSMENT",
+        #     "threshold": "BLOCK_NONE"
+        #     }
+        # ]
+        
+        # Return a clean payload, removing any keys with empty or None values.
+        return {k: v for k, v in payload.items() if v}
+
+    def gemini_construct_messages(self, messages: Union[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        """
+        Transforms a list of messages into the Gemini API's 'role' and 'parts' format,
+        handling standard text, tool calls, tool responses, and multi-modal content.
+
+        Args:
+            messages: A list of message dictionaries. Each dictionary should have a 'role' and 'content'.
+                    The 'content' can be a string or a list of multi-modal objects.
+
+        Returns:
+            A list of dictionaries formatted for the Gemini API.
+        """
+        contents = []
+        system_prompt = None
+
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+
+        # Extract the last system message found in the history.
+        for msg in reversed(messages or []):
+            if msg.get("role") == "system":
+                system_prompt = msg.get("content", "")
+                break
+
+        for msg in messages or []:
+            role = msg.get("role")
+
+            # Skip system messages; Gemini handles them implicitly, not as a dedicated role.
+            if role == "system":
+                continue
+
+            # --- Map roles to Gemini's expected values.
+            gemini_role = "user"
+            if role == "assistant":
+                gemini_role = "model"
+            elif role == "tool":
+                gemini_role = "function"
+
+            parts = []
+
+            # --- Handle standard text or multi-modal content in the 'content' field.
+            content = msg.get("content")
+            if isinstance(content, str) and content.strip():
+                # Standard text message
+                parts.append({"text": content})
+            elif isinstance(content, list):
+                # Multi-modal content (text + image)
+                for item in content:
+                    item_type = item.get("type")
+                    if item_type == "input_text" and isinstance(item.get("text"), str):
+                        parts.append({"text": item["text"]})
+                    elif item_type == "input_image" and isinstance(item.get("image_url"), str):
+                        try:
+                            # Add a common User-Agent header to mimic a web browser
+                            headers = {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                            }
+                            
+                            response = requests.get(item["image_url"], headers=headers, stream=True)
+                            response.raise_for_status() # This will catch 4xx and 5xx errors
+                            
+                            image_data = response.content
+                            mime_type = response.headers.get("Content-Type", "image/jpeg")
+                            base64_image = base64.b64encode(image_data).decode('utf-8')
+                            
+                            parts.append({
+                                "inline_data": {
+                                    "mime_type": mime_type,
+                                    "data": base64_image
+                                }
+                            })
+                        except requests.exceptions.RequestException as e:
+                            print(f"Error fetching image from URL: {e}")
+                            continue
+            
+            # --- Handle tool calls initiated by the model ('assistant' role).
+            if msg.get("tool_calls"):
+                for tool_call in msg["tool_calls"]:
+                    function_call = tool_call.get("function", {})
+                    arguments = {}
+                    # Gemini expects a dictionary, not a JSON string.
+                    if isinstance(function_call.get("arguments"), str):
+                        try:
+                            arguments = json.loads(function_call["arguments"])
+                        except json.JSONDecodeError:
+                            print("Warning: Failed to decode tool arguments.")
+                            pass # Default to empty dict on error.
+                    
+                    parts.append({
+                        "functionCall": {
+                            "name": function_call.get("name"),
+                            "args": arguments
+                        }
+                    })
+            
+            # --- Handle tool responses ('tool' role)
+            if role == "tool" and msg.get("name"):
+                parts.append({
+                    "functionResponse": {
+                        "name": msg.get("name"),
+                        "response": {"content": msg.get("content")}
+                    }
+                })
+            
+            # --- Append the final message to the list of contents.
+            if parts:
+                contents.append({"role": gemini_role, "parts": parts})
+                
+        return contents

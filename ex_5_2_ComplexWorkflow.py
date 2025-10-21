@@ -7,8 +7,8 @@ def myprint(string):
 def init(store = LLMsStore()):    
     store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY')
     store.add_new_vendor(Model4LLMs.DeepSeekVendor)(api_key='DEEPSEEK_API_KEY')
-    new_llm = lambda system_prompt: store.add_new_llm( Model4LLMs.ChatGPTDynamic)(
-        llm_model_name='gpt-5-nano',vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt)
+    new_llm = lambda system_prompt: store.add_new_obj( Model4LLMs.ChatGPTDynamic(
+        llm_model_name='gpt-5-nano',vendor_id='auto',limit_output_tokens = 2048,system_prompt=system_prompt))
     solver = new_llm(
     system_prompt='''You will act as a professional problem-solver. Follow these 4 steps for any task or question without any tool ( python ... ):  
 

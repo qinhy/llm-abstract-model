@@ -1,11 +1,19 @@
 # from https://github.com/qinhy/singleton-key-value-storage.git
 from datetime import datetime
 import json
-from typing import Optional, Type
+from typing import Callable, Optional, TypeVar, Type, overload
 import unittest
 from uuid import uuid4
 from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field
+try:
+    from typing import ParamSpec  # Py 3.10+
+except ImportError:               # Py <3.10 -> pip install typing_extensions
+    from typing_extensions import ParamSpec
+
+T = TypeVar("T")
+P = ParamSpec("P")
+
 from .Storage import SingletonKeyValueStorage
 
 def now_utc():
@@ -71,43 +79,24 @@ class Controller4Basic:
             self.model: Model4Basic.AbstractGroup = model
             self._store: BasicStore = store
 
-        def yield_children_recursive(self, depth: int = 0):
-            for child_id in self.model.children_id:
-                if not self.storage().exists(child_id):
-                    continue
-                child: Model4Basic.AbstractObj = self.storage().find(child_id)
-                if hasattr(child, 'parent_id') and hasattr(child, 'children_id'):
-                    group:Controller4Basic.AbstractGroupController = child.controller
-                    yield from group.yield_children_recursive(depth + 1)
-                yield child, depth
-
+        def delete(self):
+            parent: Model4Basic.AbstractGroup = self.storage().find(self.model.parent_id)
+            remaining_ids = [cid for cid in parent.children_id if cid != self.model.get_id()]
+            parent.controller.update(children_id=remaining_ids)
+            return super().delete()
+        
         def delete_recursive(self):
-            for child, _ in self.yield_children_recursive():
+            for child, _ in self.model.yield_children_recursive():
                 child.controller.delete()
             self.delete()
-
-        def get_children_recursive(self):
-            children_list = []
-            for child_id in self.model.children_id:
-                if not self.storage().exists(child_id):
-                    continue
-                child: Model4Basic.AbstractObj = self.storage().find(child_id)
-                if hasattr(child, 'parent_id') and hasattr(child, 'children_id'):
-                    group:Controller4Basic.AbstractGroupController = child.controller
-                    children_list.append(group.get_children_recursive())
-                else:
-                    children_list.append(child)            
-            return children_list
-
-        def get_children(self):
-            assert self.model is not None, 'Controller has a null model!'
-            return [self.storage().find(child_id) for child_id in self.model.children_id]
-
-        def get_child(self, child_id: str):
-            return self.storage().find(child_id)
-        
+            
         def add_child(self, child_id: str):
-            return self.update(children_id= self.model.children_id + [child_id])
+            if hasattr(child_id,'get_id'):
+                child_id = child_id.get_id()
+            child = self.storage().find(child_id)
+            if child:
+                self.update(children_id= self.model.children_id + [child_id])
+                child.controller.update(depth=self.model.depth+1)
 
         def delete_child(self, child_id:str):
             if child_id not in self.model.children_id:return self
@@ -144,6 +133,9 @@ class Model4Basic:
         
         def model_dump_json_dict(self):
             return json.loads(self.model_dump_json())
+        
+        def model_post_store_add(self):
+            pass
 
         def class_name(self): return self.__class__.__name__
 
@@ -198,13 +190,41 @@ class Model4Basic:
             self.controller = self._get_controller_class()(store,self)
 
     class AbstractGroup(AbstractObj):
-        author_id: str=''
+        owner_id: str=''
         parent_id: str = ''
         children_id: list[str] = []
-
+        depth: int = -1
         # auto exclude when model dump
         controller: Optional[Controller4Basic.AbstractGroupController] = None
 
+        def get_own(self):
+            return self.controller.storage().find(self.owner_id)
+        
+        def get_parent(self):
+            return self.controller.storage().find(self.parent_id)
+        
+        def is_root(self) -> bool:
+            return self.depth == 0
+
+        def yield_children_recursive(self, depth: int = 0):
+            for child_id in self.children_id:
+                if not self.controller.storage().exists(child_id):
+                    continue
+                child: Model4Basic.AbstractGroup = self.controller.storage().find(child_id)
+                if hasattr(child, 'parent_id') and hasattr(child, 'children_id'):
+                    yield from child.yield_children_recursive(depth + 1)
+                yield child, depth
+
+        def get_children_recursive(self):
+            return [cd[0] for cd in self.yield_children_recursive(self.depth)]
+
+        def get_children(self):
+            return [self.controller.storage().find(child_id) for child_id in self.children_id]
+
+        def get_child(self, child_id: str):
+            if child_id in self.children_id:
+                return self.controller.storage().find(child_id)
+        
 class BasicStore(SingletonKeyValueStorage):
     MODEL_CLASS_GROUP = Model4Basic
     
@@ -236,23 +256,28 @@ class BasicStore(SingletonKeyValueStorage):
         id,d = obj.gen_new_id() if id is None else id, obj.model_dump_json_dict()
         id = self._auto_fix_id(obj,id)
         self.set(id,d)
-        return self._get_as_obj(id,d)
+        obj = self._get_as_obj(id,d)        
+        obj.model_post_store_add()
+        return obj
     
     def add_new_class(self,obj_class_type:Type[MODEL_CLASS_GROUP.AbstractObj]):
         if not hasattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__):
             setattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__,obj_class_type)
     
-    def add_new(self, obj_class_type=MODEL_CLASS_GROUP.AbstractObj,id:str=None):#, id:str=None)->MODEL_CLASS_GROUP.AbstractObj:
+    @overload
+    def add_new(self, cls: Type[T]) -> Callable[P, T]: ...
+    
+    def add_new(self, obj_class_type:Type[T],id:str=None):
         obj_name = obj_class_type.__name__
         if not hasattr(self.MODEL_CLASS_GROUP,obj_name):
             setattr(self.MODEL_CLASS_GROUP,obj_name,obj_class_type)
-        def add_obj(*args,**kwargs):
-            obj = obj_class_type(*args,**kwargs)
+        def add_obj(*args: P.args, **kwargs: P.kwargs)->T:
+            obj:BasicStore.MODEL_CLASS_GROUP.AbstractObj = obj_class_type(*args,**kwargs)
             if obj._id is not None: raise ValueError(f'obj._id is "{obj._id}", must be none')
             return self._add_new_obj(obj,id)
         return add_obj
     
-    def add_new_obj(self, obj:MODEL_CLASS_GROUP.AbstractObj, id:str=None)->MODEL_CLASS_GROUP.AbstractObj:
+    def add_new_obj(self, obj:T, id:str=None)->T:
         obj_name = obj.__class__.__name__
         if not hasattr(self.MODEL_CLASS_GROUP,obj_name):
             setattr(self.MODEL_CLASS_GROUP,obj_name,obj.__class__)  
