@@ -23,7 +23,11 @@ from .MermaidWorkflowEngine import MermaidWorkflowEngine
 
 class Controller4LLMs:
     class AbstractObjController(Controller4Basic.AbstractObjController):
+        def storage(self)->"LLMsStore":return self._store
+
+    class AbstractGroupController(Controller4Basic.AbstractGroupController):
         pass
+
     class AbstractVendorController(AbstractObjController):
         def __init__(self, store, model):
             super().__init__(store, model)
@@ -34,7 +38,7 @@ class Controller4LLMs:
             super().__init__(store, model)
             self.model:Model4LLMs.AbstractLLM = model
             self._store:LLMsStore = store
-        def get_vendor(self, auto=False):
+        def get_vendor(self, auto=False)->"Model4LLMs.AbstractVendor":
             if not auto:
                 vendor = self._store.find(self.model.vendor_id)
                 if vendor is None:
@@ -158,6 +162,158 @@ class Controller4LLMs:
                     all_args.append(args_kwargs)
             return all_args, all_kwargs
 
+
+    class CommonDataController(AbstractObjController):pass
+    class AuthorController(AbstractObjController):pass
+
+    class AbstractContentController(AbstractObjController):
+        def __init__(self, store, model):
+            self.model: Model4LLMs.AbstractContent = model
+            self._store:LLMsStore = store
+
+        def delete(self):
+            self.get_data().controller.delete()
+            # self.storage().delete_obj(self.model)
+            super().delete()
+
+        def get_author(self):
+            author:Model4LLMs.Author = self.storage().find(self.model.author_id)
+            return author
+
+        def get_group(self):
+            res:Model4LLMs.ContentGroup = self.storage().find(self.model.group_id)
+            return res
+        
+        def get_data(self):
+            res:Model4LLMs.CommonData = self.storage().find(self.model.data_id())
+            return res
+
+        def get_data_raw(self):
+            return self.get_data().raw    
+
+        def update_data_raw(self, msg: str):
+            self.get_data().controller.update(raw = msg)
+            return self
+
+        def append_data_raw(self, msg: str):
+            data = self.get_data()
+            return self.update_data_raw(data.raw + msg)
+        
+    class ContentGroupController(AbstractGroupController):
+        def __init__(self, store, model):
+            self.model:Model4LLMs.ContentGroup = model
+            self._store:LLMsStore = store
+        
+        def storage(self):return self._store
+
+        def add_new_child_group(self,metadata={},rank=[0]):
+            parent,child = self.storage().add_new_group_to_group(group=self.model,metadata=metadata,rank=rank)
+            return child
+
+        def add_new_text_content(self, author_id:str, text:str):
+            parent,child = self.storage().add_new_text_to_group(group=self.model,author_id=author_id,
+                                                    text=text)                             
+            return child
+        
+        def add_new_embeding_content(self, author_id:str, content_id:str, vec:list[float]):
+            parent,child = self.storage().add_new_embedding_to_group(group=self.model,author_id=author_id,
+                                                        content_id=content_id, vec=vec)                                   
+            return child
+        
+        def add_new_image_content(self,author_id:str, filepath:str):
+            parent,child = self.storage().add_new_image_to_group(group=self.model,author_id=author_id,
+                                                    filepath=filepath)                              
+            return child
+
+    class TextContentController(AbstractContentController):
+        pass
+
+    class EmbeddingContentController(AbstractContentController):
+        def __init__(self, store, model):
+            self.model: Model4LLMs.EmbeddingContent = model
+            self._store:LLMsStore = store
+            
+        def get_data_raw(self):
+            return list(map(float,super().get_data_raw()[1:-1].split(',')))
+        
+        def get_data_rLOD0(self):
+            return self.get_data_raw()[::10**(0+1)]
+        
+        def get_data_rLOD1(self):
+            return self.get_data_raw()[::10**(1+1)]
+        
+        def get_data_rLOD2(self):
+            return self.get_data_raw()[::10**(2+1)]
+        
+        def get_target(self):
+            assert  self.model is not None, 'controller has null model!'
+            target_id = self.model.target_id
+            res:Model4LLMs.AbstractContent = self.storage().find(target_id)
+            return res
+        
+        def update_data_raw(self, embedding: list[float]):
+            super().update_data_raw(str(embedding))
+            return self
+
+    class FileLinkContentController(AbstractContentController):
+        pass
+
+    class BinaryFileContentController(AbstractContentController):
+        def __init__(self, store, model):
+            self.model: Model4LLMs.BinaryFileContent = model
+            self._store:LLMsStore = store
+            
+        def read_bytes(self, filepath):
+            with open(filepath, "rb") as f:
+                return f.read()
+            
+        def b64decode(self, file_base64):
+            return base64.b64decode(file_base64)
+            
+        def get_data_rLOD0(self):
+            raise ValueError('binary file has no LOD concept')
+        
+        def get_data_rLOD1(self):
+            raise ValueError('binary file has no LOD concept')
+        
+        def get_data_rLOD2(self):
+            raise ValueError('binary file has no LOD concept')
+        
+    class ImageContentController(BinaryFileContentController):
+        def __init__(self, store, model):
+            self.model: Model4LLMs.ImageContent = model    
+            self._store:LLMsStore = store
+
+        def decode_image(self, encoded_string):
+            return Image.open(io.BytesIO(self.b64decode(encoded_string)))
+        
+        def get_image(self):
+            encoded_image = self.get_data_raw()
+            if encoded_image:
+                image = self.decode_image(encoded_image)
+                return image
+            return None
+                    
+        def get_image_format(self):
+            image = self.get_image()
+            return image.format if image else None
+        
+        def get_data_rLOD(self,lod=0):
+            image = self.get_image()
+            ratio = 10**(lod+1)
+            if image.size[0]//ratio==0 or image.size[1]//ratio ==0:
+                raise ValueError(f'img size({image.size}) of LOD{lod} is smaller than 0')
+            return image.resize((image.size[0]//ratio,image.size[1]//ratio)) if image else None
+
+        def get_data_rLOD0(self):
+            return self.get_data_rLOD(lod=0)
+        
+        def get_data_rLOD1(self):
+            return self.get_data_rLOD(lod=1)
+        
+        def get_data_rLOD2(self):
+            return self.get_data_rLOD(lod=2)
+        
     class OpenAIVendorController(AbstractVendorController): pass
     class AbstractChatGPTController(AbstractLLMController): pass
     class ChatGPT4oController(AbstractLLMController): pass
@@ -229,12 +385,15 @@ class Model4LLMs:
                 res = Controller4LLMs.AbstractObjController
             return res
     
-    class AbstractVendor(AbstractVendor,AbstractObj):
+    class AbstractGroup(Model4Basic.AbstractGroup, AbstractObj):
+        controller: Optional[Controller4LLMs.AbstractGroupController] = None
+
+    class AbstractVendor(AbstractVendor, AbstractObj):
         controller: Optional[Controller4LLMs.AbstractVendorController] = None
 
-    class AbstractLLM(AbstractGPTModel,AbstractLLM,AbstractObj):
+    class AbstractLLM(AbstractGPTModel,AbstractLLM, AbstractObj):
         controller: Optional[Controller4LLMs.AbstractLLMController] = None
-        def get_vendor(self)->AbstractVendor:
+        def get_vendor(self)->"Model4LLMs.AbstractVendor":
             return self.controller.get_vendor(auto=(self.vendor_id=='auto'))
 
         def set_mcp_tools(self, mcp_tools_json = '{}'):            
@@ -627,7 +786,7 @@ class Model4LLMs:
                 embedding = self._normalize_embedding(embedding)
 
             return embedding
-
+        
         controller: Optional[Controller4LLMs.AbstractEmbeddingController] = None
     
     class TextEmbedding3Small(AbstractEmbedding, AbstractObj):
@@ -644,6 +803,84 @@ class Model4LLMs:
         normalize_embeddings: bool = True
         max_input_length: int = 8192
         
+    ##################### data model #########
+    
+    class CommonData(AbstractObj):
+        raw: str = ''
+        rLOD0: str = ''
+        rLOD1: str = ''
+        rLOD2: str = ''
+        controller: Controller4LLMs.CommonDataController = None
+
+    class Author(AbstractObj):
+        name: str = ''
+        role: str = ''
+        controller: Controller4LLMs.AuthorController = None
+
+    class AbstractContent(AbstractObj):
+        author_id: str=''
+        group_id: str=''
+        controller: Controller4LLMs.AbstractContentController = None
+        def data_id(self):return f"CommonData:{self.get_id()}"
+        def get_data(self):
+            if self.controller and self.controller.storage().exists(self.data_id()):
+                dc:Model4LLMs.CommonData = self.controller.storage().find(self.data_id())
+                return dc
+            return None
+        def model_post_store_add(self,raw=''):
+            if self.controller:
+                store = self.controller.storage()
+                if not store.exists(self.data_id()):
+                    place = self.controller.storage().add_new_obj(
+                                Model4LLMs.CommonData(raw=raw),id=self.data_id())
+                    return place
+            return None
+        
+    class ContentGroup(AbstractGroup):
+        controller: Controller4LLMs.ContentGroupController = None
+
+    class TextContent(AbstractContent):
+        text:str
+        controller: Controller4LLMs.TextContentController = None
+        def model_post_store_add(self):
+            return super().model_post_store_add(raw=self.text)
+        
+    class EmbeddingContent(AbstractContent):
+        target_id: str
+        vec:List[float]
+        controller: Controller4LLMs.EmbeddingContentController = None
+        def model_post_store_add(self):
+            res = super().model_post_store_add(raw=json.dumps(self.vec))            
+            self.controller.update(vec=[])
+            return res
+        
+        def get_target_data(self):
+            store = self.controller.storage()
+            obj:Model4LLMs.AbstractContent = store.find(self.target_id)
+            return obj.get_data()
+
+        def get_vec(self):
+            d = self.get_data()
+            return json.loads(d.raw) if d else None
+        
+    class FileLinkContent(AbstractContent):
+        controller: Controller4LLMs.FileLinkContentController = None
+        def model_post_init(self, context):
+            raise NotImplementedError
+
+    class BinaryFileContent(AbstractContent):
+        controller: Controller4LLMs.BinaryFileContentController = None
+        def model_post_init(self, context):
+            raise NotImplementedError
+
+    class ImageContent(BinaryFileContent):
+        controller: Controller4LLMs.ImageContentController = None
+        def model_post_init(self, context):
+            raise NotImplementedError
+        
+    class RaptorTree(ContentGroup):
+        pass
+
     ##################### utils model #########
     class MermaidWorkflowFunction(MWFFunction, AbstractObj):
         description: str = Field(..., description="description of this function.")        
@@ -774,58 +1011,6 @@ class Model4LLMs:
                 # else:
                 #     print(f"Success: {result['data']}")
     
-    # @Function.param_descriptions('Makes an HTTP request to async Celery REST api.',
-    #                             params='query parameters',
-    #                             data='form data',
-    #                             json='JSON payload')
-    # class AsyncCeleryWebApiFunction(Function):
-    #     method: str = 'GET'
-    #     url: str
-    #     headers: Dict[str, str] = {}
-    #     task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}'
-
-    #     def __call__(self,params: Optional[Dict[str, Any]] = None,
-    #                  data: Optional[Dict[str, Any]] = None,
-    #                  json: Optional[Dict[str, Any]] = None,
-    #                  debug=False,
-    #                  debug_data=None) -> Dict[str, Any]:
-    #         try:
-    #             if debug: return debug_data
-    #             response = requests.request(
-    #                 method=self.method,url=self.url,
-    #                 headers=self.headers,params=params,
-    #                 data=data,json=json
-    #             )
-    #             response.raise_for_status()
-    #             # get task id
-    #             for k,v in response.json().items():
-    #                 if 'id' in k:
-    #                     task_id = v
-                
-    #             while True:
-    #                 response = requests.request(
-    #                     method='GET',
-    #                     url= self.task_status_url.format(task_id=task_id),
-    #                     headers=self.headers,params=params,
-    #                     data=data,json=json
-    #                 )
-    #                 if response is None:
-    #                     break
-    #                 response.raise_for_status()
-    #                 if response.json() is None:
-    #                     break
-    #                 if response.json()['status'] in ['SUCCESS','FAILURE','REVOKED']:
-    #                     if response.json()['status'] == 'FAILURE':
-    #                         raise ValueError(f'{response.json()}')
-    #                     break
-    #                 time.sleep(1)
-
-    #             try:
-    #                 return response.json()
-    #             except Exception as e:
-    #                 raise ValueError(f'"text":{response.text}')
-    #         except requests.exceptions.RequestException as e:
-    #             raise ValueError(f'"error": {e} "status": {getattr(e.response, "status_code", None)}')
             
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   
@@ -847,7 +1032,7 @@ class LLMsStore(BasicStore):
                 return self.add_new(vendor_class_type)(api_key=api_key,timeout=timeout)
         return add_vendor
     
-    def add_new_llm(self,llm_class_type=MODEL_CLASS_GROUP.AbstractLLM):
+    def add_new_obj(self,llm_class_type=MODEL_CLASS_GROUP.AbstractLLM):
         def add_llm(vendor_id:str,
                     llm_model_name:str = None,
                     limit_output_tokens:int = 1024,
@@ -874,19 +1059,15 @@ class LLMsStore(BasicStore):
     def add_new_request(self, url:str, method='GET', headers={}, id:str=None)->MODEL_CLASS_GROUP.RequestsFunction:
         return self.add_new_obj(self.MODEL_CLASS_GROUP.RequestsFunction(method=method,url=url,headers=headers),id=id)
     
-    # def add_new_celery_request(self, url:str, method='GET', headers={},
-    #                            task_status_url: str = 'http://127.0.0.1:8000/tasks/status/{task_id}', id:str=None
-    #                            )->MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction:
-    #     return self.add_new_obj(self.MODEL_CLASS_GROUP.AsyncCeleryWebApiFunction(method=method,url=url,
-    #                                                     headers=headers,task_status_url=task_status_url),id=id)
-    
-    # def add_new_workflow(self, tasks:Optional[Dict[str,list[str]]|list[str]], metadata={}, id:str=None)->MODEL_CLASS_GROUP.WorkFlow:
-    #     if type(tasks) is list:
-    #         tasks = tasks[::-1]
-    #         ds    = [[t] for t in tasks[1:]] + [[]]
-    #         tasks = {t:d for t,d in zip(tasks,ds)}
-    #     return self.add_new_obj(Model4LLMs.WorkFlow(tasks=tasks,metadata=metadata),id=id)
-    
+    def add_obj_to_group(self,group:Model4LLMs.ContentGroup, obj:Model4LLMs.AbstractObj):
+        if group._id is None:raise ValueError('the group is no exits!')
+        content = obj
+        if not self.exists(obj.get_id()):
+            content = self.add_new_obj(obj)
+        group.controller.update(children_id=group.children_id+[content.get_id()])
+        content.init_controller(self)
+        return group,content    
+            
     def find_function(self,function_id:str) -> MODEL_CLASS_GROUP.MermaidWorkflowFunction:
         return self.find(function_id)
     
@@ -955,7 +1136,7 @@ class Tests(unittest.TestCase):
 
     def test_openai_2(self):
         v = self.store.find_all('OpenAIVendor:*')[0]
-        c = self.store.add_new_llm(Model4LLMs.ChatGPT4oMini)(vendor_id='auto')
+        c = self.store.add_new_obj(Model4LLMs.ChatGPT4oMini)(vendor_id='auto')
         print(c)
     
     def test_openai_3(self):
@@ -968,10 +1149,10 @@ class Tests(unittest.TestCase):
 
     def test_ollama_2(self):
         v = self.store.find_all('OllamaVendor:*')[0]
-        c = self.store.add_new_llm(Model4LLMs.Gemma2)(vendor_id=v.get_id())
+        c = self.store.add_new_obj(Model4LLMs.Gemma2)(vendor_id=v.get_id())
         print(c('What is your name?'))
 
     def test_ollama_3(self):
         v = self.store.find_all('OllamaVendor:*')[0]
-        c = self.store.add_new_llm(Model4LLMs.Llama)(vendor_id=v.get_id())
+        c = self.store.add_new_obj(Model4LLMs.Llama)(vendor_id=v.get_id())
         print(c('What is your name?'))

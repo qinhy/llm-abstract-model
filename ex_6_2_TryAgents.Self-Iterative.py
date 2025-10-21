@@ -189,8 +189,8 @@ Remember to be thorough, constructive, and professional in your review. Your goa
         # debugprint(f'overall_assessment == [{self.overall_assessment_extract(answer)}]')
         return f'### initial review\n{self.initial_review_extract(answer)}\n### reasoning feedback\n{self.reasoning_feedback_extract(answer)}\n### process errors\n{self.process_errors_extract(answer)}\n### overall assessmt\n{self.overall_assessment_extract(answer)}'
 
-main_llm = store.add_new_llm(Model4LLMs.ChatGPTDynamic)(llm_model_name='gpt-5-nano',vendor_id='auto',limit_output_tokens=4096)
-eval_llm = store.add_new_llm(Model4LLMs.ChatGPTDynamic)(llm_model_name='gpt-5-nano',vendor_id='auto',limit_output_tokens=4096)
+main_llm = store.add_new_obj(Model4LLMs.ChatGPTDynamic(llm_model_name='gpt-5-nano',vendor_id='auto',limit_output_tokens=4096))
+eval_llm = store.add_new_obj(Model4LLMs.ChatGPTDynamic(llm_model_name='gpt-5-nano',vendor_id='auto',limit_output_tokens=4096))
 
 # main_llm = store.add_new_grok(vendor_id='auto',limit_output_tokens=4096)
 # eval_llm = store.add_new_grok(vendor_id='auto',limit_output_tokens=4096)

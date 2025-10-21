@@ -1,11 +1,19 @@
 # from https://github.com/qinhy/singleton-key-value-storage.git
 from datetime import datetime
 import json
-from typing import Optional, Type
+from typing import Callable, Optional, TypeVar, Type, overload
 import unittest
 from uuid import uuid4
 from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field
+try:
+    from typing import ParamSpec  # Py 3.10+
+except ImportError:               # Py <3.10 -> pip install typing_extensions
+    from typing_extensions import ParamSpec
+
+T = TypeVar("T")
+P = ParamSpec("P")
+
 from .Storage import SingletonKeyValueStorage
 
 def now_utc():
@@ -144,6 +152,9 @@ class Model4Basic:
         
         def model_dump_json_dict(self):
             return json.loads(self.model_dump_json())
+        
+        def model_post_store_add(self):
+            pass
 
         def class_name(self): return self.__class__.__name__
 
@@ -236,23 +247,28 @@ class BasicStore(SingletonKeyValueStorage):
         id,d = obj.gen_new_id() if id is None else id, obj.model_dump_json_dict()
         id = self._auto_fix_id(obj,id)
         self.set(id,d)
-        return self._get_as_obj(id,d)
+        obj = self._get_as_obj(id,d)        
+        obj.model_post_store_add()
+        return obj
     
     def add_new_class(self,obj_class_type:Type[MODEL_CLASS_GROUP.AbstractObj]):
         if not hasattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__):
             setattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__,obj_class_type)
     
-    def add_new(self, obj_class_type=MODEL_CLASS_GROUP.AbstractObj,id:str=None):#, id:str=None)->MODEL_CLASS_GROUP.AbstractObj:
+    @overload
+    def add_new(self, cls: Type[T]) -> Callable[P, T]: ...
+    
+    def add_new(self, obj_class_type:Type[T],id:str=None):
         obj_name = obj_class_type.__name__
         if not hasattr(self.MODEL_CLASS_GROUP,obj_name):
             setattr(self.MODEL_CLASS_GROUP,obj_name,obj_class_type)
-        def add_obj(*args,**kwargs):
-            obj = obj_class_type(*args,**kwargs)
+        def add_obj(*args: P.args, **kwargs: P.kwargs)->T:
+            obj:BasicStore.MODEL_CLASS_GROUP.AbstractObj = obj_class_type(*args,**kwargs)
             if obj._id is not None: raise ValueError(f'obj._id is "{obj._id}", must be none')
             return self._add_new_obj(obj,id)
         return add_obj
     
-    def add_new_obj(self, obj:MODEL_CLASS_GROUP.AbstractObj, id:str=None)->MODEL_CLASS_GROUP.AbstractObj:
+    def add_new_obj(self, obj:T, id:str=None)->T:
         obj_name = obj.__class__.__name__
         if not hasattr(self.MODEL_CLASS_GROUP,obj_name):
             setattr(self.MODEL_CLASS_GROUP,obj_name,obj.__class__)  

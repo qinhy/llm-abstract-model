@@ -36,8 +36,8 @@ def adjust_value(x):
 '''
 
 vendor = store.add_new_vendor(Model4LLMs.OpenAIVendor)(api_key='OPENAI_API_KEY',timeout=60)
-llm = store.add_new_llm(Model4LLMs.ChatGPT4o)(
-                        vendor_id=vendor.get_id(),system_prompt=system_prompt,limit_output_tokens=2048)
+llm = store.add_new_obj(Model4LLMs.ChatGPT4o(
+                        vendor_id=vendor.get_id(),system_prompt=system_prompt,limit_output_tokens=2048))
 
 # Please reply refactored code in {}, and should not over {} words.
 msg_template = store.add_new_function(StringTemplate(para=dict(

@@ -54,9 +54,10 @@ print(llm([
 #     }
 # ]))
 # -> A solid black square centered on a white background, with a white border around it. There are no visible details or patterns—it's basically a blank/void image.
-
-print(text_embedding('hi! What is your model name?')[:10], '...')
-# -> [0.0118862, -0.0006172658, -0.008183353, 0.02926386, -0.03759078, -0.031130238, -0.02367668 ...
+text = store.add_new_obj(Model4LLMs.TextContent(text='hi! What is your model name?'))
+emb = store.add_new_obj(Model4LLMs.EmbeddingContent(target_id=text.get_id(),vec=text_embedding(text.text)))
+print(emb.get_target_data().raw,": ",emb.get_vec()[:10], '...')
+# -> hi! What is your model name?: [0.0118862, -0.0006172658, -0.008183353, 0.02926386, -0.03759078, -0.031130238, -0.02367668 ...
 
 # save all to json
 store.dump('./tmp/ex.1.1HowToUse.json')
