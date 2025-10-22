@@ -1,8 +1,8 @@
+
 # from https://github.com/qinhy/singleton-key-value-storage.git
 from datetime import datetime
 import json
 from typing import Callable, Optional, TypeVar, Type, overload
-import unittest
 from uuid import uuid4
 from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,8 +16,7 @@ P = ParamSpec("P")
 
 from .Storage import SingletonKeyValueStorage
 
-def now_utc():
-    return datetime.now(timezone.utc)
+def now_utc(): return datetime.now(timezone.utc)
 
 class BasicModel(BaseModel):
     # def __call__(self, *args, **kwargs):
@@ -266,9 +265,6 @@ class BasicStore(SingletonKeyValueStorage):
     def add_new_class(self,obj_class_type:Type[MODEL_CLASS_GROUP.AbstractObj]):
         if not hasattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__):
             setattr(self.MODEL_CLASS_GROUP,obj_class_type.__name__,obj_class_type)
-    
-    @overload
-    def add_new(self, cls: Type[T]) -> Callable[P, T]: ...
     
     def add_new(self, obj_class_type:Type[T],id:str=None):
         self.add_new_class(obj_class_type)
