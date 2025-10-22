@@ -81,8 +81,9 @@ class Controller4Basic:
 
         def delete(self):
             parent: Model4Basic.AbstractGroup = self.storage().find(self.model.parent_id)
-            remaining_ids = [cid for cid in parent.children_id if cid != self.model.get_id()]
-            parent.controller.update(children_id=remaining_ids)
+            if parent:
+                remaining_ids = [cid for cid in parent.children_id if cid != self.model.get_id()]
+                parent.controller.update(children_id=remaining_ids)
             return super().delete()
         
         def delete_recursive(self):
@@ -131,8 +132,8 @@ class Model4Basic:
         def __del__(self):
             if hasattr(self,'auto_del') and self.auto_del: self.__obj_del__()
         
-        def model_dump_json_dict(self):
-            return json.loads(self.model_dump_json())
+        def model_dump_json_dict(self,exclude=None):
+            return json.loads(self.model_dump_json(exclude=exclude))
         
         def model_post_store_add(self):
             pass
@@ -170,20 +171,14 @@ class Model4Basic:
             else:
                 exclude = ['controller']
             return super().model_dump(mode=mode, include=include, exclude=exclude, context=context, by_alias=by_alias, exclude_unset=exclude_unset, exclude_defaults=exclude_defaults, exclude_none=exclude_none, round_trip=round_trip, warnings=warnings, serialize_as_any=serialize_as_any)
-
-        # def _get_controller_class(self,modelclass=Controller4Basic):
-        #     class_type = self.__class__.__name__+'Controller'
-        #     res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
-        #     res = res.get(class_type, None)
-        #     if res is None: raise ValueError(f'No such class of {class_type}')
-        #     return res
-        
+       
         def _get_controller_class(self,modelclass=Controller4Basic):
-            class_type = self.__class__.__name__+'Controller'
+            class_type = self.class_name()+'Controller'
             res = {c.__name__:c for c in [i for k,i in modelclass.__dict__.items() if '_' not in k]}
             res = res.get(class_type, None)
-            if res is None: print(f'[warning]: No such class of {class_type}, use Controller4Basic.AbstractObjController')
-            res = Controller4Basic.AbstractObjController
+            if res is None: 
+                print(f'[warning]: No such class of {class_type}, use Controller4Basic.AbstractObjController')
+                res = Controller4Basic.AbstractObjController
             return res
         
         def init_controller(self,store):
@@ -206,17 +201,26 @@ class Model4Basic:
         def is_root(self) -> bool:
             return self.depth == 0
 
-        def yield_children_recursive(self, depth: int = 0):
+        def foreach_child(self):
             for child_id in self.children_id:
-                if not self.controller.storage().exists(child_id):
-                    continue
+                if not self.controller.storage().exists(child_id): continue
                 child: Model4Basic.AbstractGroup = self.controller.storage().find(child_id)
-                if hasattr(child, 'parent_id') and hasattr(child, 'children_id'):
+                yield child, hasattr(child, 'children_id')
+
+        def yield_children_recursive(self, depth: int = 0):
+            for child,has_children in self.foreach_child():
+                if has_children:
                     yield from child.yield_children_recursive(depth + 1)
                 yield child, depth
 
         def get_children_recursive(self):
-            return [cd[0] for cd in self.yield_children_recursive(self.depth)]
+            children_list = []
+            for child,has_children in self.foreach_child():
+                if has_children:
+                    children_list.append(child.get_children_recursive())
+                else:
+                    children_list.append(child)
+            return children_list
 
         def get_children(self):
             return [self.controller.storage().find(child_id) for child_id in self.children_id]
@@ -242,20 +246,19 @@ class BasicStore(SingletonKeyValueStorage):
     
     def _auto_fix_id(self,obj:MODEL_CLASS_GROUP.AbstractObj, id:str="None"):
         class_type = id.split(':')[0]
-        obj_class_type = obj.__class__.__name__
-        if class_type != obj_class_type:
-            id = f'{obj_class_type}:{id}'
+        obj_class_type = obj.class_name()
+        if class_type != obj_class_type: id = f'{obj_class_type}:{id}'
         return id
     
     def _get_as_obj(self,id,data_dict)->MODEL_CLASS_GROUP.AbstractObj:
+        if data_dict is None : return None
         obj:Model4Basic.AbstractObj = self._get_class(id)(**data_dict)
         obj.set_id(id).init_controller(self)
         return obj
     
     def _add_new_obj(self, obj:MODEL_CLASS_GROUP.AbstractObj, id:str=None):
-        id,d = obj.gen_new_id() if id is None else id, obj.model_dump_json_dict()
-        id = self._auto_fix_id(obj,id)
-        self.set(id,d)
+        id,d = (obj.gen_new_id() if id is None else id), obj.model_dump_json_dict()
+        self.set(  self._auto_fix_id(obj,id)  ,d)
         obj = self._get_as_obj(id,d)        
         obj.model_post_store_add()
         return obj
@@ -268,9 +271,7 @@ class BasicStore(SingletonKeyValueStorage):
     def add_new(self, cls: Type[T]) -> Callable[P, T]: ...
     
     def add_new(self, obj_class_type:Type[T],id:str=None):
-        obj_name = obj_class_type.__name__
-        if not hasattr(self.MODEL_CLASS_GROUP,obj_name):
-            setattr(self.MODEL_CLASS_GROUP,obj_name,obj_class_type)
+        self.add_new_class(obj_class_type)
         def add_obj(*args: P.args, **kwargs: P.kwargs)->T:
             obj:BasicStore.MODEL_CLASS_GROUP.AbstractObj = obj_class_type(*args,**kwargs)
             if obj._id is not None: raise ValueError(f'obj._id is "{obj._id}", must be none')
@@ -278,24 +279,14 @@ class BasicStore(SingletonKeyValueStorage):
         return add_obj
     
     def add_new_obj(self, obj:T, id:str=None)->T:
-        obj_name = obj.__class__.__name__
-        if not hasattr(self.MODEL_CLASS_GROUP,obj_name):
-            setattr(self.MODEL_CLASS_GROUP,obj_name,obj.__class__)  
+        self.add_new_class(obj.__class__)
         if obj._id is not None: raise ValueError(f'obj._id is {obj._id}, must be none')
         return self._add_new_obj(obj,id)
     
-    def add_new_group(self, obj:Model4Basic.AbstractGroup, id:str=None)->Model4Basic.AbstractGroup:        
-        if obj._id is not None: raise ValueError(f'obj._id is {obj._id}, must be none')
-        return self._add_new_obj(obj,id)
-    
-    def find(self,id:str) -> MODEL_CLASS_GROUP.AbstractObj:
-        raw = self.get(id)
-        if raw is None:
-            raws = self.find_all(f'*:{id}')
-            if len(raws)==1:
-                return raws[0]
-            return None
-        return self._get_as_obj(id,raw)
+    def find(self,id:str, fa:bool=True) -> MODEL_CLASS_GROUP.AbstractObj:
+        if self.exists(id): return self._get_as_obj(id, self.get(id) )
+        res = self.find_all(f'*:{id}') if fa else []
+        return res[0] if len(res) == 1 else None
     
     def find_all(self,id:str=f'AbstractObj:*')->list[MODEL_CLASS_GROUP.AbstractObj]:
-        return [self.find(k) for k in self.keys(id)]
+        return [self.find(k,False) for k in self.keys(id)]
