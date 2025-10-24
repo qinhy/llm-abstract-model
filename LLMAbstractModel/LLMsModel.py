@@ -1,23 +1,30 @@
 import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import copy
 from graphlib import TopologicalSorter
 import inspect
 import json
 import math
 import os
+from threading import Lock
 import time
 import unittest
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, create_model
 import requests
 from typing import Dict, Any
+
+import tiktoken
+
+from LLMAbstractModel.raptor_utils import distances_from_embeddings, get_embeddings, get_node_list, get_text, indices_of_nearest_neighbors_from_distances, perform_clustering, split_text
 
 from .BasicModel import Controller4Basic, Model4Basic, BasicStore
 from .ModelInterface import AbstractVendor
 from .ModelInterface import AbstractLLM
 from .ModelInterface import OpenAIVendor
 from .ModelInterface import AbstractGPTModel
-from .ModelInterface import AbstractEmbedding    
+from .ModelInterface import AbstractEmbedding as AbstractEmbeddingInterface
 from .MermaidWorkflowEngine import GraphNode, MermaidWorkflowFunction as MWFFunction
 from .MermaidWorkflowEngine import MermaidWorkflowEngine
 
@@ -763,7 +770,7 @@ class Model4LLMs:
         
     ##################### embedding model #####
     
-    class AbstractEmbedding(AbstractEmbedding, AbstractObj):
+    class AbstractEmbedding(AbstractEmbeddingInterface, AbstractObj):
         
         def generate_embedding(self, input_text: str) -> np.ndarray:
             """Generate embedding for the given text."""
@@ -789,14 +796,14 @@ class Model4LLMs:
         
         controller: Optional[Controller4LLMs.AbstractEmbeddingController] = None
     
-    class TextEmbedding3Small(AbstractEmbedding, AbstractObj):
+    class TextEmbedding3Small(AbstractEmbedding):
         vendor_id: str = "auto"
         embedding_model_name: str = "text-embedding-3-small"
         embedding_dim: int = 1536  # As specified by OpenAI's "text-embedding-3-small" model
         normalize_embeddings: bool = True
         max_input_length: int = 8192  # Default max token length for text-embedding-3-small
         
-    class TextGeminiEmbedding001(AbstractEmbedding, AbstractObj):
+    class TextGeminiEmbedding001(AbstractEmbedding):
         vendor_id: str = "auto"
         embedding_model_name: str = "gemini-embedding-001"
         embedding_dim: int = 1536
@@ -842,6 +849,12 @@ class Model4LLMs:
     class TextContent(AbstractContent):
         text:str
         controller: Controller4LLMs.TextContentController = None
+
+        def get_text(self):
+            if len(self.text)>0:return self.text
+            d = self.get_data()
+            return d.raw if d else None
+
         def model_post_store_add(self):
             return super().model_post_store_add(raw=self.text)
         
@@ -860,6 +873,7 @@ class Model4LLMs:
             return obj.get_data()
 
         def get_vec(self):
+            if len(self.vec)>0:return self.vec
             d = self.get_data()
             return json.loads(d.raw) if d else None
         
@@ -877,9 +891,429 @@ class Model4LLMs:
         controller: Controller4LLMs.ImageContentController = None
         def model_post_init(self, context):
             raise NotImplementedError
+
+    class RaptorNode(Model4Basic.AbstractGroup):
+        """
+        Storage-native RAPTOR node.
+        - node_type: 'root' | 'leaf' | 'summary'
+        - text      : original content (leaf)
+        - summary   : abstractive roll-up (summary/root)
+        - embeddings: Dict[vendor_name, vector]
+        - tokens    : cached token count (optional)
+        """
+        content: "Model4LLMs.TextContent"
+        index: int
+        node_type: str = "leaf" # 'root' | 'leaf' | 'summary'
+        embeddings: Dict[str,"Model4LLMs.EmbeddingContent"]
+        children: Set[int] = Field(default_factory=set)
+        tokens: int = 0
+        cluster_id: int = -1
+
+        # convenience
+        def text(self):
+            return self.content.get_text()
+
+        def summary(self):
+            if self.node_type != "summary":return None
+            return self.content.get_data().rLOD2
         
-    class RaptorTree(ContentGroup):
-        pass
+        def is_leaf(self) -> bool:
+            return self.node_type == "leaf" and len(self.children_id) == 0
+
+        def is_summary(self) -> bool:
+            return self.node_type in ("summary", "root")
+
+        def content_text(self) -> str:
+            return self.text() if self.text() else self.summary()
+        
+    class RaptorClusterTree(ContentGroup):
+        all_nodes: Dict[int, "Model4LLMs.RaptorNode"] = {}
+        root_nodes: Dict[int, "Model4LLMs.RaptorNode"] = {}
+        leaf_nodes: Dict[int, "Model4LLMs.RaptorNode"] = {}
+        layer_to_nodes: Dict[int, List["Model4LLMs.RaptorNode"]] = {}
+
+        tokenizer_name: str = "cl100k_base"
+        max_tokens: int = 100
+        start_layer: int = 0
+        num_layers: int = 5
+        threshold: float = 0.5
+        top_k: int = 5
+        selection_mode: str = "top_k"
+        summarization_length: int = 100
+        summarization_model: AbstractLLM
+        embedding_models: Dict[str, "Model4LLMs.AbstractEmbedding"]
+        cluster_embedding_model: str = "OpenAI"
+        
+        # Cluster
+        reduction_dimension: int = 10
+        clustering_algorithm:str = "RAPTOR_Clustering"
+        max_length_in_cluster: int = 3500
+        threshold: float = 0.1
+        verbose: bool = False
+        tree_node_index_to_layer:Dict[int,int] = {}
+        _summary_cache = {}
+
+        def tokenizer(self):
+            return tiktoken.get_encoding(self.tokenizer_name)
+        def token_len(self, text: str):
+            return len(self.tokenizer().encode(text))
+        
+        def create_node(
+            self, index: int, text: str, children_indices: Optional[Set[int]] = None):
+            
+            if children_indices is None:
+                children_indices = set()
+
+            con = Model4LLMs.TextContent(text=text)
+            con._id = con.gen_new_id()
+            embeddings = {
+                model_name: Model4LLMs.EmbeddingContent(
+                    target_id=con.get_id(),
+                    vec=model.generate_embedding(text).tolist())
+                for model_name, model in self.embedding_models.items()
+            }
+            return (index, Model4LLMs.RaptorNode(                
+                        content=Model4LLMs.TextContent(text=text),
+                        index=index,
+                        embeddings=embeddings,
+                        children = children_indices))
+
+        def create_embedding(self, text) -> List[float]:
+            return self.embedding_models[self.cluster_embedding_model].generate_embedding(
+                text
+            ).tolist()
+
+        def summarize(self, context, max_tokens=150) -> str:
+            return self.summarization_model(context, max_tokens)
+
+        def get_relevant_nodes(self, current_node:"Model4LLMs.RaptorNode", list_nodes:List["Model4LLMs.RaptorNode"]
+                               ) -> List["Model4LLMs.RaptorNode"]:
+            embeddings = [node.embeddings[self.cluster_embedding_model] for node in list_nodes]
+
+            distances = distances_from_embeddings(
+                current_node.embeddings[self.cluster_embedding_model], embeddings
+            )
+            indices = indices_of_nearest_neighbors_from_distances(distances)
+
+            if self.selection_mode == "threshold":
+                best_indices = [
+                    index for index in indices if distances[index] > self.threshold
+                ]
+            elif self.selection_mode == "top_k":
+                best_indices = indices[: self.top_k]
+            else:
+                best_indices = []
+
+            return [list_nodes[idx] for idx in best_indices]
+
+        def multithreaded_create_leaf_nodes(self, chunks: List[str]) -> Dict[int, "Model4LLMs.RaptorNode"]:
+            with ThreadPoolExecutor() as executor:
+                future_nodes = {
+                    executor.submit(self.create_node, index, text): (index, text)
+                    for index, text in enumerate(chunks)
+                }
+
+                leaf_nodes = {}
+                for future in as_completed(future_nodes):
+                    index, node = future.result()
+                    leaf_nodes[index] = node
+
+            return leaf_nodes
+
+        def build_from_text(self, text: str, use_multithreading: bool = True) -> "Model4LLMs.RaptorTree":
+            chunks = split_text(text, self.tokenizer(), self.max_tokens)
+
+            print("Creating Leaf Model4LLMs.RaptorNode")
+
+            if use_multithreading:
+                leaf_nodes = self.multithreaded_create_leaf_nodes(chunks)
+            else:
+                leaf_nodes = {}
+                for index, chunk in enumerate(chunks):
+                    __, node = self.create_node(index, chunk)
+                    leaf_nodes[index] = node
+
+            layer_to_nodes = {0: list(leaf_nodes.values())}
+            print(f"Created {len(leaf_nodes)} Leaf Embeddings")
+
+            print("Building All Model4LLMs.RaptorNode")
+            all_nodes = copy.deepcopy(leaf_nodes)
+            root_nodes = self.construct_tree(all_nodes, all_nodes, layer_to_nodes)
+            tree = Model4LLMs.RaptorClusterTree(all_nodes, root_nodes, leaf_nodes, self.num_layers, layer_to_nodes)
+            return tree
+
+        @staticmethod
+        def static_perform_RAPTOR_clustering(
+            nodes: List["Model4LLMs.RaptorNode"],
+            embedding_model_name: str,
+            max_length_in_cluster: int = 3500,
+            tokenizer=tiktoken.get_encoding("cl100k_base"),
+            reduction_dimension: int = 10,
+            threshold: float = 0.1,
+            verbose: bool = False,
+        ) -> List[List["Model4LLMs.RaptorNode"]]:
+            embeddings = np.array([node.embeddings[embedding_model_name].get_vec() for node in nodes])
+
+            clusters = perform_clustering(
+                embeddings, dim=reduction_dimension, threshold=threshold
+            )
+
+            node_clusters = []
+
+            for label in np.unique(np.concatenate(clusters)):
+                indices = [i for i, cluster in enumerate(clusters) if label in cluster]
+                cluster_nodes = [nodes[i] for i in indices]
+
+                if len(cluster_nodes) == 1:
+                    node_clusters.append(cluster_nodes)
+                    continue
+
+                total_length = sum(
+                    [len(tokenizer.encode(node.text())) for node in cluster_nodes]
+                )
+
+                if total_length > max_length_in_cluster:
+                    if verbose:
+                        print(
+                            f"reclustering cluster with {len(cluster_nodes)} nodes"
+                        )
+                    node_clusters.extend(
+                        Model4LLMs.RaptorClusterTree.static_perform_RAPTOR_clustering(
+                            cluster_nodes, embedding_model_name, max_length_in_cluster,
+                            tokenizer, reduction_dimension, threshold, verbose
+                        )
+                    )
+                else:
+                    node_clusters.append(cluster_nodes)
+
+            return node_clusters
+
+        def construct_tree(
+            self,
+            current_level_nodes: Dict[int, "Model4LLMs.RaptorNode"],
+            all_tree_nodes: Dict[int, "Model4LLMs.RaptorNode"],
+            layer_to_nodes: Dict[int, List["Model4LLMs.RaptorNode"]],
+            use_multithreading: bool = True,
+        ) -> Dict[int, "Model4LLMs.RaptorNode"]:
+            print("Using Cluster TreeBuilder")
+
+            next_node_index = len(all_tree_nodes)
+
+            def process_cluster(
+                cluster:List[Model4LLMs.RaptorNode], new_level_nodes, next_index, summarization_length, lock
+            ):
+                node_texts = get_text(cluster)
+
+                child_ids = tuple(sorted(n.index for n in cluster))
+                if child_ids in self._summary_cache:
+                    summarized_text = self._summary_cache[child_ids]
+                else:
+                    summarized_text = self.summarize(context=node_texts, max_tokens=summarization_length)
+                    self._summary_cache[child_ids] = summarized_text
+
+                print(
+                    f"Node Texts Length: {self.token_len(node_texts)}, "
+                    f"Summarized Text Length: {self.token_len(summarized_text)}"
+                )
+
+                __, new_parent_node = self.create_node(
+                    next_index, summarized_text, {node.index for node in cluster}
+                )
+
+                with lock:
+                    new_level_nodes[next_index] = new_parent_node
+
+            for layer in range(self.num_layers):
+                new_level_nodes = {}
+
+                print(f"Constructing Layer {layer}")
+
+                node_list_current_layer = get_node_list(current_level_nodes)
+
+                if len(node_list_current_layer) <= self.reduction_dimension + 1:
+                    self.num_layers = layer
+                    print(
+                        "Stopping Layer construction: Cannot Create More Layers. "
+                        f"Total Layers in tree: {layer}"
+                    )
+                    break
+
+                clusters = Model4LLMs.RaptorClusterTree.static_perform_RAPTOR_clustering(
+                    node_list_current_layer,
+                    self.cluster_embedding_model,
+                    self.max_length_in_cluster,
+                    tiktoken.get_encoding(self.tokenizer_name),
+                    self.reduction_dimension,
+                    self.threshold,
+                    self.verbose,
+                )
+
+                lock = Lock()
+
+                summarization_length = self.summarization_length
+                print(f"Summarization Length: {summarization_length}")
+
+                if use_multithreading:
+                    with ThreadPoolExecutor() as executor:
+                        for cluster in clusters:
+                            executor.submit(
+                                process_cluster,
+                                cluster,
+                                new_level_nodes,
+                                next_node_index,
+                                summarization_length,
+                                lock,
+                            )
+                            next_node_index += 1
+                        executor.shutdown(wait=True)
+                else:
+                    for cluster in clusters:
+                        process_cluster(
+                            cluster,
+                            new_level_nodes,
+                            next_node_index,
+                            summarization_length,
+                            lock,
+                        )
+                        next_node_index += 1
+
+                layer_to_nodes[layer + 1] = list(new_level_nodes.values())
+                current_level_nodes = new_level_nodes
+                all_tree_nodes.update(new_level_nodes)
+
+            return current_level_nodes
+
+        
+        def retrieve_information_collapse_tree(
+            self, query: str, top_k: int, max_tokens: int
+        ) -> Tuple[List["Model4LLMs.RaptorNode"], str]:
+            query_embedding = self.create_embedding(query)
+
+            selected_nodes = []
+
+            indices:List[int] = sorted(self.all_nodes.keys())
+            node_list = [self.all_nodes[index] for index in indices]
+            embeddings = [node.embeddings[self.cluster_embedding_model].get_vec() for node in node_list]
+
+            distances = distances_from_embeddings(query_embedding, embeddings)
+            indices = indices_of_nearest_neighbors_from_distances(distances)
+
+            total_tokens = 0
+            for idx in indices[:top_k]:
+                node = node_list[idx]
+                node_tokens = self.token_len(node.text())
+
+                if total_tokens + node_tokens > max_tokens:
+                    break
+
+                selected_nodes.append(node)
+                total_tokens += node_tokens
+
+            context = get_text(selected_nodes)
+            return selected_nodes, context
+
+        def retrieve_information(
+            self, current_nodes: List["Model4LLMs.RaptorNode"], query: str, num_layers: int
+        ) -> Tuple[List["Model4LLMs.RaptorNode"], str]:
+            query_embedding = self.create_embedding(query)
+
+            selected_nodes = []
+
+            node_list = current_nodes
+
+            for layer in range(num_layers):
+                embeddings = get_embeddings(node_list, self.cluster_embedding_model)
+
+                distances = distances_from_embeddings(query_embedding, embeddings)
+
+                indices = indices_of_nearest_neighbors_from_distances(distances)
+
+                if self.selection_mode == "threshold":
+                    best_indices:List[int] = [
+                        index for index in indices if distances[index] > self.threshold
+                    ]
+                elif self.selection_mode == "top_k":
+                    best_indices:List[int] = indices[: self.top_k].tolist()
+                else:
+                    best_indices:List[int] = []
+
+                nodes_to_add = [node_list[idx] for idx in best_indices]
+
+                selected_nodes.extend(nodes_to_add)
+
+                if layer != num_layers - 1:
+                    child_nodes = []
+
+                    for index in best_indices:
+                        child_nodes.extend(node_list[index].children)
+
+                    child_nodes = list(dict.fromkeys(child_nodes))
+                    node_list = [self.all_nodes[i] for i in child_nodes]
+
+            context = get_text(selected_nodes)
+            return selected_nodes, context
+
+        def retrieve(
+            self,
+            query: str,
+            start_layer: int = None,
+            num_layers: int = None,
+            top_k: int = 10,
+            max_tokens: int = 3500,
+            collapse_tree: bool = True,
+            return_layer_information: bool = False,
+        ):
+            if not isinstance(query, str):
+                raise ValueError("query must be a string")
+
+            if not isinstance(max_tokens, int) or max_tokens < 1:
+                raise ValueError("max_tokens must be an integer and at least 1")
+
+            if not isinstance(collapse_tree, bool):
+                raise ValueError("collapse_tree must be a boolean")
+
+            start_layer = self.start_layer if start_layer is None else start_layer
+            num_layers = self.num_layers if num_layers is None else num_layers
+
+            if not isinstance(start_layer, int) or not (
+                0 <= start_layer <= self.num_layers
+            ):
+                raise ValueError(
+                    f"start_layer of [{self.start_layer}] must be an integer between 0 and {self.num_layers}"
+                )
+
+            if not isinstance(num_layers, int) or num_layers < 1:
+                raise ValueError(f"num_layers must be an integer and at least 1")
+
+            if num_layers > (start_layer + 1):
+                raise ValueError(f"num_layers must be less than or equal to {self.start_layer+1}")
+
+            if collapse_tree:
+                print("Using collapsed_tree")
+                selected_nodes, context = self.retrieve_information_collapse_tree(
+                    query, top_k, max_tokens
+                )
+            else:
+                layer_nodes = self.layer_to_nodes[start_layer]
+                selected_nodes, context = self.retrieve_information(
+                    layer_nodes, query, num_layers
+                )
+
+            if return_layer_information:
+                layer_information = []
+
+                for node in selected_nodes:
+                    layer_information.append(
+                        {
+                            "node_index": node.index,
+                            "layer_number": self.tree_node_index_to_layer[node.index],
+                        }
+                    )
+
+                return context, layer_information
+
+            return context
+
 
     ##################### utils model #########
     class MermaidWorkflowFunction(MWFFunction, AbstractObj):
@@ -940,7 +1374,7 @@ class Model4LLMs:
             mermaid_text_lines = [[l[0],l[1].replace(':','__of__',1)] if len(l)>1 else l for l in mermaid_text_lines]
             mermaid_text_lines = [l[0]+'-->'+l[1] if len(l)>1 else l[0] for l in mermaid_text_lines]
             mermaid_text = '\n'.join(mermaid_text_lines)
-            res:dict[str,GraphNode] = super().parse_mermaid(mermaid_text)
+            res:dict[str,Model4LLMs.RaptorNode] = super().parse_mermaid(mermaid_text)
             for k,v in res.items():
                 res[k] = v.model_dump()
             res = json.loads(json.dumps(res).replace('__of__',':'))
@@ -950,7 +1384,7 @@ class Model4LLMs:
                 if not callable(func) and hasattr(func,'build'):
                     func:MWFFunction = func.build()
                 model_registry[k] = (func.__class__,func)
-                res[k] = GraphNode(**v)
+                res[k] = Model4LLMs.RaptorNode(**v)
             self.model_register(model_registry)
             self.mermaid_text = mermaid_text_copy
             self._graph = res
@@ -979,8 +1413,8 @@ class Model4LLMs:
         rets: Returness = Returness()
                 
         def __call__(self,
-                     debug=False,
-                     debug_data=None) -> Dict[str, Any]:
+                    debug=False,
+                    debug_data=None) -> Dict[str, Any]:
             try:
                 if debug: self.rets.data = debug_data
                 response = requests.request(
@@ -1011,7 +1445,7 @@ class Model4LLMs:
                 # else:
                 #     print(f"Success: {result['data']}")
     
-            
+                
 class LLMsStore(BasicStore):
     MODEL_CLASS_GROUP = Model4LLMs   
 
