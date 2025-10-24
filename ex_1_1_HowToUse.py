@@ -75,8 +75,8 @@ class SimpleHistory:
         return f"{author}: {msg}"
 
     def to_list(self):
-        gs = list(self.root.get_children_recursive())
-        ms:list[Model4LLMs.TextContent] = [self.store.find(g.owner_id) for g in gs]
+        ms:list[Model4LLMs.TextContent] = []
+        ms = [self.store.find(g.owner_id) for g,_ in self.root.yield_children_recursive()]
         return [{"role": m.author_id, "content": m.text} for m in ms]
     
     def print(self):

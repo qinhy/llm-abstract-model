@@ -1,4 +1,3 @@
-
 # from https://github.com/qinhy/singleton-key-value-storage.git
 from datetime import datetime
 import json
@@ -14,9 +13,10 @@ except ImportError:               # Py <3.10 -> pip install typing_extensions
 T = TypeVar("T")
 P = ParamSpec("P")
 
-from .Storage import SingletonKeyValueStorage
+from .Storage import PythonDictStorage, SingletonKeyValueStorage
 
-def now_utc(): return datetime.now(timezone.utc)
+def now_utc():
+    return datetime.now(timezone.utc)
 
 class BasicModel(BaseModel):
     # def __call__(self, *args, **kwargs):
@@ -79,8 +79,8 @@ class Controller4Basic:
             self._store: BasicStore = store
 
         def delete(self):
-            parent: Model4Basic.AbstractGroup = self.storage().find(self.model.parent_id)
-            if parent:
+            if not self.model.is_root():
+                parent: Model4Basic.AbstractGroup = self.storage().find(self.model.parent_id)
                 remaining_ids = [cid for cid in parent.children_id if cid != self.model.get_id()]
                 parent.controller.update(children_id=remaining_ids)
             return super().delete()
@@ -233,7 +233,7 @@ class BasicStore(SingletonKeyValueStorage):
     
     def __init__(self, version_controll=False) -> None:
         super().__init__(version_controll)
-        self.python_backend()
+        self.switch_backend(PythonDictStorage.build_tmp())
 
     def _get_class(self, id: str, modelclass=MODEL_CLASS_GROUP):
         class_type = id.split(':')[0]
