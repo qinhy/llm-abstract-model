@@ -36,6 +36,59 @@ You should reply summarizations only, without any additional information.
 {}
 ```'''
 
+#### for RAG
+'''
+Summarize the input text to exactly one-tenth (1/10) of its original length, in the same language as the input. Write sentences that reuse as many exact phrases and entities from the text as possible, with minimal syntax: use subject-verb-object and simple connectors. Do not paraphrase beyond shortening or connecting phrases. Copy verbatim any names, quoted phrases, dates, numbers, locations, or headings from the input, and preserve negations and original order of ideas. Prefer repeating entities to using pronouns. The summary should follow the order of the source text and include only minimal syntactic connectors.
+
+Provide the output in strict format (no additional text):
+
+- Line 1: summary (keyword-dense, minimal-syntax sentences as per above)
+- Line 2: {"tags": ["tag1", "tag2", "..."]}
+
+Do not use any extra explanations, markdown, paragraph structure, or formatting beyond the two output lines.
+
+# Steps
+
+1. Read the input text and determine its length.
+2. Extract primary phrases, names, quoted statements, dates, numbers, locations, and headings, as well as the main events or ideas, in original order.
+3. Compose the summary sentences, ensuring total length is 1/10 of the input text (round down if necessary), using as many original phrases as possible and preferred repetition of entities instead of pronouns.
+4. Generate a set of keyword tags capturing main topics, entities, themes, genres, or elements of the content, using concise terms.
+5. Output the summary in line 1, and the tags in standard JSON format on line 2. Do not wrap in a code block.
+
+# Output Format
+
+Line 1: [Summary]  
+Line 2: {"tags": ["tag1", "tag2", ...]}
+
+The summary line must be no longer than one-tenth of the original input’s character or word count, must strictly adhere to the copying and minimal-syntax rules, and must always use the same language as in the input. The tags JSON must be exactly on line 2, with no other text.
+
+# Examples
+
+Example 1 (Input: in English):  
+Input:  
+"On March 14, 2022, Dr. Emily Chen presented her research on 'urban climate adaptation' at the Berlin Conference. She explained strategies for sustainable water use, flood prevention, and green infrastructure, emphasizing the role of local governments. Over 300 experts attended. 'Cities are frontlines for climate adaptation,' Chen declared."  
+Expected Output:  
+March 14, 2022, Dr. Emily Chen, "urban climate adaptation", Berlin Conference, strategies: sustainable water use, flood prevention, green infrastructure, local governments. Over 300 experts attended. "Cities are frontlines for climate adaptation."  
+{"tags": ["Emily Chen", "urban climate adaptation", "Berlin Conference", "sustainability", "climate adaptation", "water", "infrastructure", "local government"]}  
+
+Example 2 (Input: in French):  
+Input:  
+"Le 5 mai, Jean Dupont a déclaré : « La croissance économique n’est pas durable sans respect de l’environnement. » À Paris, il a présenté des données sur le recyclage, soulignant le rôle des jeunes. 500 étudiants étaient présents."  
+Expected Output:  
+5 mai, Jean Dupont, « La croissance économique n’est pas durable sans respect de l’environnement. » Paris, données sur le recyclage, rôle des jeunes, 500 étudiants présents.  
+{"tags": ["Jean Dupont", "croissance économique", "environnement", "Paris", "recyclage", "jeunes", "étudiants"]}  
+
+(Real input and output should be proportional in length, respecting the 1/10 ratio.)
+
+# Notes
+
+- Do not paraphrase more than necessary to fit length and connector requirements.
+- Always copy verbatim: names, quoted phrases, dates, numbers, places, headings, and preserve original order.
+- Avoid pronouns unless present in the source, and favor repeated explicit entities.
+- The summary and tags must be in the same language as the input.
+- Do not provide internal reasoning, explanations, or any output apart from the required two lines.
+- For summary length, round down to comply strictly with the 1/10 rule.
+'''
 ###################################################
     class CodeExplainer:
         sys = '''I will provide pieces of a project code along with prior explanations.

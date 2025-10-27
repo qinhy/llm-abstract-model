@@ -4,13 +4,16 @@ from LLMAbstractModel.LLMsModel import Model4LLMs
 
 store = LLMsStore()
 
-vendor = store.add_new(Model4LLMs.OpenAIVendor)(
-                            api_key='OPENAI_API_KEY')
+
+vendor = store.add_new_obj(Model4LLMs.OpenAIVendor(
+                            api_key='OPENAI_API_KEY',timeout=60))
 text_embedding = store.add_new(Model4LLMs.TextEmbedding3Small)(
                             vendor_id=vendor.get_id())
-llm = store.add_new(Model4LLMs.ChatGPTDynamic)(
-            llm_model_name='gpt-5-nano',
-            vendor_id=vendor.get_id())
+llm = store.add_new_obj(Model4LLMs.ChatGPTDynamic(
+            vendor_id=vendor.get_id(),
+            llm_model_name='gpt-5-mini',
+            reasoning_effort="medium",
+            limit_output_tokens=4096))
 
 # vendor = store.add_new(Model4LLMs.AnthropicVendor)(api_key='ANTHROPIC_API_KEY')
 # llm = store.add_new(Model4LLMs.ClaudeDynamic)(vendor_id=vendor.get_id())
