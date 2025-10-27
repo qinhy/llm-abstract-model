@@ -1,10 +1,12 @@
 import base64
 import json
+import math
 import os
 import re
 from types import MethodType
 from pydantic import BaseModel, ConfigDict, Field, create_model
-from typing import Any, Callable, Optional, List
+from typing import Any, Callable, Optional, List, Tuple
+import tiktoken
 from typing_extensions import LiteralString
 
 from .BasicModel import Model4Basic
@@ -139,6 +141,175 @@ def __call__(self, {arg_str}):
         self.__class__ = dynamic_cls
         setattr(self.__class__, '__call__', dynamic_call)
 
+class StringChunkerByTokenizer(Model4LLMs.MermaidWorkflowFunction):
+    description: str = Field('StringChunkerByTokenizer')
+
+    class Arguments(BaseModel):
+        text: str = Field(description="Input text to split into token chunks")
+        tokenizer: Optional[str] = Field(
+            default="cl100k_base",
+            description=(
+                "Tokenizer/encoding. For tiktoken: 'cl100k_base', 'o200k_base', 'p50k_base', "
+                "or 'auto:<openai-model>' (e.g. 'auto:gpt-4o'). For HF: model id like 'gpt2'."
+            )
+        )
+        # Overlaps are percentages of the *target* region (floats).
+        left_overlap: float = Field(default=0.05, description="Left overlap as a fraction/percent of target")
+        right_overlap: float = Field(default=0.05, description="Right overlap as a fraction/percent of target")
+        # Hard cap: full chunk length (left + target + right) must not exceed this
+        max_chuck_token: int = Field(default=8192, description="Max tokens per emitted chunk, including overlaps")
+
+        trim_whitespace: bool = Field(default=True, description="Strip whitespace around chunk text")
+
+    class Returness(BaseModel):
+        chunks: List[str] = Field(default_factory=list, description="Chunk texts")
+        token_counts: List[int] = Field(default_factory=list, description="Token count per chunk (including overlaps)")
+        total_tokens: int = Field(default=0, description="Total tokens in input per chosen tokenizer")
+        tokenizer_used: str = Field(default="", description="Resolved tokenizer/encoding actually used")
+        effective_target_tokens: int = Field(default=0, description="Target (non-overlap) token size actually used")
+
+    args: Optional[Arguments] = None
+    rets: Returness = Returness()
+
+    # --- tokenizer loader ---
+    def _get_tokenizer(
+        self, spec: Optional[str]
+    ) -> Tuple[Callable[[str], List[int]], Callable[[List[int]], str], str]:
+        # 1) tiktoken (explicit encoding or auto:model)
+        if tiktoken is not None:
+            if spec and spec.startswith("auto:"):
+                model = spec.split("auto:", 1)[1].strip()
+                try:
+                    enc = tiktoken.encoding_for_model(model)
+                    return enc.encode, enc.decode, f"tiktoken:auto:{model}"
+                except Exception:
+                    pass
+            if spec:
+                try:
+                    enc = tiktoken.get_encoding(spec)
+                    return enc.encode, enc.decode, f"tiktoken:{spec}"
+                except Exception:
+                    pass
+
+        # 2) Hugging Face
+        if AutoTokenizer is not None and spec and not spec.startswith("auto:"):
+            try:
+                hf_tok = AutoTokenizer.from_pretrained(spec, use_fast=True)
+                def _encode(s: str) -> List[int]:
+                    return hf_tok.encode(s, add_special_tokens=False)
+                def _decode(ids: List[int]) -> str:
+                    return hf_tok.decode(ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+                return _encode, _decode, f"hf:{spec}"
+            except Exception:
+                pass
+
+        # 3) Whitespace fallback
+        table: List[str] = []
+        def _ws_encode(s: str) -> List[int]:
+            table.clear()
+            table.extend(s.split())
+            return list(range(len(table)))
+        def _ws_decode(ids: List[int]) -> str:
+            return " ".join(table[i] for i in ids if 0 <= i < len(table))
+        return _ws_encode, _ws_decode, "whitespace:fallback"
+
+    def _normalize_pct(self, x: float) -> float:
+        """
+        Accepts 0..1, or 0..100 (percent). Values >1 are treated as percent and divided by 100.
+        Clamped to [0, 1].
+        """
+        if x is None:
+            return 0.0
+        pct = x / 100.0 if x > 1.0 else x
+        return max(0.0, min(1.0, pct))
+
+    def __call__(
+        self,
+        text: str = '',
+        tokenizer: str = 'cl100k_base',
+        left_overlap: float = 0.05,
+        right_overlap: float = 0.05,
+        max_chuck_token: int = 8192,
+        trim_whitespace: bool = True,
+    ):
+        # Capture args
+        self.args = self.Arguments(
+            text=text,
+            tokenizer=tokenizer,
+            left_overlap=left_overlap,
+            right_overlap=right_overlap,
+            max_chuck_token=max_chuck_token,
+            trim_whitespace=trim_whitespace,
+        )
+
+        # Validate
+        if self.args.max_chuck_token < 1:
+            raise ValueError("max_chuck_token must be >= 1")
+        if not (self.args.left_overlap*self.args.max_chuck_token>1 and self.args.right_overlap*self.args.max_chuck_token>1):
+            raise ValueError("overlap must be >= 1 token")
+
+        L = self._normalize_pct(self.args.left_overlap)
+        R = self._normalize_pct(self.args.right_overlap)
+
+        encode, decode, used_name = self._get_tokenizer(self.args.tokenizer)
+        token_ids = encode(self.args.text)
+        N = len(token_ids)
+
+        # Compute target (non-overlap) size so that (L + 1 + R) * target <= max_chuck_token
+        denom = (1.0 + L + R)
+        if denom <= 0:
+            denom = 1.0
+        base_target = max(1, int(math.floor(self.args.max_chuck_token / denom)))
+
+        chunks: List[str] = []
+        counts: List[int] = []
+
+        target_start = 0
+        while target_start < N:
+            # This slice's target length (last slice may be shorter)
+            target_len = min(base_target, N - target_start)
+
+            # Overlaps derived from this slice's *target_len*
+            left_tokens  = int(math.floor(L * target_len))
+            right_tokens = int(math.floor(R * target_len))
+
+            # Ensure we never exceed max_chuck_token due to rounding
+            total_len = left_tokens + target_len + right_tokens
+            if total_len > self.args.max_chuck_token:
+                overflow = total_len - self.args.max_chuck_token
+                # reduce right first, then left
+                reduce_r = min(right_tokens, overflow)
+                right_tokens -= reduce_r
+                overflow -= reduce_r
+                if overflow > 0:
+                    left_tokens = max(0, left_tokens - overflow)
+                total_len = left_tokens + target_len + right_tokens  # recompute
+
+            # Compute slice boundaries (clamp overlaps at text boundaries)
+            start = max(0, target_start - left_tokens)
+            end   = min(N, target_start + target_len + right_tokens)
+
+            piece_ids = token_ids[start:end]
+            piece_text = decode(piece_ids)
+            if self.args.trim_whitespace:
+                piece_text = piece_text.strip()
+
+            chunks.append(piece_text)
+            counts.append(len(piece_ids))
+
+            # advance by the *target* size (non-overlap part)
+            target_start += target_len
+
+        self.rets = self.Returness(
+            chunks=chunks,
+            token_counts=counts,
+            total_tokens=N,
+            tokenizer_used=used_name,
+            effective_target_tokens=base_target,
+        )
+        # Return primary payload to match your other tools
+        return self.rets
+  
 # @descriptions('Classification Template for performing conditional checks on a target',
 #               target='The object or value to be classified',
 #               condition_funcs='List of condition functions to evaluate the target')
@@ -160,6 +331,7 @@ def __call__(self, {arg_str}):
 
 LLMsStore().add_new_class(RegxExtractor)
 LLMsStore().add_new_class(StringTemplate)
+LLMsStore().add_new_class(StringChunkerByTokenizer)
 # LLMsStore().add_new_obj(ClassificationTemplate()).controller.delete()
 
 class TextFile(Model4Basic.AbstractObj):

@@ -11,7 +11,7 @@ from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
 
 import numpy as np
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import tiktoken
 from umap.umap_ import UMAP
 from scipy import spatial
