@@ -876,6 +876,10 @@ class Model4LLMs:
             d = self.get_data()
             return json.loads(d.raw) if d else None
         
+        @staticmethod
+        def build(text_cont:'Model4LLMs.TextContent',embedding_model:'Model4LLMs.AbstractEmbedding'):
+            return Model4LLMs.EmbeddingContent(target_id=text_cont.get_id(),vec=embedding_model(text_cont.text))
+        
     class FileLinkContent(AbstractContent):
         controller: Controller4LLMs.FileLinkContentController = None
         def model_post_init(self, context):
