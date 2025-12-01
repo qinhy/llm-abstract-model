@@ -74,7 +74,7 @@ class SimpleHistory:
     def add_msg(self,msg,author='user'):
         msg_obj = store.add_new_obj(Model4LLMs.TextContent(text=msg,author_id=author))
         msg_group = self.store.add_new_obj(Model4LLMs.ContentGroup(owner_id=msg_obj.get_id()))
-        self.root.controller.add_child(msg_group)    
+        self.root.controller.add_child(msg_group)
         return f"{author}: {msg}"
 
     def to_list(self):
@@ -89,7 +89,7 @@ class SimpleHistory:
 
 hist = SimpleHistory()
 print(hist.add_user('hi! What is your model name?'))
-print(hist.add_assistant(llm(hist.to_list()[-4:])))
+print(hist.add_assistant(llm(hist.to_list()[-4:]))) # only last 4 messages for one request.
 print(hist.add_user('How big is your body?'))
 print(hist.add_assistant(llm(hist.to_list()[-4:])))
 print(hist.to_list())
